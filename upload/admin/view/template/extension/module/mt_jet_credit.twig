@@ -1,0 +1,883 @@
+{{ header }}{{ column_left }}
+<div id="content">
+
+	{% if error_warning %}
+		<div class="alert alert-danger">
+			<i class="fa fa-exclamation-circle"></i>
+			{{ error_warning }}
+			<button type="button" class="close" data-dismiss="alert">&times;</button>
+		</div>
+	{% endif %}
+
+	{% if success %}
+		<div class="alert alert-success alert-dismissible">
+			<button type="button" class="close" data-dismiss="alert">&times;</button>
+			{{ success }}
+		</div>
+	{% endif %}
+
+	<div class="page-header">
+		<div class="container-fluid">
+			<div class="pull-right">
+				<button type="submit" form="form-html" data-toggle="tooltip" title="Запиши" class="btn btn-primary">
+					<i class="fa fa-save"></i>
+				</button>
+				<a href="{{ cancel }}" data-toggle="tooltip" title="Откажи" class="btn btn-default">
+					<i class="fa fa-reply"></i>
+				</a>
+			</div>
+			<h1>ПБ Лични Финанси</h1>
+			<ul class="breadcrumb">
+				{% for breadcrumb in breadcrumbs %}
+					<li>
+						<a href="{{ breadcrumb.href }}">{{ breadcrumb.text }}</a>
+					</li>
+				{% endfor %}
+			</ul>
+		</div>
+	</div>
+
+	<div class="container-fluid">
+		<div class="panel panel-default" id="mt-jet-credit-module-settings">
+			<style>
+				#mt-jet-credit-module-settings .tab-content > form > .tab-pane {
+					display: none;
+				}
+				#mt-jet-credit-module-settings .tab-content > form > .tab-pane.active {
+					display: block;
+				}
+				#mt-jet-credit-module-settings #mt-jet-credit-settings-tabs {
+					margin-top: 6px;
+				}
+				#mt-jet-credit-module-settings .mt-switch {
+					position: relative;
+					display: inline-block;
+					width: 52px;
+					height: 28px;
+					margin: 0;
+					vertical-align: middle;
+				}
+				#mt-jet-credit-module-settings .mt-switch input {
+					opacity: 0;
+					width: 0;
+					height: 0;
+				}
+				#mt-jet-credit-module-settings .mt-switch-slider {
+					position: absolute;
+					inset: 0;
+					cursor: pointer;
+					background-color: #c9c9c9;
+					transition: 0.2s;
+					border-radius: 28px;
+				}
+				#mt-jet-credit-module-settings .mt-switch-slider:before {
+					position: absolute;
+					content: '';
+					height: 22px;
+					width: 22px;
+					left: 3px;
+					bottom: 3px;
+					background-color: #fff;
+					transition: 0.2s;
+					border-radius: 50%;
+					box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+				}
+				#mt-jet-credit-module-settings .mt-switch input:checked + .mt-switch-slider {
+					background-color: #1e91cf;
+				}
+				#mt-jet-credit-module-settings .mt-switch input:checked + .mt-switch-slider:before {
+					transform: translateX(24px);
+				}
+				#mt-jet-credit-module-settings .nav-tabs > li > a:focus,
+				#mt-jet-credit-module-settings .nav-tabs > li > a:active {
+					outline: none;
+					box-shadow: none;
+				}
+				#mt-jet-credit-module-settings .mt-jet-button-preview {
+					width: 100%;
+					max-width: 100%;
+					box-sizing: border-box;
+					margin-top: 12px;
+					padding: 10px 12px;
+					background: #f9f9f9;
+					border: 1px solid #e3e3e3;
+					border-radius: 4px;
+				}
+				#mt-jet-credit-module-settings .mt-jet-button-preview .mt-jet-preview-label {
+					margin: 0 0 8px;
+					font-size: 12px;
+					color: #666;
+				}
+				#mt-jet-credit-module-settings .mt-jet-preview-standard-inner {
+					display: flex;
+					flex-wrap: wrap;
+					gap: 16px;
+					align-items: flex-start;
+				}
+				#mt-jet-credit-module-settings .mt-jet-preview-table {
+					text-align: center;
+					border: 0;
+				}
+				#mt-jet-credit-module-settings .mt-jet-preview-table .mt-jet-preview-cell {
+					padding: 2px 0;
+					border: 0;
+				}
+				#mt-jet-credit-module-settings .mt-jet-preview-table img {
+					margin: 0;
+					padding: 0;
+					max-width: 155px;
+					border: 0;
+					background: transparent;
+					vertical-align: middle;
+				}
+				#mt-jet-credit-module-settings .mt-jet-wide-button-wrap {
+					width: 100%;
+					max-width: 100%;
+					box-sizing: border-box;
+					display: flex;
+					flex-direction: column;
+					align-items: flex-start;
+					gap: 10px;
+					--jet-wide-radius: 16px;
+					--jet-wide-max-width: 570px;
+					--jet-wide-font-size: 14px;
+					--jet-wide-bg: #ffffff;
+					--jet-wide-hover: #f0fdf4;
+					--jet-wide-border: #166534;
+					--jet-wide-color: #166534;
+					--jet-wide-color-second: #000000;
+				}
+				#mt-jet-credit-module-settings .mt-jet-wide-button {
+					width: 100%;
+					max-width: var(--jet-wide-max-width, 570px);
+					height: 50px;
+					max-height: 50px;
+					border: 2px solid var(--jet-wide-border, #166534);
+					background: var(--jet-wide-bg, #fff);
+					border-radius: var(--jet-wide-radius, 16px);
+					padding: 6px 12px;
+					display: flex;
+					flex-direction: column;
+					justify-content: center;
+					overflow: hidden;
+					box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+					box-sizing: border-box;
+				}
+				#mt-jet-credit-module-settings .mt-jet-wide-button-head {
+					font-size: var(--jet-wide-font-size, 14px);
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					gap: 6px;
+					font-weight: 700;
+					color: var(--jet-wide-color, #166534);
+					line-height: 1.2;
+					white-space: nowrap;
+				}
+				#mt-jet-credit-module-settings .mt-jet-wide-button-logo {
+					height: 16px;
+					width: auto;
+				}
+				#mt-jet-credit-module-settings .mt-jet-wide-button-text {
+					font-size: var(--jet-wide-font-size, 14px);
+					color: var(--jet-wide-color, #166534);
+					line-height: 1.2;
+					text-align: center;
+					white-space: nowrap;
+					overflow: hidden;
+					text-overflow: ellipsis;
+				}
+				#mt-jet-credit-module-settings .mt-jet-wide-button-text-second {
+					font-size: 75%;
+					font-weight: 400;
+					color: var(--jet-wide-color-second, #000000);
+				}
+				#mt-jet-credit-module-settings .jet_scheme_grid_wrap {
+					width: 100% !important;
+					overflow-x: auto !important;
+					-webkit-overflow-scrolling: touch !important;
+					padding: 4px !important;
+					box-sizing: border-box !important;
+				}
+				#mt-jet-credit-module-settings .jet_scheme_grid {
+					display: grid !important;
+					grid-template-columns: repeat(7, minmax(72px, 1fr)) !important;
+					gap: 10px !important;
+					min-width: min-content !important;
+				}
+				#mt-jet-credit-module-settings .jet_scheme_card {
+					display: block !important;
+					margin: 0 !important;
+					cursor: pointer !important;
+					-webkit-box-sizing: border-box !important;
+					-moz-box-sizing: border-box !important;
+					box-sizing: border-box !important;
+				}
+				#mt-jet-credit-module-settings .jet_scheme_radio {
+					position: absolute !important;
+					clip: rect(0, 0, 0, 0) !important;
+					width: 1px !important;
+					height: 1px !important;
+					margin: -1px !important;
+					padding: 0 !important;
+					overflow: hidden !important;
+					border: 0 !important;
+				}
+				#mt-jet-credit-module-settings .jet_scheme_preview {
+					display: flex !important;
+					align-items: center !important;
+					justify-content: center !important;
+					min-height: 48px !important;
+					padding: 6px 4px !important;
+					-webkit-box-sizing: border-box !important;
+					-moz-box-sizing: border-box !important;
+					box-sizing: border-box !important;
+					width: 100% !important;
+					transition: box-shadow 0.15s ease, transform 0.15s ease !important;
+				}
+				#mt-jet-credit-module-settings .jet_scheme_preview_text {
+					font-size: 11px !important;
+					font-weight: 700 !important;
+					line-height: 1.15 !important;
+					text-align: center !important;
+					word-break: break-word !important;
+				}
+				#mt-jet-credit-module-settings .jet_scheme_card:hover .jet_scheme_preview {
+					box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+				}
+				#mt-jet-credit-module-settings .jet_scheme_card:has(.jet_scheme_radio:checked) .jet_scheme_preview {
+					outline: 3px solid #dc2626 !important;
+					outline-offset: 1px !important;
+					box-shadow: none !important;
+				}
+				#mt-jet-credit-module-settings p.jet_scheme_summary {
+					margin: 12px 0 0 !important;
+					font-size: 13px !important;
+					font-weight: 600 !important;
+					color: #1d2327 !important;
+				}
+			</style>
+			<div class="panel-heading">
+				<h3 class="panel-title">
+					<i class="fa fa-cog"></i>
+					ПБ Лични Финанси — настройки</h3>
+			</div>
+			<ul class="nav nav-tabs" id="mt-jet-credit-settings-tabs" style="padding: 0 15px;">
+				<li class="active">
+					<a href="#mt-jet-tab-upravlenie" data-toggle="tab">Управление</a>
+				</li>
+				<li>
+					<a href="#mt-jet-tab-funkcionalni" data-toggle="tab">Функционални настройки</a>
+				</li>
+				<li>
+					<a href="#mt-jet-tab-vizualni" data-toggle="tab">Визуални настройки</a>
+				</li>
+				<li>
+					<a href="#mt-jet-tab-filtri" data-toggle="tab">Форма за въвеждане на лихвени филтри</a>
+				</li>
+			</ul>
+			<div class="tab-content" style="padding: 0;">
+				<form action="{{ form_action }}" method="post" enctype="multipart/form-data" id="form-html" class="form-horizontal">
+					<div id="mt-jet-tab-upravlenie" class="tab-pane active" role="tabpanel">
+						<div class="panel-body">
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_status">Включи модула</label>
+								<div class="col-sm-8">
+									<input type="hidden" name="module_mt_jet_credit_status" value="0"/>
+									<label class="mt-switch" for="module_mt_jet_credit_status">
+										<input type="checkbox" name="module_mt_jet_credit_status" id="module_mt_jet_credit_status" value="1" {% if module_mt_jet_credit_status == 1 %} checked {% endif %}/>
+										<span class="mt-switch-slider"></span>
+									</label>
+									<div class="text-small">Показвай бутоните за закупуване на кредит през ПБ Лични Финанси</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_cart_show">Покажи бутоните в количката</label>
+								<div class="col-sm-8">
+									<input type="hidden" name="module_mt_jet_credit_cart_show" value="0"/>
+									<label class="mt-switch" for="module_mt_jet_credit_cart_show">
+										<input type="checkbox" name="module_mt_jet_credit_cart_show" id="module_mt_jet_credit_cart_show" value="1" {% if module_mt_jet_credit_cart_show == 1 %} checked {% endif %}/>
+										<span class="mt-switch-slider"></span>
+									</label>
+									<div class="text-small">Показвай бутоните за закупуване на кредит през ПБ Лични Финанси в количката</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_status_card">Използвайте метод на плащане чрез кредитна карта</label>
+								<div class="col-sm-8">
+									<input type="hidden" name="module_mt_jet_credit_status_card" value="0"/>
+									<label class="mt-switch" for="module_mt_jet_credit_status_card">
+										<input type="checkbox" name="module_mt_jet_credit_status_card" id="module_mt_jet_credit_status_card" value="1" {% if module_mt_jet_credit_status_card == 1 %} checked {% endif %}/>
+										<span class="mt-switch-slider"></span>
+									</label>
+									<div class="text-small">Показвай бутона за закупуване на кредит през ПБ Лични Финанси със заявката за лизинг направена по метода с кредитна карта</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_vnoska">Покажи вноска</label>
+								<div class="col-sm-8">
+									<input type="hidden" name="module_mt_jet_credit_vnoska" value="0"/>
+									<label class="mt-switch" for="module_mt_jet_credit_vnoska">
+										<input type="checkbox" name="module_mt_jet_credit_vnoska" id="module_mt_jet_credit_vnoska" value="1" {% if module_mt_jet_credit_vnoska == 1 %} checked {% endif %}/>
+										<span class="mt-switch-slider"></span>
+									</label>
+									<div class="text-small">Дали да се показва текст, в дясно от бутона указващ месечната вноска за избрания период на лизинг?</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_eur">Избор на режим на работа с валути</label>
+								<div class="col-sm-8">
+									<select name="module_mt_jet_credit_eur" id="module_mt_jet_credit_eur" class="form-control">
+										<option value="0" {% if module_mt_jet_credit_eur == 0 %} selected {% endif %}>Единична визуализация в лева и изпращания на исканията в лева</option>
+										<option value="1" {% if module_mt_jet_credit_eur == 1 %} selected {% endif %}>Двойна визуализация в лева/евро и изпращания на исканията в лева</option>
+										<option value="2" {% if module_mt_jet_credit_eur == 2 %} selected {% endif %}>Двойна визуализация в евро/лева и изпращания на исканията в евро</option>
+										<option value="3" {% if module_mt_jet_credit_eur == 3 %} selected {% endif %}>Единична визуализация в евро и изпращания на исканията в евро</option>
+									</select>
+									<div class="text-small">Избор на режим на работа с валути. Възможност за показване в евро или лева. Изпращане на исканията в евро или лева с превалутиране ако е необходимо</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div id="mt-jet-tab-funkcionalni" class="tab-pane" role="tabpanel">
+						<div class="panel-body">
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_mail">Избери email за изпращане</label>
+								<div class="col-sm-8">
+									<input type="text" name="module_mt_jet_credit_mail" value="{{ module_mt_jet_credit_mail }}" placeholder="Избери email за изпращане" id="module_mt_jet_credit_mail" class="form-control"/>
+									<div class="small">Избери email адрес на който ще се изпращат заявките от клиента. Използвайте "pf-online.shop@postbank.bg" за изпращане на заявките към ПБ Лични Финанси. Можете да въведете повече от един мейл адрес, като ги разделите помежду си със запетая. (Ако оставите празно ще се използва email-а по-подразбиране за системата. Препоръчва се използването на email извън Вашия домейн за да се избегне ауто спан защитата.)</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_id">Избери идентификатор на магазина за изпращане</label>
+								<div class="col-sm-8">
+									<input type="text" name="module_mt_jet_credit_id" value="{{ module_mt_jet_credit_id }}" placeholder="Избери идентификатор на магазина за изпращане" id="module_mt_jet_credit_id" class="form-control"/>
+									<div class="small">Избери идентификатор на магзина, който да се изпраща към Банката заедно със заявката за лизинг. По този идентификатор Банката ще разпознава Вашите заявки</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_vnoski">Избор на брой вноски по-подразбиране</label>
+								<div class="col-sm-8">
+									<select name="module_mt_jet_credit_vnoski" id="module_mt_jet_credit_vnoski" class="form-control">
+										<option value="3" {% if module_mt_jet_credit_vnoski == 3 %} selected {% endif %}>3 месеца</option>
+										<option value="6" {% if module_mt_jet_credit_vnoski == 6 %} selected {% endif %}>6 месеца</option>
+										<option value="9" {% if module_mt_jet_credit_vnoski == 9 %} selected {% endif %}>9 месеца</option>
+										<option value="12" {% if module_mt_jet_credit_vnoski == 12 %} selected {% endif %}>12 месеца</option>
+										<option value="15" {% if module_mt_jet_credit_vnoski == 15 %} selected {% endif %}>15 месеца</option>
+										<option value="18" {% if module_mt_jet_credit_vnoski == 18 %} selected {% endif %}>18 месеца</option>
+										<option value="24" {% if module_mt_jet_credit_vnoski == 24 %} selected {% endif %}>24 месеца</option>
+										<option value="30" {% if module_mt_jet_credit_vnoski == 30 %} selected {% endif %}>30 месеца</option>
+										<option value="36" {% if module_mt_jet_credit_vnoski == 36 %} selected {% endif %}>36 месеца</option>
+									</select>
+									<div class="text-small">Избор на брой вноски по-подразбиране в продуктовата страница</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_purcent">Избор на процент лихва</label>
+								<div class="col-sm-8">
+									<select name="module_mt_jet_credit_purcent" id="module_mt_jet_credit_purcent" class="form-control">
+										<option value="0.00" {% if module_mt_jet_credit_purcent == 0.00 %} selected {% endif %}>0.00%</option>
+										<option value="0.80" {% if module_mt_jet_credit_purcent == 0.80 %} selected {% endif %}>0.80%</option>
+										<option value="0.99" {% if module_mt_jet_credit_purcent == 0.99 %} selected {% endif %}>0.99%</option>
+										<option value="1.00" {% if module_mt_jet_credit_purcent == 1.00 %} selected {% endif %}>1.00%</option>
+										<option value="1.10" {% if module_mt_jet_credit_purcent == 1.10 %} selected {% endif %}>1.10%</option>
+										<option value="1.20" {% if module_mt_jet_credit_purcent == 1.20 %} selected {% endif %}>1.20%</option>
+										<option value="1.40" {% if module_mt_jet_credit_purcent == 1.40 %} selected {% endif %}>1.40%</option>
+									</select>
+									<div class="text-small">Избор на процент лихва</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_purcent_card">Процент за лихва чрез кредитна карта</label>
+								<div class="col-sm-8">
+									<select name="module_mt_jet_credit_purcent_card" id="module_mt_jet_credit_purcent_card" class="form-control">
+										<option value="0.00" {% if module_mt_jet_credit_purcent_card == 0.00 %} selected {% endif %}>0.00%</option>
+										<option value="0.80" {% if module_mt_jet_credit_purcent_card == 0.80 %} selected {% endif %}>0.80%</option>
+										<option value="0.90" {% if module_mt_jet_credit_purcent_card == 0.90 %} selected {% endif %}>0.90%</option>
+										<option value="0.99" {% if module_mt_jet_credit_purcent_card == 0.99 %} selected {% endif %}>0.99%</option>
+										<option value="1.00" {% if module_mt_jet_credit_purcent_card == 1.00 %} selected {% endif %}>1.00%</option>
+										<option value="1.10" {% if module_mt_jet_credit_purcent_card == 1.10 %} selected {% endif %}>1.10%</option>
+										<option value="1.20" {% if module_mt_jet_credit_purcent_card == 1.20 %} selected {% endif %}>1.20%</option>
+										<option value="1.40" {% if module_mt_jet_credit_purcent_card == 1.40 %} selected {% endif %}>1.40%</option>
+									</select>
+									<div class="text-small">Избор на таблица за процент за лихва за заявката за лизинг направена по метода с кредитна карта</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_count">№ Поръчка</label>
+								<div class="col-sm-8">
+									<input type="text" readonly name="module_mt_jet_credit_count" value="{{ module_mt_jet_credit_count }}" placeholder="Номер на текущата поръчка за лизинг." id="module_mt_jet_credit_count" class="form-control"/>
+									<div class="small">Номер на текущата поръчка за лизинг</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_price">Минимална сума</label>
+								<div class="col-sm-8">
+									<input type="number" min="0" max="999999" step="1" name="module_mt_jet_credit_price" value="{{ module_mt_jet_credit_price }}" placeholder="Минимална сума (лв.)" id="module_mt_jet_credit_price" class="form-control"/>
+									<div class="small">Минимално възможната сума на стоките за закупуване на кредит през ПБ Лични Финанси</div>
+								</div>
+							</div>
+
+						</div>
+					</div>
+
+					<div class="tab-pane" role="tabpanel" id="mt-jet-tab-vizualni">
+						<div class="panel-body">
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_gap">Празно място над бутона</label>
+								<div class="col-sm-8">
+									<input type="number" min="0" max="999999" step="1" name="module_mt_jet_credit_gap" value="{{ module_mt_jet_credit_gap }}" id="module_mt_jet_credit_gap" class="form-control"/>
+									<div class="small">Празно място над бутона в px. Използва се за подредба на бутоните, когато са повече от един. Можете да въведете 0 ако не желаете да има празно място</div>
+								</div>
+							</div>
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_button_type">Вид на бутона</label>
+								<div class="col-sm-8">
+									<select name="module_mt_jet_credit_button_type" id="module_mt_jet_credit_button_type" class="form-control">
+										<option value="standard" {% if module_mt_jet_credit_button_type == 'standard' %} selected {% endif %}>Стандартен бутон</option>
+										<option value="wide" {% if module_mt_jet_credit_button_type == 'wide' %} selected {% endif %}>Персонализиран бутон</option>
+									</select>
+									<div class="small">От тук можете да си изберете вида на бутоните които ще се показват в продуктовата и в страницата количка.</div>
+									<div class="mt-jet-button-preview">
+										<div id="mt-jet-preview-standard" style="display: {{ module_mt_jet_credit_button_type == 'wide' ? 'none' : 'block' }};">
+											<div class="mt-jet-preview-standard-inner">
+												<table class="mt-jet-preview-table" cellspacing="0" cellpadding="0">
+													<tbody>
+														<tr>
+															<td class="mt-jet-preview-cell">
+																<img src="{{ mt_jet_preview_jet }}" alt="Кредитен модул ПБ Лични Финанси" title="Кредитен модул ПБ Лични Финанси"/>
+															</td>
+														</tr>
+													</tbody>
+												</table>
+											</div>
+										</div>
+										<div id="mt-jet-preview-wide" style="display: {{ module_mt_jet_credit_button_type == 'wide' ? 'block' : 'none' }};">
+											<div class="mt-jet-wide-dual-preview" style="display:flex;flex-direction:column;align-items:flex-start;gap:10px;width:100%;">
+												<div id="mt-jet-wide-preview-wrap" class="mt-jet-wide-button-wrap" style="{{ mt_jet_wide_button_wrap_style|e('html') }}">
+													<div class="mt-jet-wide-button" role="img" aria-label="Преглед — основен бутон">
+														<div class="mt-jet-wide-button-head">
+															<span id="mt-jet-btn-text-preview">{{ module_mt_jet_credit_btn_text }}</span>
+															<img id="mt-jet-wide-preview-logo-main" src="{{ mt_jet_preview_jet_logo }}" alt="ПБ Лични Финанси" class="mt-jet-wide-button-logo"{% if module_mt_jet_credit_btn_logo != 1 %} style="display:none"{% endif %}/>
+														</div>
+														<div class="mt-jet-wide-button-text">12 x 97.33 евро
+															<span class="mt-jet-wide-button-text-second">(190.37 лв.)</span>
+														</div>
+													</div>
+												</div>
+												<div id="mt-jet-wide-preview-wrap-card" class="mt-jet-wide-button-wrap" style="{{ mt_jet_wide_button_wrap_style|e('html') }}">
+													<div class="mt-jet-wide-button" role="img" aria-label="Преглед — картов бутон">
+														<div class="mt-jet-wide-button-head">
+															<span id="mt-jet-btn-text-card-preview">{{ module_mt_jet_credit_btn_text_card }}</span>
+															<img id="mt-jet-wide-preview-logo-card" src="{{ mt_jet_preview_jet_logo }}" alt="ПБ Лични Финанси" class="mt-jet-wide-button-logo"{% if module_mt_jet_credit_btn_logo != 1 %} style="display:none"{% endif %}/>
+														</div>
+														<div class="mt-jet-wide-button-text">12 x 97.33 евро
+															<span class="mt-jet-wide-button-text-second">(190.37 лв.)</span>
+														</div>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div id="mt-jet-wide-only-settings" style="display: {{ module_mt_jet_credit_button_type == 'wide' ? 'block' : 'none' }};">
+								<div class="form-group">
+									<label class="col-sm-4 control-label">Цветова схема на бутона</label>
+									<div class="col-sm-8">
+										<div class="jet_scheme_grid_wrap">
+											<div class="jet_scheme_grid">
+												{% for sch in mt_jet_button_schemes %}
+													<label class="jet_scheme_card">
+														<input type="radio" name="module_mt_jet_credit_button_scheme" value="{{ loop.index0 }}" class="jet_scheme_radio" data-scheme-idx="{{ loop.index0 }}" {% if module_mt_jet_credit_button_scheme|default(0) == loop.index0 %} checked="checked" {% endif %}/>
+														<span class="jet_scheme_preview" style="background: {{ sch.background }}; border: 2px solid {{ sch.border }}; border-radius: 16px;">
+															<span class="jet_scheme_preview_text" style="color: {{ sch.color }};">{{ sch.short }}</span>
+														</span>
+													</label>
+												{% endfor %}
+											</div>
+										</div>
+										<p id="mt_jet_scheme_selected_summary" class="jet_scheme_summary">Избрана визуална схема:
+											{{ mt_jet_button_scheme_label }}</p>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_text">Текст на основния бутон</label>
+									<div class="col-sm-8">
+										<input type="text" name="module_mt_jet_credit_btn_text" id="module_mt_jet_credit_btn_text" value="{{ module_mt_jet_credit_btn_text }}" class="form-control" maxlength="160" placeholder="Купи на изплащане с"/>
+										<div class="small">Текстът в първия ред на персонализирания бутон.</div>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_text_card">Текст на картовия бутон</label>
+									<div class="col-sm-8">
+										<input type="text" name="module_mt_jet_credit_btn_text_card" id="module_mt_jet_credit_btn_text_card" value="{{ module_mt_jet_credit_btn_text_card }}" class="form-control" maxlength="160" placeholder="На вноски с твоята кредитна карта"/>
+										<div class="small">Текстът в първия ред на бутона за кредитна карта.</div>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_logo">Покажи лого в бутона</label>
+									<div class="col-sm-8">
+										<input type="hidden" name="module_mt_jet_credit_btn_logo" value="0"/>
+										<label class="mt-switch" for="module_mt_jet_credit_btn_logo">
+											<input type="checkbox" name="module_mt_jet_credit_btn_logo" id="module_mt_jet_credit_btn_logo" value="1" {% if module_mt_jet_credit_btn_logo == 1 %} checked {% endif %}/>
+											<span class="mt-switch-slider"></span>
+										</label>
+										<div class="text-small">Определя дали да се показва логото на ПБ Лични Финанси в персонализирания бутон.</div>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_max_width">Максимална ширина на бутона</label>
+									<div class="col-sm-8">
+										<input type="number" name="module_mt_jet_credit_btn_max_width" id="module_mt_jet_credit_btn_max_width" min="30" max="1200" step="1" value="{{ module_mt_jet_credit_btn_max_width }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
+										<input type="range" id="module_mt_jet_credit_btn_max_width_range" class="form-control" min="30" max="1200" step="1" value="{{ module_mt_jet_credit_btn_max_width }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
+										<div class="small">Ширина в px. Може да зададете стойност ръчно или с плъзгача (30–1200).</div>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_round">Радиус на закръгление</label>
+									<div class="col-sm-8">
+										<input type="number" name="module_mt_jet_credit_btn_round" id="module_mt_jet_credit_btn_round" min="0" max="25" step="1" value="{{ module_mt_jet_credit_btn_round }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
+										<input type="range" id="module_mt_jet_credit_btn_round_range" class="form-control" min="0" max="25" step="1" value="{{ module_mt_jet_credit_btn_round }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
+										<div class="small">Радиус в px. 0 означава бутони без закръгление. Стойност ръчно или плъзгач (0–25).</div>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_font">Размер на шрифт в бутона</label>
+									<div class="col-sm-8">
+										<input type="number" name="module_mt_jet_credit_btn_font" id="module_mt_jet_credit_btn_font" min="6" max="36" step="1" value="{{ module_mt_jet_credit_btn_font }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
+										<input type="range" id="module_mt_jet_credit_btn_font_range" class="form-control" min="6" max="36" step="1" value="{{ module_mt_jet_credit_btn_font }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
+										<div class="small">Размер в px за текстовете в персонализирания бутон (6–36). Стойност ръчно или плъзгач.</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="tab-pane" role="tabpanel" id="mt-jet-tab-filtri">
+						<div class="panel panel-default" style="margin: 0; border-left: 0; border-right: 0; border-top: 0; border-radius: 0; box-shadow: none;">
+							<div class="panel-heading">
+								<h3 class="panel-title">
+									<i class="fa fa-pencil"></i>
+									Форма за въвеждане на лихвени филтри</h3>
+							</div>
+							<div class="panel-body" style="display:flex;flex-direction:column;gap:5px;">
+								<div>
+									<div class="col-md-2 col-sm-12">Продуктов ID номер. Идентификатора на даден продукт в системата на OpenCart. Id #. Филтъра действа за всички продукти ако използвате глобалния символ *:</div>
+									<div class="col-md-2 col-sm-12">Избери процент оскъпяване. Избирате процента оскъпяване който да действа за филтъра. Ако изберете "Не показвай бутона", бутона няма да се показва в продуктовата страница.:</div>
+									<div class="col-md-2 col-sm-12">За кои месечни вноски действа филтъра. За разделител между цифрите за месеци се използва подчертаващо тире.:</div>
+									<div class="col-md-2 col-sm-12">Цена на продукта над която да се задейства този филтър. Ако е 0, филтъра ще действа за всяка цена.:</div>
+									<div class="col-md-2 col-sm-12">Начало за действие на филтъра. Датата от която започва да действа този филтър.:</div>
+									<div class="col-md-2 col-sm-12">Край за действие на филтъра. Датата на която приклчва действието на филтъра.:</div>
+								</div>
+								<div>
+									<div class="col-md-2 col-sm-12">
+										<input type="text" id="module_mt_jet_credit_product_id" class="form-control"/>
+									</div>
+									<div class="col-md-2 col-sm-12">
+										<select id="module_mt_jet_credit_product_percent" class="form-control">
+											<option value="-1.00">Не показвай бутона</option>
+											<option value="0.00" selected="selected">0.00%</option>
+											<option value="0.80">0.80%</option>
+											<option value="0.99">0.99%</option>
+											<option value="1.00">1.00%</option>
+											<option value="1.10">1.10%</option>
+											<option value="1.20">1.20%</option>
+											<option value="1.40">1.40%</option>
+										</select>
+									</div>
+									<div class="col-md-2 col-sm-12">
+										<input type="text" id="module_mt_jet_credit_product_meseci" class="form-control"/>
+									</div>
+									<div class="col-md-2 col-sm-12">
+										<input type="number" id="module_mt_jet_credit_product_price" class="form-control" value="0"/>
+									</div>
+									<div class="col-md-2 col-sm-12">
+										<input type="date" id="module_mt_jet_credit_product_start" class="form-control"/>
+									</div>
+									<div class="col-md-2 col-sm-12">
+										<input type="date" id="module_mt_jet_credit_product_end" class="form-control"/>
+									</div>
+								</div>
+							</div>
+							<div class="panel-footer" style="display:flex;justify-content:end;">
+								<button type="button" id="module_mt_jet_credit_btn_add" data-toggle="tooltip" title="Добави филтъра." class="btn btn-primary">
+									<i class="fa fa-save"></i>&nbsp;Добави</button>
+							</div>
+						</div>
+
+						<div class="panel panel-default" style="margin: 0; border-left: 0; border-right: 0; border-radius: 0; box-shadow: none;">
+							<div class="panel-heading">
+								<h3 class="panel-title">
+									<i class="fa fa-pencil"></i>
+									Съществуващи филтри</h3>
+							</div>
+							<div class="panel-body" style="display:flex;flex-direction:column;gap:5px;">
+								<div>
+									<div class="col-md-1 col-sm-12">Продуктов ID номер</div>
+									<div class="col-md-2 col-sm-12">Процент оскъпяване</div>
+									<div class="col-md-2 col-sm-12">Месечни вноски</div>
+									<div class="col-md-2 col-sm-12">Цена на продуктa</div>
+									<div class="col-md-2 col-sm-12">Начало</div>
+									<div class="col-md-2 col-sm-12">Край</div>
+									<div class="col-md-1 col-sm-12">&nbsp;</div>
+								</div>
+								{% for schemes in module_mt_jet_schemes %}
+									<div>
+										<div class="col-md-1 col-sm-12">
+											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_id }}"/>
+										</div>
+										<div class="col-md-2 col-sm-12">
+											{% if schemes.jet_product_percent == -1 %}
+												<input type="text" readonly class="form-control" value="Не показвай бутона"/>
+											{% else %}
+												<input type="text" readonly class="form-control" value="{{ schemes.jet_product_percent }}"/>
+											{% endif %}
+										</div>
+										<div class="col-md-2 col-sm-12">
+											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_meseci }}"/>
+										</div>
+										<div class="col-md-2 col-sm-12">
+											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_price }}"/>
+										</div>
+										<div class="col-md-2 col-sm-12">
+											<input type="date" readonly class="form-control" value="{{ schemes.jet_product_start }}"/>
+										</div>
+										<div class="col-md-2 col-sm-12">
+											<input type="date" readonly class="form-control" value="{{ schemes.jet_product_end }}"/>
+										</div>
+										<div class="col-md-1 col-sm-12">
+											<button type="button" onclick="deleteSchema('{{ schemes.jet_product_id }}');" data-toggle="tooltip" title="Изтрий филтъра." class="btn btn-danger">
+												<i class="fa fa-trash"></i>&nbsp;Изтрий</button>
+										</div>
+									</div>
+								{% endfor %}
+							</div>
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	$(function () {
+		var tabStorageKey = 'mt_jet_credit_active_tab';
+		var $tabs = $('#mt-jet-credit-settings-tabs a[data-toggle="tab"]');
+		var savedTab = sessionStorage.getItem(tabStorageKey);
+
+		if (savedTab && $tabs.filter('[href="' + savedTab + '"]').length) {
+			$tabs.filter('[href="' + savedTab + '"]').tab('show');
+		}
+
+		$tabs.on('shown.bs.tab', function (e) {
+			sessionStorage.setItem(tabStorageKey, $(e.target).attr('href'));
+		});
+
+		function syncJetButtonTypePreview() {
+			var v = $('#module_mt_jet_credit_button_type').val();
+			if (v === 'wide') {
+				$('#mt-jet-preview-standard').hide();
+				$('#mt-jet-preview-wide').show();
+				$('#mt-jet-wide-only-settings').show();
+			} else {
+				$('#mt-jet-preview-wide').hide();
+				$('#mt-jet-preview-standard').show();
+				$('#mt-jet-wide-only-settings').hide();
+			}
+		}
+		$('#module_mt_jet_credit_button_type').on('change', syncJetButtonTypePreview);
+		syncJetButtonTypePreview();
+
+		var mtJetSchemeStyles = {{ mt_jet_button_scheme_styles_for_js|raw }};
+		var mtJetSchemeLabels = {{ mt_jet_button_scheme_labels_json|raw }};
+
+		function jetClampMaxWidthVal(v) {
+			v = parseInt(v, 10);
+			if (isNaN(v)) {
+				v = 570;
+			}
+			if (v < 30) {
+				v = 30;
+			}
+			if (v > 1200) {
+				v = 1200;
+			}
+			return v;
+		}
+
+		function jetMaxWidthStyleSuffix() {
+			return '--jet-wide-max-width:' + jetClampMaxWidthVal($('#module_mt_jet_credit_btn_max_width').val()) + 'px;';
+		}
+		function jetClampRoundVal(v) {
+			v = parseInt(v, 10);
+			if (isNaN(v)) {
+				v = 16;
+			}
+			if (v < 0) {
+				v = 0;
+			}
+			if (v > 25) {
+				v = 25;
+			}
+			return v;
+		}
+		function jetRoundStyleSuffix() {
+			return '--jet-wide-radius:' + jetClampRoundVal($('#module_mt_jet_credit_btn_round').val()) + 'px;';
+		}
+		function jetClampFontVal(v) {
+			v = parseInt(v, 10);
+			if (isNaN(v)) {
+				v = 14;
+			}
+			if (v < 6) {
+				v = 6;
+			}
+			if (v > 36) {
+				v = 36;
+			}
+			return v;
+		}
+		function jetFontStyleSuffix() {
+			return '--jet-wide-font-size:' + jetClampFontVal($('#module_mt_jet_credit_btn_font').val()) + 'px;';
+		}
+
+		function applyJetSchemePreview(idx) {
+			var k = (idx === 0 || idx) ? String(idx) : '0';
+			var s = (mtJetSchemeStyles && (mtJetSchemeStyles[k] || mtJetSchemeStyles[idx])) || '';
+			s += jetMaxWidthStyleSuffix();
+			s += jetRoundStyleSuffix();
+			s += jetFontStyleSuffix();
+			$('#mt-jet-wide-preview-wrap').attr('style', s);
+			$('#mt-jet-wide-preview-wrap-card').attr('style', s);
+			var lab = (mtJetSchemeLabels && (mtJetSchemeLabels[idx] !== undefined && mtJetSchemeLabels[idx] !== null)) ? mtJetSchemeLabels[idx] : '';
+			$('#mt_jet_scheme_selected_summary').text('Избрана визуална схема: ' + lab);
+		}
+
+		$(document).on('change', '.jet_scheme_radio', function () {
+			applyJetSchemePreview(parseInt($(this).val(), 10) || 0);
+		});
+		applyJetSchemePreview({{ module_mt_jet_credit_button_scheme|default(0) }});
+
+		$('#module_mt_jet_credit_btn_max_width, #module_mt_jet_credit_btn_max_width_range').on('input change', function (e) {
+			var $n = $('#module_mt_jet_credit_btn_max_width');
+			var $r = $('#module_mt_jet_credit_btn_max_width_range');
+			var w;
+			if (e && e.target && e.target.id === 'module_mt_jet_credit_btn_max_width_range') {
+				w = jetClampMaxWidthVal($r.val());
+				$n.val(w);
+			} else {
+				w = jetClampMaxWidthVal($n.val());
+				$r.val(w);
+			}
+			applyJetSchemePreview(parseInt($('.jet_scheme_radio:checked').val(), 10) || 0);
+		});
+		$('#module_mt_jet_credit_btn_round, #module_mt_jet_credit_btn_round_range').on('input change', function (e) {
+			var $n = $('#module_mt_jet_credit_btn_round');
+			var $r = $('#module_mt_jet_credit_btn_round_range');
+			var t;
+			if (e && e.target && e.target.id === 'module_mt_jet_credit_btn_round_range') {
+				t = jetClampRoundVal($r.val());
+				$n.val(t);
+			} else {
+				t = jetClampRoundVal($n.val());
+				$r.val(t);
+			}
+			applyJetSchemePreview(parseInt($('.jet_scheme_radio:checked').val(), 10) || 0);
+		});
+		$('#module_mt_jet_credit_btn_font, #module_mt_jet_credit_btn_font_range').on('input change', function (e) {
+			var $n = $('#module_mt_jet_credit_btn_font');
+			var $r = $('#module_mt_jet_credit_btn_font_range');
+			var t;
+			if (e && e.target && e.target.id === 'module_mt_jet_credit_btn_font_range') {
+				t = jetClampFontVal($r.val());
+				$n.val(t);
+			} else {
+				t = jetClampFontVal($n.val());
+				$r.val(t);
+			}
+			applyJetSchemePreview(parseInt($('.jet_scheme_radio:checked').val(), 10) || 0);
+		});
+
+		var defaultJetBtnText = 'Купи на изплащане с';
+		var defaultJetBtnTextCard = 'На вноски с твоята кредитна карта';
+
+		function syncJetBtnTextPreview() {
+			var t = ($('#module_mt_jet_credit_btn_text').val() || '').trim();
+			$('#mt-jet-btn-text-preview').text(t === '' ? defaultJetBtnText : t);
+		}
+
+		function syncJetBtnTextCardPreview() {
+			var t = ($('#module_mt_jet_credit_btn_text_card').val() || '').trim();
+			$('#mt-jet-btn-text-card-preview').text(t === '' ? defaultJetBtnTextCard : t);
+		}
+
+		$('#module_mt_jet_credit_btn_text').on('input change', syncJetBtnTextPreview);
+		$('#module_mt_jet_credit_btn_text_card').on('input change', syncJetBtnTextCardPreview);
+		function syncJetBtnLogoPreview() {
+			var on = $('#module_mt_jet_credit_btn_logo').is(':checked');
+			$('#mt-jet-wide-preview-logo-main, #mt-jet-wide-preview-logo-card').toggle(on);
+		}
+		$('#module_mt_jet_credit_btn_logo').on('change', syncJetBtnLogoPreview);
+	});
+
+	$(document).on("click", "#module_mt_jet_credit_btn_add", function (e) {
+		e.preventDefault();
+		if ($("#module_mt_jet_credit_product_id").val() !== '' && $("#module_mt_jet_credit_product_meseci").val() !== '' && $("#module_mt_jet_credit_product_price").val() !== '' && $("#module_mt_jet_credit_product_start").val() !== '' && $("#module_mt_jet_credit_product_end").val() !== '') {
+			$.ajax({
+				url: '../index.php?route=extension/mt_jet_credit/jetcredit/createSchema',
+				type: 'post',
+				dataType: 'json',
+				data: {
+					mt_jet_credit_product_id: $("#module_mt_jet_credit_product_id").val(),
+					mt_jet_credit_product_percent: $("#module_mt_jet_credit_product_percent option:selected").val(),
+					mt_jet_credit_product_meseci: $("#module_mt_jet_credit_product_meseci").val(),
+					mt_jet_credit_product_price: $("#module_mt_jet_credit_product_price").val(),
+					mt_jet_credit_product_start: $("#module_mt_jet_credit_product_start").val(),
+					mt_jet_credit_product_end: $("#module_mt_jet_credit_product_end").val()
+				},
+				success: function (json) {
+					if (json['success'] == 'success') {
+						if (json['exist'] != '') {
+							alert(json['exist']);
+						} else {
+							alert("Успешно записахте филтъра.");
+						}
+						window.location.reload();
+					}
+				}
+			});
+		} else {
+			alert("Имате непопълнени полета!");
+		}
+	});
+
+	const deleteSchema = (id) => {
+		$.ajax({
+			url: '../index.php?route=extension/mt_jet_credit/jetcredit/deleteSchema',
+			type: 'post',
+			dataType: 'json',
+			data: {
+				mt_jet_credit_product_id: id
+			},
+			success: function (json) {
+				if (json['success'] == 'success') {
+					alert("Успешно изтрихте филтъра.");
+					window.location.reload();
+				}
+			}
+		});
+	}
+</script>
+{{ footer }}
