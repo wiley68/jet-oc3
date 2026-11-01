@@ -1,0 +1,470 @@
+{
+  "format": "opencart3-ocmod-source-manifest-v1",
+  "module_version": "2.0.0",
+  "archive_roots": [
+    "install.xml",
+    "upload/"
+  ],
+  "archive_created": false,
+  "documentation": [
+    "docs/CLEAN-INSTALL.md",
+    "docs/MYSQL-TEST.md",
+    "docs/BUILD-INSTALLER.md",
+    "docs/PURCHASE-LIFECYCLE.md"
+  ],
+  "excluded": [
+    "*:Zone.Identifier",
+    "tests/**",
+    "docs/**",
+    ".git/**",
+    "credentials",
+    "caches"
+  ],
+  "files": [
+    {
+      "path": "install.xml",
+      "sha256": "8c8c4d9615ab4fad97b9093dc9b06ca007a41908f1b70fc9caaa6409f5286683",
+      "bytes": 48629
+    },
+    {
+      "path": "upload/admin/controller/extension/module/mt_jet_credit.php",
+      "sha256": "e95916a21b610aef20b80d20c4b79ef30d2904d5d35401ad2f4ac7c2e4a01514",
+      "bytes": 19740
+    },
+    {
+      "path": "upload/admin/controller/extension/payment/jet.php",
+      "sha256": "5fa171a398d3ed9407cd0f5723f1d8b1e0fe18f6f89bd468f9b5332b767b31e5",
+      "bytes": 4540
+    },
+    {
+      "path": "upload/admin/controller/extension/payment/jet_card.php",
+      "sha256": "733b99fa9123efda8e7eee9321724859996ebf21be096657dc66d4f72e06cd96",
+      "bytes": 4709
+    },
+    {
+      "path": "upload/admin/language/bg/extension/module/mt_jet_credit.php",
+      "sha256": "7ccf62e643fa120c9c39627406e9c1af2e8e9d0b5676fea80eb48be9a5865b1a",
+      "bytes": 61
+    },
+    {
+      "path": "upload/admin/language/bg/extension/payment/jet.php",
+      "sha256": "3ad5d7639e00921eb223423c98663f28ae4dd6dc918602734622c7e4d7d88e69",
+      "bytes": 304
+    },
+    {
+      "path": "upload/admin/language/bg/extension/payment/jet_card.php",
+      "sha256": "3f456008e2e343068a28fb2f1edcb1592480b302bcc94483faa5b5d28432028b",
+      "bytes": 395
+    },
+    {
+      "path": "upload/admin/language/bg-bg/extension/module/mt_jet_credit.php",
+      "sha256": "7ccf62e643fa120c9c39627406e9c1af2e8e9d0b5676fea80eb48be9a5865b1a",
+      "bytes": 61
+    },
+    {
+      "path": "upload/admin/language/bg-bg/extension/payment/jet.php",
+      "sha256": "3ad5d7639e00921eb223423c98663f28ae4dd6dc918602734622c7e4d7d88e69",
+      "bytes": 304
+    },
+    {
+      "path": "upload/admin/language/bg-bg/extension/payment/jet_card.php",
+      "sha256": "3f456008e2e343068a28fb2f1edcb1592480b302bcc94483faa5b5d28432028b",
+      "bytes": 395
+    },
+    {
+      "path": "upload/admin/language/bulgarian/extension/module/mt_jet_credit.php",
+      "sha256": "7ccf62e643fa120c9c39627406e9c1af2e8e9d0b5676fea80eb48be9a5865b1a",
+      "bytes": 61
+    },
+    {
+      "path": "upload/admin/language/bulgarian/extension/payment/jet.php",
+      "sha256": "3ad5d7639e00921eb223423c98663f28ae4dd6dc918602734622c7e4d7d88e69",
+      "bytes": 304
+    },
+    {
+      "path": "upload/admin/language/bulgarian/extension/payment/jet_card.php",
+      "sha256": "3f456008e2e343068a28fb2f1edcb1592480b302bcc94483faa5b5d28432028b",
+      "bytes": 395
+    },
+    {
+      "path": "upload/admin/language/en/extension/module/mt_jet_credit.php",
+      "sha256": "7ccf62e643fa120c9c39627406e9c1af2e8e9d0b5676fea80eb48be9a5865b1a",
+      "bytes": 61
+    },
+    {
+      "path": "upload/admin/language/en/extension/payment/jet.php",
+      "sha256": "3ad5d7639e00921eb223423c98663f28ae4dd6dc918602734622c7e4d7d88e69",
+      "bytes": 304
+    },
+    {
+      "path": "upload/admin/language/en/extension/payment/jet_card.php",
+      "sha256": "3f456008e2e343068a28fb2f1edcb1592480b302bcc94483faa5b5d28432028b",
+      "bytes": 395
+    },
+    {
+      "path": "upload/admin/language/en-gb/extension/module/mt_jet_credit.php",
+      "sha256": "7ccf62e643fa120c9c39627406e9c1af2e8e9d0b5676fea80eb48be9a5865b1a",
+      "bytes": 61
+    },
+    {
+      "path": "upload/admin/language/en-gb/extension/payment/jet.php",
+      "sha256": "3ad5d7639e00921eb223423c98663f28ae4dd6dc918602734622c7e4d7d88e69",
+      "bytes": 304
+    },
+    {
+      "path": "upload/admin/language/en-gb/extension/payment/jet_card.php",
+      "sha256": "3f456008e2e343068a28fb2f1edcb1592480b302bcc94483faa5b5d28432028b",
+      "bytes": 395
+    },
+    {
+      "path": "upload/admin/language/english/extension/module/mt_jet_credit.php",
+      "sha256": "7ccf62e643fa120c9c39627406e9c1af2e8e9d0b5676fea80eb48be9a5865b1a",
+      "bytes": 61
+    },
+    {
+      "path": "upload/admin/language/english/extension/payment/jet.php",
+      "sha256": "3ad5d7639e00921eb223423c98663f28ae4dd6dc918602734622c7e4d7d88e69",
+      "bytes": 304
+    },
+    {
+      "path": "upload/admin/language/english/extension/payment/jet_card.php",
+      "sha256": "3f456008e2e343068a28fb2f1edcb1592480b302bcc94483faa5b5d28432028b",
+      "bytes": 395
+    },
+    {
+      "path": "upload/admin/model/extension/module/jetcredit.php",
+      "sha256": "e8d75125843c7b1cc123d604e2a74b23e4d27f73d12bbad261d672fd533ed8cf",
+      "bytes": 4268
+    },
+    {
+      "path": "upload/admin/view/image/payment/jet_card_logo.png",
+      "sha256": "e784ed621aa416adac06d415ea7fa4cf991c929de9ba62e8b0aaf97c9c29690b",
+      "bytes": 12773
+    },
+    {
+      "path": "upload/admin/view/image/payment/jet_logo.png",
+      "sha256": "3a720849faeb85c717244f38a09658d6bb7ddcdd20fabee7d2446d74b401ae8d",
+      "bytes": 12397
+    },
+    {
+      "path": "upload/admin/view/template/extension/module/mt_jet_credit.twig",
+      "sha256": "cdd510e92a1150bf8e37c4fa89a22bd9840c26031faee21a5b3e9d9337b0a2d5",
+      "bytes": 44719
+    },
+    {
+      "path": "upload/admin/view/template/extension/payment/jet.twig",
+      "sha256": "7d5c52f32692cc59c9e028360dbd5207c7c179cf30f2c72f93878bd3b5b1db84",
+      "bytes": 6020
+    },
+    {
+      "path": "upload/admin/view/template/extension/payment/jet_card.twig",
+      "sha256": "3d71750cf17b758987c06b17c409cf35df4820af5310620bfec165fdd618ca72",
+      "bytes": 6086
+    },
+    {
+      "path": "upload/catalog/controller/extension/mt_jet_credit/PHPMailer/Exception.php",
+      "sha256": "09958f6fe74c8f1b3ade44de76c0b3f8d8af93b810cc1cba0b5a35110ac8411b",
+      "bytes": 1336
+    },
+    {
+      "path": "upload/catalog/controller/extension/mt_jet_credit/PHPMailer/PHPMailer.php",
+      "sha256": "64eac598c88e9b43635d52bc985d940f812a170955f0f0834044859e63d3242c",
+      "bytes": 193414
+    },
+    {
+      "path": "upload/catalog/controller/extension/mt_jet_credit/PHPMailer/SMTP.php",
+      "sha256": "3a48fb0d996a2e5933496af74a5646cfe0d8b73295c84d19563c94faad23dea2",
+      "bytes": 52166
+    },
+    {
+      "path": "upload/catalog/controller/extension/mt_jet_credit/jetcredit.php",
+      "sha256": "9693bb1c56156bf7763e617cafaebe94bdffadb3501bc4a3bf8ae64e097ee12e",
+      "bytes": 3142
+    },
+    {
+      "path": "upload/catalog/controller/extension/mt_jet_credit/success.php",
+      "sha256": "b217ba795876feaca9d4697e5e68811f4abc18e54d4b4a9d52bd910e36b423e3",
+      "bytes": 1677
+    },
+    {
+      "path": "upload/catalog/controller/extension/payment/jet.php",
+      "sha256": "3e0d851ce81917bd62a1ff946274c170f08701cec322022e26ef14b82000cc0e",
+      "bytes": 676
+    },
+    {
+      "path": "upload/catalog/controller/extension/payment/jet_card.php",
+      "sha256": "1d1503fded04cb39ee8e42e2957b9693b8f0d1d26e73da7fb3bc0cff52651671",
+      "bytes": 700
+    },
+    {
+      "path": "upload/catalog/language/bg/extension/mt_jet_credit/success.php",
+      "sha256": "eeecfcf8a7af11ab9efa59f5e35baa78533b09322e86fae2b2496999a99cbf5d",
+      "bytes": 86
+    },
+    {
+      "path": "upload/catalog/language/bg/extension/payment/jet.php",
+      "sha256": "d54dd4b9aa10d41049658660894d5091926c62e9d39b227f88d701335e74e932",
+      "bytes": 76
+    },
+    {
+      "path": "upload/catalog/language/bg/extension/payment/jet_card.php",
+      "sha256": "307688440da3e971002401939bea61f4162e781402f3c9744b7ff114996ed20c",
+      "bytes": 81
+    },
+    {
+      "path": "upload/catalog/language/bg-bg/extension/mt_jet_credit/success.php",
+      "sha256": "a2dfd28b7dfc4331ce7bfaa34abdf3b053a4a5dd25f165675b3e096f0dc7fe4a",
+      "bytes": 705
+    },
+    {
+      "path": "upload/catalog/language/bg-bg/extension/payment/jet.php",
+      "sha256": "f0df97f986139cf4134b8a7bc2a3a970d0249a362e1bc327ceddfc6586fa94ad",
+      "bytes": 116
+    },
+    {
+      "path": "upload/catalog/language/bg-bg/extension/payment/jet_card.php",
+      "sha256": "f0df97f986139cf4134b8a7bc2a3a970d0249a362e1bc327ceddfc6586fa94ad",
+      "bytes": 116
+    },
+    {
+      "path": "upload/catalog/language/bulgarian/extension/mt_jet_credit/success.php",
+      "sha256": "eeecfcf8a7af11ab9efa59f5e35baa78533b09322e86fae2b2496999a99cbf5d",
+      "bytes": 86
+    },
+    {
+      "path": "upload/catalog/language/bulgarian/extension/payment/jet.php",
+      "sha256": "d54dd4b9aa10d41049658660894d5091926c62e9d39b227f88d701335e74e932",
+      "bytes": 76
+    },
+    {
+      "path": "upload/catalog/language/bulgarian/extension/payment/jet_card.php",
+      "sha256": "307688440da3e971002401939bea61f4162e781402f3c9744b7ff114996ed20c",
+      "bytes": 81
+    },
+    {
+      "path": "upload/catalog/language/en/extension/mt_jet_credit/success.php",
+      "sha256": "4ac8ffce9a3d868f1845fa80010e8e40a2c58bca46c1554f5069f5eaf7347674",
+      "bytes": 86
+    },
+    {
+      "path": "upload/catalog/language/en/extension/payment/jet.php",
+      "sha256": "8564ac6d5cbc3152ce5ab8dfa31bc03a2099d24cefcf4b2c9549eacd33357707",
+      "bytes": 76
+    },
+    {
+      "path": "upload/catalog/language/en/extension/payment/jet_card.php",
+      "sha256": "07b54741a0afe3a8e7ccdf60856221c48f49ff5bd552665a076e799df74e5c3c",
+      "bytes": 81
+    },
+    {
+      "path": "upload/catalog/language/en-gb/extension/mt_jet_credit/success.php",
+      "sha256": "32df0d1a2b78d1ce89a7b16e4e621d92f525ab4ba07ddf7baa575ade459e5011",
+      "bytes": 465
+    },
+    {
+      "path": "upload/catalog/language/en-gb/extension/payment/jet.php",
+      "sha256": "abf9829d0de56e1f10c45f354bafb5871c05b82b72285b1bb0a3bb6bd3a668fe",
+      "bytes": 90
+    },
+    {
+      "path": "upload/catalog/language/en-gb/extension/payment/jet_card.php",
+      "sha256": "abf9829d0de56e1f10c45f354bafb5871c05b82b72285b1bb0a3bb6bd3a668fe",
+      "bytes": 90
+    },
+    {
+      "path": "upload/catalog/language/english/extension/mt_jet_credit/success.php",
+      "sha256": "4ac8ffce9a3d868f1845fa80010e8e40a2c58bca46c1554f5069f5eaf7347674",
+      "bytes": 86
+    },
+    {
+      "path": "upload/catalog/language/english/extension/payment/jet.php",
+      "sha256": "8564ac6d5cbc3152ce5ab8dfa31bc03a2099d24cefcf4b2c9549eacd33357707",
+      "bytes": 76
+    },
+    {
+      "path": "upload/catalog/language/english/extension/payment/jet_card.php",
+      "sha256": "07b54741a0afe3a8e7ccdf60856221c48f49ff5bd552665a076e799df74e5c3c",
+      "bytes": 81
+    },
+    {
+      "path": "upload/catalog/model/extension/mt_jet_credit/checkout.php",
+      "sha256": "16dfd654c3347b8037cea8a52c887cfaf266ab989c21b7bb93b560e9dbf56b59",
+      "bytes": 5590
+    },
+    {
+      "path": "upload/catalog/model/extension/mt_jet_credit/financial.php",
+      "sha256": "83e0c18a76523540aaa222b4f472363fa4f361fa5e8616db9a72906140c933bb",
+      "bytes": 27188
+    },
+    {
+      "path": "upload/catalog/model/extension/mt_jet_credit/jetcredit.php",
+      "sha256": "43863b92611d587f7f2b9f29ec22019a0308927a0e6122523c132bff7a7c408f",
+      "bytes": 2090
+    },
+    {
+      "path": "upload/catalog/model/extension/mt_jet_credit/submission.php",
+      "sha256": "43a965c66776bd1cef79406623f346343565fa13add51770e30d48701ddfc231",
+      "bytes": 8996
+    },
+    {
+      "path": "upload/catalog/model/extension/mt_jet_credit/submission_order.php",
+      "sha256": "d2942b45232b45df4b9e8f87ae2c4b81433478cfcd9e616d39d202c161fcac09",
+      "bytes": 13317
+    },
+    {
+      "path": "upload/catalog/model/extension/payment/jet.php",
+      "sha256": "3c44f6838cb5610fc237f3b7a8b57ee35443aef62ef21abb8b08e457632bc80a",
+      "bytes": 1684
+    },
+    {
+      "path": "upload/catalog/model/extension/payment/jet_card.php",
+      "sha256": "059a49cd25da607b66d8ec7cbb09509a4e96073591e77ae92f44fdb26f6fb825",
+      "bytes": 1875
+    },
+    {
+      "path": "upload/catalog/view/theme/default/image/jet.png",
+      "sha256": "3a720849faeb85c717244f38a09658d6bb7ddcdd20fabee7d2446d74b401ae8d",
+      "bytes": 12397
+    },
+    {
+      "path": "upload/catalog/view/theme/default/image/jet_card.png",
+      "sha256": "e784ed621aa416adac06d415ea7fa4cf991c929de9ba62e8b0aaf97c9c29690b",
+      "bytes": 12773
+    },
+    {
+      "path": "upload/catalog/view/theme/default/image/jet_logo.png",
+      "sha256": "864a59428b8efa076dc750bd597c00f2800a25a583cdb489e53403b690554318",
+      "bytes": 6179
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_cart.css",
+      "sha256": "e7b590d836aeb1c3f3f88fe64a7017f12c8e1e679158ee0f7fe4371f5136669e",
+      "bytes": 14604
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_cart.js",
+      "sha256": "af682a5a4b0dccff2774a31ecf0bfdd6caf813d60e108637207756e017092c9c",
+      "bytes": 101
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_offers.js",
+      "sha256": "ea7190bb1dbd1f59be94a9e0d4bd6ca23ded976b49761783f2cb7b11bdd1e57b",
+      "bytes": 16429
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_products.css",
+      "sha256": "99be40aedd5a4fc8926a84339430fc9fbc3c43a33df7d143a0e7bb9dc0c198e8",
+      "bytes": 14797
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_products.js",
+      "sha256": "af682a5a4b0dccff2774a31ecf0bfdd6caf813d60e108637207756e017092c9c",
+      "bytes": 101
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/fonts/roboto-condensed-cyrillic-italic.woff2",
+      "sha256": "2d920e4fb54e1d90fecc79266b478acddbffeef24525cfd3059a547ed6f1abbd",
+      "bytes": 27376
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/fonts/roboto-condensed-cyrillic.woff2",
+      "sha256": "b96fbbb3e96d271177d728b44a7603815b3baf259eb0979fbc75640e93a23962",
+      "bytes": 24828
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/success.twig",
+      "sha256": "01ff93b5839b5293695b5ac0479c275277bac273bba68d48b0dec506829aa690",
+      "bytes": 772
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/payment/jet.twig",
+      "sha256": "7c9453e98f59aae0ad137950b0e56f5819060fa7c8fce7f6e5ce6d572be7c83f",
+      "bytes": 13816
+    },
+    {
+      "path": "upload/catalog/view/theme/default/template/extension/payment/jet_card.twig",
+      "sha256": "363b891e00fb8f609c188510b97d68a8a894901d19c14a1385b0e8fc83afde9a",
+      "bytes": 13901
+    },
+    {
+      "path": "upload/system/library/jet_button_scheme.php",
+      "sha256": "18b0f788b6621f8328953fc0e6a9ae81160d43c304cc8570c6961aaadc65ae4b",
+      "bytes": 3555
+    },
+    {
+      "path": "upload/system/library/jetcredit/admin_settings.php",
+      "sha256": "294982d591a270d5ed7509f4666c82469106be8abeae477625a661fbd80c0f17",
+      "bytes": 4325
+    },
+    {
+      "path": "upload/system/library/jetcredit/financial.php",
+      "sha256": "cab2d0ddbca94aafe036027e620e0078cb144e2e64e1aed1e930eb67f74adf30",
+      "bytes": 5823
+    },
+    {
+      "path": "upload/system/library/jetcredit/installation.php",
+      "sha256": "b20fc388f4075a2713f5b83cafa216327258e64700134963f40330b3b974d023",
+      "bytes": 6116
+    },
+    {
+      "path": "upload/system/library/jetcredit/native_mail_scope.php",
+      "sha256": "743801cc2f3de0e666f5b9ba9025df9b1cd449899ac31a0781479780717cf850",
+      "bytes": 2093
+    },
+    {
+      "path": "upload/system/library/jetcredit/offer.php",
+      "sha256": "ef31b6d99d6b6ca28dc3a569a1846c217b39d564076de7e467b33168f256082b",
+      "bytes": 3797
+    },
+    {
+      "path": "upload/system/library/jetcredit/receipt.php",
+      "sha256": "ef995229e1945f86952e2f823db9bdba908235ef566d4914de1057eff2a443d0",
+      "bytes": 1789
+    },
+    {
+      "path": "upload/system/library/jetcredit/runtime.php",
+      "sha256": "d75bc1cf7759d14d1322d96ef2994d012e2fe1bf600062d69dbcbd673c5fd9b7",
+      "bytes": 845
+    },
+    {
+      "path": "upload/system/library/jetcredit/submission.php",
+      "sha256": "f69f1e40dae4eef367ada8e8c024b1eef9b7d066f795e285aa75e2c58c994023",
+      "bytes": 6719
+    },
+    {
+      "path": "upload/system/library/jetcredit/submission_http.php",
+      "sha256": "c38c320d5e306a78df3df87bfdaa5c72606f7d1ee12569d4995b9cc5bb4bea3b",
+      "bytes": 2552
+    },
+    {
+      "path": "upload/system/library/jetcredit/submission_identity.php",
+      "sha256": "23d90cf3032d099a732b19ccf70b23aa4765220d881fbb6d5c3d909af1da771a",
+      "bytes": 3891
+    },
+    {
+      "path": "upload/system/library/jetcredit/submission_input.php",
+      "sha256": "743076336b57922aa6711ba3cbd40f58d2d91718612ace1ce78664e4adbe5d58",
+      "bytes": 5820
+    },
+    {
+      "path": "upload/system/library/jetcredit/submission_mail.php",
+      "sha256": "590db316f13e7a1ef36cc838fc466337f1d5f1418e8a48696f08c0418c645fe6",
+      "bytes": 7062
+    },
+    {
+      "path": "upload/system/library/jetcredit/submission_schema.php",
+      "sha256": "472bb6d8466717c7c7ce0838c5d0e1a0b38c03994bfe2f7dd8c651fb06ad4fba",
+      "bytes": 3341
+    },
+    {
+      "path": "upload/system/library/jetcredit/submission_store.php",
+      "sha256": "894ef3b7b5a983fbab60d3b5c7214cfecfb9674ebef81732c4b8a35a1e4cb754",
+      "bytes": 13425
+    },
+    {
+      "path": "upload/system/library/jetcredit/version.php",
+      "sha256": "4bf5421a48337545a37a989268e6ba7371b9bcbf72ee9f7035dd3ad29d1c41ab",
+      "bytes": 154
+    }
+  ]
+}

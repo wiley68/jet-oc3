@@ -1,0 +1,14 @@
+{{ header }}
+<div id="jet-success" class="container">
+  <div class="row">{{ column_left }}
+    {% set class = column_left and column_right ? 'col-sm-6' : (column_left or column_right ? 'col-sm-9' : 'col-sm-12') %}
+    <div id="content" class="{{ class|e('html') }}">{{ content_top }}
+      <h1>{{ heading_title|e('html') }}</h1>
+      <p>{{ text_message|e('html') }}</p>
+      <p>{{ text_order|e('html') }} {{ order_id|e('html') }}</p>
+      <p><a href="{{ purchase_return|e('html') }}">{{ text_purchase_return|e('html') }}</a></p>
+      <div class="buttons"><div class="pull-right"><a href="{{ continue|e('html') }}" class="btn btn-primary">{{ button_continue|e('html') }}</a></div></div>
+      {{ content_bottom }}</div>
+    {{ column_right }}</div>
+</div>
+{{ footer }}

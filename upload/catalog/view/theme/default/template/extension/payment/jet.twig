@@ -277,18 +277,16 @@ input[type="checkbox"].jet_uslovia{
 	outline: none !important;
 }
 </style>
-<input type="hidden" id="jet_price" name="jet_price" value="{{ jet_price }}" />
-<input type="hidden" id="jet_products" name="jet_products" value="{{ jet_products }}" />
-<input type="hidden" id="jet_products_qt" name="jet_products_qt" value="{{ jet_products_qt }}" />
-<input type="hidden" id="jet_products_pr" name="jet_products_pr" value="{{ jet_products_pr }}" />
-<input type="hidden" id="jet_products_vr" name="jet_products_vr" value="{{ jet_products_vr }}" />
 
+{% if is_active_jet %}
+<input type="hidden" id="jet_finance_context" data-intent="{{ jet_application_intent|e('html') }}" data-context="{{ jet_context|e('html') }}" data-scheme="{{ jet_scheme|e('html') }}" data-csrf="{{ jet_csrf|e('html') }}" value="" />
+<p id="jet_finance_notice" role="status">Кандидатстването временно не е достъпно. Не е изпратена заявка.</p>
 <div class="jet_panel">
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
-			Първоначална вноска ({{ jet_sign }})
+		<div class="{{ jet_column_left|e('html') }}">
+			Първоначална вноска ({{ jet_sign|e('html') }})
 		</div>
-		<div class="{{ jet_column_right }}">
+		<div class="{{ jet_column_right|e('html') }}">
 			<input 
 				class="jet_input_text_active" 
 				type="number" 
@@ -305,33 +303,23 @@ input[type="checkbox"].jet_uslovia{
 		</div>
 	</div>
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
-			{% if jet_sign_second == '' %}
-				Цена на стоките ({{ jet_sign }})
-			{% else %}
-				Цена на стоките ({{ jet_sign }}
-				<span style='font-size:70%;font-weight:400;height:14px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
-			{% endif %}
+		<div class="{{ jet_column_left|e('html') }}">
+
+				Цена на стоките ({{ jet_sign|e('html') }})
+
 		</div>
 		<div class="jet_column_right">
-			<input type="hidden" id="jet_priceall_input" name="jet_priceall_input" />
-			{% if jet_eur == 0 or jet_eur == 3 %}
+
+
 				<div class="jet_input_text jet_disable">
 					<div><span id="jet_priceall"></span></div>
-					<div></div>
+
 				</div>
-			{% else %}
-				<div class="jet_input_text jet_disable">
-					<div><span id="jet_priceall"></span></div>
-					<div>
-						<span>/</span><span id="jet_priceall_second"></span>
-					</div>
-				</div>
-			{% endif %}
+
 		</div>
 	</div>
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
+		<div class="{{ jet_column_left|e('html') }}">
 			Брой погасителни вноски
 		</div>
 		<div class="jet_column_right">
@@ -340,123 +328,84 @@ input[type="checkbox"].jet_uslovia{
 				name="jet_vnoski_input"
 				class="jet_input_text"
 			>
-				<option value="3" {% if jet_vnoski == 3 %}selected{% endif %}>3 месеца</option>
-				<option value="6" {% if jet_vnoski == 6 %}selected{% endif %}>6 месеца</option>
-				<option value="9" {% if jet_vnoski == 9 %}selected{% endif %}>9 месеца</option>
-				<option value="10" {% if jet_vnoski == 10 %}selected{% endif %}>10 месеца</option>
-				<option value="12" {% if jet_vnoski == 12 %}selected{% endif %}>12 месеца</option>
-				<option value="15" {% if jet_vnoski == 15 %}selected{% endif %}>15 месеца</option>
-				<option value="18" {% if jet_vnoski == 18 %}selected{% endif %}>18 месеца</option>
-				<option value="24" {% if jet_vnoski == 24 %}selected{% endif %}>24 месеца</option>
-				<option value="30" {% if jet_vnoski == 30 %}selected{% endif %}>30 месеца</option>
-				<option value="36" {% if jet_vnoski == 36 %}selected{% endif %}>36 месеца</option>
+				<option value="">Изчисляване…</option>
 			</select>
 		</div>
 	</div>
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
-			{% if jet_sign_second == '' %}
-				Общо кредит ({{ jet_sign }})
-			{% else %}
-				Общо кредит ({{ jet_sign }}
-				<span style='font-size:70%;font-weight:400;height:14px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
-			{% endif %}
+		<div class="{{ jet_column_left|e('html') }}">
+
+				Общо кредит ({{ jet_sign|e('html') }})
+
 		</div>
 		<div class="jet_column_right">
-			<input type="hidden" id="jet_total_credit_price_input" name="jet_total_credit_price_input" />
-			{% if jet_eur == 0 or jet_eur == 3 %}
+
+
 				<div class="jet_input_text jet_disable">
 					<div><span id="jet_total_credit_price"></span></div>
-					<div></div>
+
 				</div>
-			{% else %}
-				<div class="jet_input_text jet_disable">
-					<div><span id="jet_total_credit_price"></span></div>
-					<div>
-						<span>/</span><span id="jet_total_credit_price_second"></span>
-					</div>
-				</div>
-			{% endif %}
+
 		</div>
 	</div>
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
-			{% if jet_sign_second == '' %}
-				Месечна вноска ({{ jet_sign }})
-			{% else %}
-				Месечна вноска ({{ jet_sign }}
-				<span style='font-size:70%;font-weight:400;height:14px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
-			{% endif %}
+		<div class="{{ jet_column_left|e('html') }}">
+
+				Месечна вноска ({{ jet_sign|e('html') }})
+
 		</div>
 		<div class="jet_column_right">
-			<input type="hidden" id="jet_vnoska_input" name="jet_vnoska_input" />
-			{% if jet_eur == 0 or jet_eur == 3 %}
+
+
 				<div class="jet_input_text jet_disable">
 					<div><span id="jet_vnoska"></span></div>
-					<div></div>
+
 				</div>
-			{% else %}
-				<div class="jet_input_text jet_disable">
-					<div><span id="jet_vnoska"></span></div>
-					<div>
-						<span>/</span><span id="jet_vnoska_second"></span>
-					</div>
-				</div>
-			{% endif %}
+
 		</div>
 	</div>
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
+		<div class="{{ jet_column_left|e('html') }}">
 			Фикс ГПР (%)
 		</div>
 		<div class="jet_column_right">
-			<input type="hidden" id="jet_gpr_input" name="jet_gpr_input" />
+
 			<div class="jet_input_text jet_disable">
 				<div><span id="jet_gpr"></span></div>
-				<div></div>
+
 			</div>
 		</div>
 	</div>
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
+		<div class="{{ jet_column_left|e('html') }}">
 			ГЛП (%)
 		</div>
 		<div class="jet_column_right">
-			<input type="hidden" id="jet_glp_input" name="jet_glp_input" />
+
 			<div class="jet_input_text jet_disable">
 				<div><span id="jet_glp"></span></div>
-				<div></div>
+
 			</div>
 		</div>
 	</div>
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
-			{% if jet_sign_second == '' %}
-				Общо плащания ({{ jet_sign }})
-			{% else %}
-				Общо плащания ({{ jet_sign }}
-				<span style='font-size:70%;font-weight:400;height:14px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
-			{% endif %}
+		<div class="{{ jet_column_left|e('html') }}">
+
+				Общо плащания ({{ jet_sign|e('html') }})
+
 		</div>
 		<div class="jet_column_right">
-			<input type="hidden" id="jet_obshto_input" name="jet_obshto_input" />
-			{% if jet_eur == 0 or jet_eur == 3 %}
+
+
 				<div class="jet_input_text jet_disable">
 					<div><span id="jet_obshto"></span></div>
-					<div></div>
+
 				</div>
-			{% else %}
-				<div class="jet_input_text jet_disable">
-					<div><span id="jet_obshto"></span></div>
-					<div>
-						<span>/</span><span id="jet_obshto_second"></span>
-					</div>
-				</div>
-			{% endif %}
+
 		</div>
 	</div>
 	<div class="jet_row">
-		<div class="{{ jet_column_left }}">
+		<div class="{{ jet_column_left|e('html') }}">
 			ЕГН *
 		</div>
 		<div class="jet_column_right">
@@ -512,248 +461,9 @@ input[type="checkbox"].jet_uslovia{
 		
 <div class="buttons">
 	<div class="pull-right">
-		<input type="button" {% if not jet_status %}disabled{% endif %} value="{{ button_confirm }}" id="button-confirm" class="btn btn-primary" data-loading-text="{{ text_loading }}" />
+		<input type="button" disabled value="{{ button_confirm|e('html') }}" id="button-confirm" class="btn btn-primary" data-loading-text="{{ text_loading|e('html') }}" />
 	</div>
 </div>
-<script type="text/javascript"><!--
-jQuery(document).ready(function($) {
-	const debounce = (func, delay) => {
-		let timeoutId;
-		return function(...args) {
-			clearTimeout(timeoutId);
-			timeoutId = setTimeout(() => {
-				func.apply(this, args);
-			}, delay);
-		};
-	}
-		
-	const jetCalculate = () => {
-		const jetPriceall = parseFloat($('#jet_price').val());
-		jetHideOptions401();
-		jetHideOptions601();
-		if (jetPriceall >= 401) {
-			jetShowOptions401();
-		}
-		if (jetPriceall >= 601) {
-			jetShowOptions601();
-		}
-		if (parseFloat($('#jet_parva').val()) < jetPriceall) {
-			const jetFormData = new FormData();
-			jetFormData.append('jet_priceall', jetPriceall.toFixed(2));
-			jetFormData.append('jet_parva', parseFloat($('#jet_parva').val()).toFixed(2));
-			jetFormData.append('jet_vnoski', parseInt($('#jet_vnoski').val()));
-			jetFormData.append('jet_products', $('#jet_products').val());
-			jetFormData.append('jet_products_qt', $('#jet_products_qt').val());
-			jetFormData.append('jet_products_pr', $('#jet_products_pr').val());
-			$.ajax({
-				url: 'index.php?route=extension/mt_jet_credit/jetcredit/jet_calculate_cart',
-				method: 'POST',
-				data: jetFormData,
-				processData: false,
-				contentType: false,
-				success: function(json) {
-					if (json.success === 'success') {
-						if ($('#jet_vnoska').length !== 0) {
-							$('#jet_vnoska').text(json.jet_vnoska);
-							if ($('#jet_vnoska_second').length !== 0) $('#jet_vnoska_second').text(json.jet_vnoska_second);
-							$('#jet_vnoski_text').text(parseInt($('#jet_vnoski').val()));
-							$('#jet_priceall').text(json.jet_priceall);
-							if ($('#jet_priceall_second').length !== 0) $('#jet_priceall_second').text(json.jet_priceall_second);
-							$('#jet_total_credit_price').text(json.jet_total_credit_price);
-							if ($('#jet_total_credit_price_second').length !== 0) $('#jet_total_credit_price_second').text(json.jet_total_credit_price_second);
-							$('#jet_vnoska_popup').text(json.jet_vnoska);
-							if ($('#jet_vnoska_popup_second').length !== 0) $('#jet_vnoska_popup_second').text(json.jet_vnoska_second);
-							$('#jet_gpr').text(json.jet_gpr);
-							$('#jet_glp').text(json.jet_glp);
-							$('#jet_obshto').text(json.jet_obshto);
-							if ($('#jet_obshto_second').length !== 0) $('#jet_obshto_second').text(json.jet_obshto_second);
-						}
-					}
-				},
-				error: function(error) {
-					console.error('Error:', error);
-				}
-			});
-		} else {
-			$("#jet_alert_overlay").addClass("show");
-			jetShowCustomAlert('Първоначалната вноска трябва да бъде по-малка от цената на стоките!', false);
-		}
-	}
-	
-	const jetHideOptions401 = () => {
-		$('#jet_vnoski').find('option').each(function() {
-			if ($(this).val() === '15' || $(this).val() === '18' || $(this).val() === '24') {
-				$(this).prop('disabled', true);
-			}
-		});
-	}
-	const jetShowOptions401 = () => {
-		$('#jet_vnoski').find('option').each(function() {
-			if ($(this).val() === '15' || $(this).val() === '18' || $(this).val() === '24') {
-				$(this).prop('disabled', false);
-			}
-		});
-	}
-	const jetHideOptions601 = () => {
-		$('#jet_vnoski').find('option').each(function() {
-			if ($(this).val() === '30' || $(this).val() === '36') {
-				$(this).prop('disabled', true);
-			}
-		});
-	}
-	const jetShowOptions601 = () => {
-		$('#jet_vnoski').find('option').each(function() {
-			if ($(this).val() === '30' || $(this).val() === '36') {
-				$(this).prop('disabled', false);
-			}
-		});
-	}
-	
-	const jetShowCustomAlert = (message, exit) => {
-		const jetAlertBox = $('<div></div>', {
-			id: 'jet_alert_box',
-			css: {
-				position: 'fixed',
-				top: '50%',
-				left: '50%',
-				transform: 'translate(-50%, -50%)',
-				backgroundColor: '#fff',
-				padding: '20px',
-				borderRadius: '5px',
-				boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
-				zIndex: '5000001',
-				width: '300px',
-				textAlign: 'center'
-			}
-		});
-		const jetMessageText = $('<p></p>', {
-			text: message,
-			css: {
-				fontFamily: '"Roboto Condensed", sans-serif',
-				color: '#14532d'
-			}
-		});
-		jetAlertBox.append(jetMessageText);
-		const jetCloseButton = $('<button></button>', {
-			text: 'Добре',
-			css: {
-				fontFamily: '"Roboto Condensed", sans-serif',
-				fontWeight: '500',
-				marginTop: '20px',
-				padding: '10px 20px',
-				border: 'none',
-				backgroundColor: '#166534',
-				color: '#fff',
-				borderRadius: '3px',
-				cursor: 'pointer'
-			}
-		});
-		jetCloseButton.on('click', function() {
-			jetAlertBox.remove();
-			if (exit) {
-				window.location.href = window.location.origin;
-			}
-			$('#jet_alert_overlay').removeClass('show');
-		});
-		jetAlertBox.append(jetCloseButton);
-		$('body').append(jetAlertBox);
-	}
-	
-	const handleJetEgnChange = (event) => {
-		if (event.target.id == "jet_egn") {
-			const input = event.target.value;
-			const regex = /^[0-9]{0,10}$/;
-			if (!regex.test(input)) {
-				event.target.value = input.slice(0, -1);
-			}
-			jetCalculate();
-			changeBtnJetcredit();
-		}
-	}
-	
-	const changeBtnJetcredit = () => {
-		if ($('#jet_uslovia').is(':checked') && $('#jet_uslovia1').is(':checked') && $('#jet_egn').val() !== '') {
-			let _taxa = parseFloat($('#jet_vnoska').text());
-			if (_taxa >= 20) {
-				$('#button-confirm').prop('disabled', false);
-			} else {
-				$("#jet_alert_overlay").addClass("show");
-				jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 лв.!', false);
-				$('#jet_uslovia').prop('checked', false);
-				$('#jet_uslovia1').prop('checked', false);
-			}
-		} else {
-			$('#button-confirm').prop('disabled', true);
-		}
-	}
-	
-	document.addEventListener('input', debounce(handleJetEgnChange, 1000));
-	
-	document.addEventListener('blur', (event) => {
-		if (event.target.id == "jet_egn") {
-			jetCalculate();
-			changeBtnJetcredit();
-		}
-	});
-
-	document.addEventListener('click', (event) => {
-		if (event.target.id == 'btn_preizcisli') {
-			jetCalculate();
-			changeBtnJetcredit();
-		}
-		if (event.target.id == 'jet_uslovia' || event.target.id == 'jet_uslovia1') {
-			jetCalculate();
-			changeBtnJetcredit();
-		}
-	});
-
-	document.addEventListener('change', (event) => {
-		if (event.target.id == 'jet_vnoski') {
-			jetCalculate();
-			changeBtnJetcredit();
-		}
-	});
-	
-	$('#button-confirm').on('click', function() {
-		$('#button-confirm').prop('disabled', true).button('loading');
-		const jetFormSendData = new FormData();
-		jetFormSendData.append('jet_priceall', $('#jet_priceall').text());
-		jetFormSendData.append('jet_vnoski', $('#jet_vnoski').val());
-		jetFormSendData.append('jet_vnoska', $('#jet_vnoska').text());
-		jetFormSendData.append('jet_parva', $('#jet_parva').val());
-		jetFormSendData.append('jet_total_credit_price', $('#jet_total_credit_price').text());
-		jetFormSendData.append('jet_obshto', $('#jet_obshto').text());
-		jetFormSendData.append('jet_gpr', $('#jet_gpr').text());
-		jetFormSendData.append('jet_glp', $('#jet_glp').text());
-		jetFormSendData.append('jet_egn', $('#jet_egn').val());
-		jetFormSendData.append('jet_products', $('#jet_products').val());
-		jetFormSendData.append('jet_products_qt', $('#jet_products_qt').val());
-		jetFormSendData.append('jet_products_pr', $('#jet_products_pr').val());
-		jetFormSendData.append('jet_products_vr', $('#jet_products_vr').val());
-		$.ajax({
-			url: 'index.php?route=extension/payment/jet/confirm',
-			method: 'POST',
-			data: jetFormSendData,
-			processData: false,
-			contentType: false,
-			success: function(json) {
-				console.log(json);
-				if (json['success'] == 'success') {
-					if (json['redirect']) {
-						location = json['redirect'];
-					}
-				}else{
-					$("#jet_alert_overlay").addClass("show");
-					jetShowCustomAlert('Заявката за лизинг не може да бъде изпратена в момента! Моля опитайте по-късно.', false);
-				}
-			},
-			error: function(xhr, ajaxOptions, thrownError) {
-				$('#button-confirm').prop('disabled', false).button('reset');
-				alert(thrownError + "\r\n" + xhr.statusText + "\r\n" + xhr.responseText);
-			}
-		});
-	});
-
-	jetCalculate();
-});
-//--></script>
+<script src="{{ jet_offer_js|e('html') }}"></script>
+<script>jQuery(function () { if (window.JetCreditOffers) window.JetCreditOffers.mount(); });</script>
+{% else %}<p>{{ jet_diagnostic|e('html') }}</p>{% endif %}

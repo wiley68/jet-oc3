@@ -1,0 +1,162 @@
+{
+  "upstream": "opencart/opencart",
+  "scope": "Official version-tag source snapshots; exact bytes pinned by SHA-256; default theme only.",
+  "files": [
+    {
+      "version": "3.0.3.8",
+      "path": "upload/admin/controller/extension/extension/module.php",
+      "sha256": "2a0688f71a7a9e546ab5d88c158fb4433f60cc7263c97e71630386f20ebed8e6",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/admin/controller/extension/extension/module.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/admin/controller/marketplace/modification.php",
+      "sha256": "fd2700ccab62cce7bd23bcde5cb3f425194d1f1c99a4adb00c4b8a488e7a26f5",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/admin/controller/marketplace/modification.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/catalog/controller/checkout/cart.php",
+      "sha256": "b1e6ab76afc98e9ac8712ea65a35604a91ab71e16105ff89b30f1379faf79f5d",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/catalog/controller/checkout/cart.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/catalog/controller/checkout/confirm.php",
+      "sha256": "f91b0fb0c1fd4e6b06eb647da92969c8410a9745d4719defb40afc1b7f5b8d34",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/catalog/controller/checkout/confirm.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/catalog/controller/checkout/success.php",
+      "sha256": "be77f455ddf7dcf518ae3c3e4ce923342dd25942de15508bb4efc9f36f3cddf7",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/catalog/controller/checkout/success.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/catalog/controller/mail/order.php",
+      "sha256": "b4d9887acd59462d9366031e52e3eabbf878422c3496dc442c77044f728e7603",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/catalog/controller/mail/order.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/catalog/controller/product/product.php",
+      "sha256": "de3a034cfd0681ca0ea4830210d8e4e32126c12864b126598e4d391203ca1012",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/catalog/controller/product/product.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/catalog/model/setting/setting.php",
+      "sha256": "e336e04662aedb7a5905766b8dbfe668b9ae1d9f7abe214867621ddd8a3b1b58",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/catalog/model/setting/setting.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/catalog/view/theme/default/template/checkout/cart.twig",
+      "sha256": "7d9e7f2a3544ea67422a353c70b44bf6dc3e3f2a7489d2157f558fac00267e8f",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/catalog/view/theme/default/template/checkout/cart.twig"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/catalog/view/theme/default/template/product/product.twig",
+      "sha256": "93b4f16922b9169e47197e919c7889c158008e9bfb7ebb6a1bd9b4f076462290",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/catalog/view/theme/default/template/product/product.twig"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/system/engine/loader.php",
+      "sha256": "4df5483d388b5aa9071d37b4f4ec17d6d500b2488b93c642f0a9ee4634165378",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/system/engine/loader.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/system/library/db.php",
+      "sha256": "a0cea8a9b8d90e1c304b33c6d43f8838e0914773eb919bff8a5e363c6bc07786",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/system/library/db.php"
+    },
+    {
+      "version": "3.0.3.8",
+      "path": "upload/system/library/request.php",
+      "sha256": "054e8904dd92ba21ff2f6fe52252a681e71811ff5c7031330b08c42aacb975b5",
+      "url": "https://github.com/opencart/opencart/blob/3.0.3.8/upload/system/library/request.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/admin/controller/extension/extension/module.php",
+      "sha256": "0cc01ad44967444e4624d1c17d5668cd9048474f237ea4db090cc82c31a71405",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/admin/controller/extension/extension/module.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/admin/controller/marketplace/modification.php",
+      "sha256": "8e3a2ba055cebcf71679c341e76c3fa09c28d05e5fad7665572f1b191926ec52",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/admin/controller/marketplace/modification.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/catalog/controller/checkout/cart.php",
+      "sha256": "b1e6ab76afc98e9ac8712ea65a35604a91ab71e16105ff89b30f1379faf79f5d",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/catalog/controller/checkout/cart.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/catalog/controller/checkout/confirm.php",
+      "sha256": "f91b0fb0c1fd4e6b06eb647da92969c8410a9745d4719defb40afc1b7f5b8d34",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/catalog/controller/checkout/confirm.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/catalog/controller/checkout/success.php",
+      "sha256": "be77f455ddf7dcf518ae3c3e4ce923342dd25942de15508bb4efc9f36f3cddf7",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/catalog/controller/checkout/success.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/catalog/controller/mail/order.php",
+      "sha256": "29c50e238f6cb73e75a093f9a4c1d39731e56e02a8c7af6957dc488747a3e0a7",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/catalog/controller/mail/order.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/catalog/controller/product/product.php",
+      "sha256": "cdc135cefa78a0fdd6cbfd77b9b06667e01d2e60e2aaaa7991949c6945be41d3",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/catalog/controller/product/product.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/catalog/model/setting/setting.php",
+      "sha256": "e336e04662aedb7a5905766b8dbfe668b9ae1d9f7abe214867621ddd8a3b1b58",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/catalog/model/setting/setting.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/catalog/view/theme/default/template/checkout/cart.twig",
+      "sha256": "7d9e7f2a3544ea67422a353c70b44bf6dc3e3f2a7489d2157f558fac00267e8f",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/catalog/view/theme/default/template/checkout/cart.twig"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/catalog/view/theme/default/template/product/product.twig",
+      "sha256": "68bffba382244d6cdb5436d62b725fab61024df4ff2f6c0041eab64bb63bb5a5",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/catalog/view/theme/default/template/product/product.twig"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/system/engine/loader.php",
+      "sha256": "4df5483d388b5aa9071d37b4f4ec17d6d500b2488b93c642f0a9ee4634165378",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/system/engine/loader.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/system/library/db.php",
+      "sha256": "a0cea8a9b8d90e1c304b33c6d43f8838e0914773eb919bff8a5e363c6bc07786",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/system/library/db.php"
+    },
+    {
+      "version": "3.0.5.1",
+      "path": "upload/system/library/request.php",
+      "sha256": "422a03eb9a68f143c6ba1c23d83cc09f74f72ecfe48f3b6d46ed5c378df6ad82",
+      "url": "https://github.com/opencart/opencart/blob/3.0.5.1/upload/system/library/request.php"
+    }
+  ]
+}

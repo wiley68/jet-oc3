@@ -1,0 +1,4 @@
+# Preserve byte-identical upstream fixtures; their source hashes are test assertions.
+# Whitespace checks remain enabled for all owned source, harnesses and documentation.
+tests/fixtures/oc3/*/upload/** -whitespace
+tests/fixtures/oc3-native-mail-index.php -whitespace
