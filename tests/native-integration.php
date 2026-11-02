@@ -178,4 +178,5 @@ foreach (array('native_array','legacy_json') as $wireFormat) {
  $bank=$r->get('submission_mail_instances')->items[0];
  fcheck(strpos($bank->Body,$text)!==false&&$bank->isHtml===false,'bank format receives validated plaintext, not HTML or double-encoded options');
 }
+require __DIR__ . '/fix07-native.php';
 echo "T-NATIVE-MAIL / T-SUBMIT " . VERSION . " PASS: $fchecks checks; actual OCMOD-applied native callbacks and public controllers; DB/order/SMTP doubles.\n";

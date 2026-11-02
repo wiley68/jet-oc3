@@ -67,10 +67,13 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 	}
 
 	public function quote($context, $scheme, $input) {
+		$diagnostics = $this->registry->get('jetcredit_diagnostics');
+		if ($diagnostics) { $diagnostics->stage('runtime'); }
 		JetCreditRuntime::boot($this->registry);
 		$this->validateCsrf($input);
 		$entity = $context === 'product' ? JetCreditFinancial::positiveInteger($input['jet_product_id'] ?? $input['product_id'] ?? null) : ($context === 'checkout' ? ($this->session->data['order_id'] ?? null) : null);
 		$this->load->model('extension/mt_jet_credit/submission');
+		if ($diagnostics) { $diagnostics->stage('authorization'); }
 		$identity = $this->model_extension_mt_jet_credit_submission->identity();
 		// Missing identity means generation ONE only, never the current generation.
 		$intent = $input['jet_intent'] ?? $identity->first($context,$entity);
@@ -78,9 +81,10 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		$existing = $this->model_extension_mt_jet_credit_submission->existingOutcome($context, $entity, $intent);
 		if ($existing !== null) { return $existing; }
 		$identity->assertCurrent($context,$entity,$intent);
+		if ($diagnostics) { $diagnostics->stage('financial_verification'); }
 		$offer = $this->ready($scheme);
 		$source = $this->source($context, $scheme, $input);
-		$term = isset($input['jet_vnoski']) && $input['jet_vnoski'] !== '' ? JetCreditFinancial::positiveInteger($input['jet_vnoski']) : JetCreditFinancial::initialTerm($source['amount'], $this->config->get('module_mt_jet_credit_vnoski'));
+		$term = isset($input['jet_vnoski']) && $input['jet_vnoski'] !== '' ? JetCreditDiagnostics::integer($input['jet_vnoski'], 'initial_term') : JetCreditFinancial::initialTerm($source['amount'], $this->config->get('module_mt_jet_credit_vnoski'));
 		$down = JetCreditFinancial::money($input['jet_parva'] ?? '0');
 		$selected = $this->calculation($source, $down, $term, $scheme, false);
 		$previews = array($scheme => $selected['calculation']);
@@ -103,7 +107,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		$identity = $this->model_extension_mt_jet_credit_submission->identity();
 		$intent = $input['jet_intent'] ?? $identity->first($context,$context==='product'?$source['lines'][0]['product_id']:null);
 		$identity->assertCurrent($context,$context==='product'?$source['lines'][0]['product_id']:null,$intent);
-		$selected = $this->calculation($source, JetCreditFinancial::money($input['jet_parva']), JetCreditFinancial::positiveInteger($input['jet_vnoski']), $scheme, true);
+		$selected = $this->calculation($source, JetCreditFinancial::money($input['jet_parva']), JetCreditDiagnostics::integer($input['jet_vnoski'], 'initial_term'), $scheme, true);
 		$calculation = $offer->verify($input['jet_offer'] ?? null, $this->binding($context, $scheme, $source, $intent), $source, $selected['policy'], $this->recipientConfiguration(), $selected['calculation']);
 		// Redundant legacy display values may detect tampering, but never determine pricing.
 		foreach (array('jet_priceall' => 'amount', 'jet_total_credit_price' => 'principal', 'jet_vnoska' => 'monthly', 'jet_obshto' => 'total', 'jet_glp' => 'glp', 'jet_gpr' => 'gpr') as $field => $key) {
@@ -147,7 +151,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		if ($price < 0) { throw new JetCreditFinancialException('invalid_product_price'); }
 		$tax = JetCreditFinancial::number($this->tax->getTax($price, $product['tax_class_id']));
 		$reward = $product['reward'] ?? 0;
-		$reward = $reward === null || $reward === 0 || $reward === '0' ? 0 : JetCreditFinancial::positiveInteger($reward);
+		$reward = $reward === null || $reward === 0 || $reward === '0' ? 0 : JetCreditDiagnostics::integer($reward, 'reward');
 		$line = $this->line($id, $quantity, $options, $price, $price * $quantity, $tax, $reward * $quantity);
 		return array('base_amount' => number_format(($price + $tax) * $quantity, 2, '.', ''), 'amount' => $this->eurAmount(($price + $tax) * $quantity), 'lines' => array($line), 'totals' => array(), 'pricing_context' => $this->pricingContext());
 	}
@@ -161,7 +165,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		$known = array();
 		$result = array();
 		foreach ($specs as $spec) {
-			$id = JetCreditFinancial::positiveInteger($spec['product_option_id']);
+			$id = JetCreditDiagnostics::integer($spec['product_option_id'], 'option_id');
 			$known[] = $id;
 			$chosen = $selection[$id] ?? null;
 			if ($chosen === null || $chosen === '' || $chosen === array()) {
@@ -174,7 +178,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 				} else { $chosen = array($chosen); }
 				$seen = array();
 				foreach ($chosen as $value) {
-					$value = JetCreditFinancial::positiveInteger($value);
+					$value = JetCreditDiagnostics::integer($value, 'option_value_id');
 					if (in_array($value, $seen, true)) { throw new JetCreditFinancialException('invalid_options'); }
 					$seen[] = $value;
 					$found = null;
@@ -190,7 +194,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 				$result[] = array('product_option_id' => $id, 'product_option_value_id' => 0, 'value' => JetCreditSubmissionInput::native(JetCreditSubmissionInput::line($chosen, 4096, false)), 'type' => $spec['type'], 'modifier' => 0.0);
 			} else { throw new JetCreditFinancialException('unsupported_pricing'); }
 		}
-		foreach (array_keys($selection) as $key) { if (!in_array(JetCreditFinancial::positiveInteger($key), $known, true)) { throw new JetCreditFinancialException('invalid_options'); } }
+		foreach (array_keys($selection) as $key) { if (!in_array(JetCreditDiagnostics::integer($key, 'option_id'), $known, true)) { throw new JetCreditFinancialException('invalid_options'); } }
 		usort($result, function ($a, $b) { return ($a['product_option_id'] <=> $b['product_option_id']) ?: ($a['product_option_value_id'] <=> $b['product_option_value_id']); });
 		return $result;
 	}
@@ -201,16 +205,16 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		if (!$products || (!$this->cart->hasStock() && !$this->config->get('config_stock_checkout'))) { throw new JetCreditFinancialException('invalid_cart'); }
 		$groups = array();
 		foreach ($products as $product) {
-			$id = JetCreditFinancial::positiveInteger($product['product_id']);
-			$groups[$id] = ($groups[$id] ?? 0) + JetCreditFinancial::positiveInteger($product['quantity']);
+			$id = JetCreditDiagnostics::integer($product['product_id'], 'cart_product_id');
+			$groups[$id] = ($groups[$id] ?? 0) + JetCreditDiagnostics::integer($product['quantity'], 'cart_quantity');
 		}
 		$lines = array();
 		$this->load->model('catalog/product');
 		foreach ($products as $product) {
-			if (!empty($product['recurring']) || $groups[$product['product_id']] < JetCreditFinancial::positiveInteger($product['minimum'])) { throw new JetCreditFinancialException('invalid_cart'); }
+			if (!empty($product['recurring']) || $groups[$product['product_id']] < ($product['minimum'] === 0 || $product['minimum'] === '0' ? 1 : JetCreditDiagnostics::integer($product['minimum'], 'cart_minimum'))) { throw new JetCreditFinancialException('invalid_cart'); }
 			$selection = array();
 			foreach ($product['option'] as $option) {
-				$id = JetCreditFinancial::positiveInteger($option['product_option_id']);
+				$id = JetCreditDiagnostics::integer($option['product_option_id'], 'option_id');
 				if ($option['type'] === 'checkbox') { $selection[$id][] = $option['product_option_value_id']; }
 				else { $selection[$id] = in_array($option['type'], array('select', 'radio'), true) ? $option['product_option_value_id'] : $option['value']; }
 			}
@@ -218,7 +222,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 			if (count($options) !== count($product['option'])) { throw new JetCreditFinancialException('invalid_options'); }
 			$tax = $this->tax->getTax($product['price'], $product['tax_class_id']);
 			$line = $this->line($product['product_id'], $product['quantity'], $options, $product['price'], $product['total'], $tax, $product['reward'] ?? 0);
-			$line['cart_id'] = isset($product['cart_id']) ? JetCreditFinancial::positiveInteger($product['cart_id']) : null;
+			$line['cart_id'] = isset($product['cart_id']) ? JetCreditDiagnostics::integer($product['cart_id'], 'cart_id') : null;
 			$lines[] = $line;
 		}
 		$totals = array(); $taxes = $this->cart->getTaxes(); $total = 0;
@@ -243,7 +247,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 
 	public function orderSnapshot($scheme) {
 		if (!$this->enabled('payment_' . $scheme . '_status') || ($this->session->data['payment_method']['code'] ?? null) !== $scheme) { throw new JetCreditFinancialException('invalid_order_context'); }
-		$id = JetCreditFinancial::positiveInteger($this->session->data['order_id'] ?? null);
+		$id = JetCreditDiagnostics::integer($this->session->data['order_id'] ?? null, 'session_order_id');
 		$this->load->model('checkout/order');
 		$order = $this->model_checkout_order->getOrder($id);
 		if ($this->model_checkout_order->getOrderVouchers($id)) { throw new JetCreditFinancialException('unsupported_pricing'); }
@@ -256,10 +260,10 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		foreach ($this->model_checkout_order->getOrderProducts($id) as $product) {
 			$options = array();
 			foreach ($this->model_checkout_order->getOrderOptions($id, $product['order_product_id']) as $option) {
-				$options[] = array('product_option_id' => JetCreditFinancial::positiveInteger($option['product_option_id']), 'product_option_value_id' => (int)$option['product_option_value_id'], 'value' => (string)$option['value'], 'type' => (string)$option['type'], 'modifier' => 0.0);
+				$options[] = array('product_option_id' => JetCreditDiagnostics::integer($option['product_option_id'], 'option_id'), 'product_option_value_id' => (int)$option['product_option_value_id'], 'value' => (string)$option['value'], 'type' => (string)$option['type'], 'modifier' => 0.0);
 			}
 			usort($options, function ($a, $b) { return ($a['product_option_id'] <=> $b['product_option_id']) ?: ($a['product_option_value_id'] <=> $b['product_option_value_id']); });
-			$lines[] = $this->line($product['product_id'], $product['quantity'], $options, $product['price'], $product['total'], $product['tax'], $product['reward'] ?? 0);
+			$lines[] = $this->line(JetCreditDiagnostics::integer($product['product_id'], 'order_product_id'), JetCreditDiagnostics::integer($product['quantity'], 'order_quantity'), $options, $product['price'], $product['total'], $product['tax'], $product['reward'] ?? 0);
 		}
 		if (!$lines) { throw new JetCreditFinancialException('invalid_order_context'); }
 		$totals = $this->normalizeTotals($this->model_checkout_order->getOrderTotals($id), $order['total']);
@@ -272,7 +276,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		$id = JetCreditFinancial::positiveInteger($id); $quantity = JetCreditFinancial::positiveInteger($quantity);
 		$net = JetCreditFinancial::number($net); $net_total = JetCreditFinancial::number($net_total); $tax = JetCreditFinancial::number($tax);
 		if ($net < 0 || $tax < 0 || abs($net * $quantity - $net_total) > 0.0001) { throw new JetCreditFinancialException('unsupported_pricing'); }
-		$reward = $reward === 0 || $reward === '0' ? 0 : JetCreditFinancial::positiveInteger($reward);
+		$reward = $reward === 0 || $reward === '0' ? 0 : JetCreditDiagnostics::integer($reward, 'reward');
 		return array('product_id' => $id, 'quantity' => $quantity, 'options' => $options, 'net' => number_format($net, 8, '.', ''), 'net_total' => number_format($net_total, 8, '.', ''), 'tax' => number_format($tax, 8, '.', ''), 'gross_total' => number_format($net_total + $tax * $quantity, 8, '.', ''), 'reward' => $reward);
 	}
 

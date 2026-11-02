@@ -26,10 +26,22 @@ GUARD;
 			$checkoutBody = $this->methodBody('ControllerCheckoutConfirm', 'index');
 			$checkoutGuard = <<<'CHECKOUT'
             if (in_array($order_data['payment_code'], array('jet','jet_card'), true)) {
+                $jet_diagnostics = null;
                 try {
+                    require_once DIR_SYSTEM . 'library/jetcredit/diagnostics.php';
+                    $jet_diagnostics = new JetCreditDiagnostics($this->config, $this->log, 'checkout_confirm');
+                    $this->registry->set('jetcredit_diagnostics', $jet_diagnostics);
+                    $jet_diagnostics->stage('model_loading');
                     $this->load->model('extension/mt_jet_credit/checkout');
                     $this->session->data['order_id'] = $this->model_extension_mt_jet_credit_checkout->orderForIntent($order_data);
                 } catch (Throwable $e) {
+                    if ($jet_diagnostics instanceof JetCreditDiagnostics) {
+                        $jet_diagnostics->capture($e);
+                        $jet_diagnostic_result = $jet_diagnostics->response(array());
+                        if (isset($jet_diagnostic_result['correlation_id'])) {
+                            $this->response->addHeader('X-Jet-Correlation-ID: ' . $jet_diagnostic_result['correlation_id']);
+                        }
+                    }
                     $this->response->addHeader('HTTP/1.1 503 Service Unavailable');
                     $this->response->setOutput('Финансирането временно не е достъпно.');
                     return;

@@ -97,6 +97,9 @@ def main():
                 checkout_file.write_text(original_checkout.replace('->orderForIntent(', '->missingReservation('))
                 negative = subprocess.run(['php', str(ROOT / 'tests/native-unavailable.php'), version, str(dest)], capture_output=True, text=True)
                 check(negative.returncode == 0, 'marker-only checkout capability refused: ' + negative.stdout + negative.stderr)
+                checkout_file.write_text(original_checkout.replace("$jet_diagnostics->stage('model_loading');", ""))
+                negative = subprocess.run(['php', str(ROOT / 'tests/native-unavailable.php'), version, str(dest)], capture_output=True, text=True)
+                check(negative.returncode == 0, 'partial diagnostic checkout replacement refused: ' + negative.stdout + negative.stderr)
                 checkout_file.write_text(original_checkout)
         broken = dict(modified)
         # A missing anchor on original source must abort, never silently skip a guard.

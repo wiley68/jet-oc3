@@ -3,46 +3,73 @@ require_once DIR_SYSTEM . 'library/jetcredit/runtime.php';
 require_once DIR_SYSTEM . 'library/jetcredit/submission_identity.php';
 /** Durable reservation commits before native addOrder. Never retry an unresolved owner. */
 class ModelExtensionMtJetCreditCheckout extends Model {
+ private $diagnostics;
  public function orderForIntent($data) {
+  $this->diagnostics=$this->registry->get('jetcredit_diagnostics');
+  if (!$this->diagnostics instanceof JetCreditDiagnostics) { $this->diagnostics=new JetCreditDiagnostics($this->config,$this->log,'checkout_confirm'); }
+  $this->diagnostics->stage('runtime');
   JetCreditRuntime::boot($this->registry);
+  $this->diagnostics->stage('context');
   $scheme=$data['payment_code']??null;
   if (!in_array($scheme,array('jet','jet_card'),true) || (int)$data['store_id']!==0 || (int)$data['customer_id']!==(int)$this->customer->getId() || ($this->session->data['payment_method']['code']??null)!==$scheme) { throw new JetCreditFinancialException('invalid_order_context'); }
+  $this->diagnostics->stage('financing_readiness');
   $this->load->model('extension/mt_jet_credit/financial'); $this->model_extension_mt_jet_credit_financial->ready($scheme);
   if (!in_array($this->config->get('payment_'.$scheme.'_status'),array(1,'1'),true)) { throw new JetCreditFinancialException('financing_unavailable'); }
+  $this->diagnostics->stage('storage');
   $this->load->model('extension/mt_jet_credit/submission'); $facade=$this->model_extension_mt_jet_credit_submission;
   $identity=$facade->identity();
   // Explicit old native POSTs retain their immutable context. An unbound native
   // page GET bootstraps the active server generation, but never advances it.
+  $this->diagnostics->stage('authorization');
   $intent=$this->request->post['jet_intent']??$identity->intent('checkout',null,true);
   $auth=$identity->authorization(0,$this->customer->getId(),'checkout',null,$intent);
-  $store=$facade->purchaseRepository(); $claim=$store->find($intent);
+  $this->diagnostics->stage('storage');
+  $store=$facade->purchaseRepository();
+  $this->diagnostics->stage('claim_lookup');
+  $claim=$store->find($intent);
   $this->load->model('checkout/order');
   if ($claim) {
    if (!hash_equals((string)$claim['authorization'],$auth) || !$claim['order_id']) { throw new JetCreditFinancialException('invalid_application_context'); }
    $order=$this->model_checkout_order->getOrder($claim['order_id']);
    if (!$order || (int)$order['store_id']!==0 || (int)$order['customer_id']!==(int)$this->customer->getId()) { throw new JetCreditFinancialException('invalid_order_context'); }
    // Historical outcome only; submission replays the claim without executing this new data.
-   return JetCreditFinancial::positiveInteger($claim['order_id']);
+   $id=JetCreditFinancial::positiveInteger($claim['order_id']);
+   $this->diagnostics->stage('return');
+   return $id;
   }
+  $this->diagnostics->stage('authorization');
   $identity->assertCurrent('checkout',null,$intent);
+  $this->diagnostics->stage('draft_reservation');
   $signer=new JetCreditOffer(JetCreditOffer::configuredSecret($this->config)); $snapshot=$data;
   foreach(array('ip','forwarded_ip','user_agent','accept_language','tracking') as $key){unset($snapshot[$key]);}
   $digest=$signer->digest($snapshot); $run=bin2hex(random_bytes(32));
+  $this->diagnostics->reservationReached();
   $reservation=$store->reserveDraft($intent,$auth,$digest,$scheme,$run); $row=$reservation['row'];
   if (!$reservation['acquired']) {
+   $this->diagnostics->stage('draft_reuse');
    if ($row['state']!=='draft_bound' || !$row['order_id']) { throw new JetCreditFinancialException('review_required'); }
    if ($row['request_digest']!==$digest || $row['scheme']!==$scheme) { throw new JetCreditFinancialException('stale_order'); }
+   $this->diagnostics->stage('persisted_verification');
    $actual=$this->persisted($row['order_id']);
    if (!hash_equals((string)$row['order_digest'],$signer->digest($actual))) { throw new JetCreditFinancialException('stale_order'); }
+   $this->diagnostics->bindingConfirmed();
+   $this->diagnostics->stage('return');
    return (int)$row['order_id'];
   }
+  $this->diagnostics->reservationConfirmed();
   // No DB transaction spans this call. Native MyISAM writes may persist on failure.
   // Any exception/death leaves draft_creating permanently held, including before addOrder.
+  $this->diagnostics->stage('native_order_creation');
+  $this->diagnostics->nativeCreationStarted();
   $id=JetCreditFinancial::positiveInteger($this->model_checkout_order->addOrder($data));
+  $this->diagnostics->stage('persisted_verification');
   $actual=$this->persisted($id);
   $expected=$this->canonical($data,$data['products'],$data['totals'],function($product){return $product['option'];});
   if ($actual!==$expected) { throw new JetCreditFinancialException('invalid_persisted_order'); }
+  $this->diagnostics->stage('draft_binding');
   $store->bindDraft($intent,$run,$id,$signer->digest($actual));
+  $this->diagnostics->bindingConfirmed();
+  $this->diagnostics->stage('return');
   return $id;
  }
  private function persisted($id) {

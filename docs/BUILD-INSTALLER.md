@@ -42,8 +42,8 @@ files or silently regenerates the manifest. After an approved runtime change:
 python3 tests/release-manifest.py --write
 ```
 
-That command updates metadata only and never creates a ZIP. The 89-entry manifest
-contains `install.xml` and 88 files under `upload/`, with no wrapper directory.
+That command updates metadata only and never creates a ZIP. The 90-entry manifest
+contains `install.xml` and 89 files under `upload/`, with no wrapper directory.
 Tests, docs, builder, Git/IDE data, Windows download metadata, caches, logs,
 credentials and database dumps are excluded.
 

@@ -27,6 +27,8 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	}
 
 	private function calculate($context) {
+		$diagnostics = new JetCreditDiagnostics($this->config, $this->log, 'quote_' . $context);
+		$this->registry->set('jetcredit_diagnostics', $diagnostics);
 		if (($this->request->server['REQUEST_METHOD'] ?? '') !== 'POST') { $this->output(array('success' => 'unsuccess', 'code' => 'method_not_allowed'), '405 Method Not Allowed'); return; }
 		try {
 			$card = $this->request->post['jet_card'] ?? '0';
@@ -35,9 +37,11 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 			$result = $this->model_extension_mt_jet_credit_financial->quote($context, (string)$card === '1' ? 'jet_card' : 'jet', $this->request->post);
 			$this->output($result);
 		} catch (JetCreditFinancialException $e) {
-			$this->output(array('success' => 'unsuccess', 'code' => $e->getMessage()), '400 Bad Request');
+			$diagnostics->capture($e);
+			$this->output($diagnostics->response(array('success' => 'unsuccess', 'code' => $e->getMessage())), '400 Bad Request');
 		} catch (Throwable $e) {
-			$this->output(array('success' => 'unsuccess', 'code' => 'calculation_unavailable'), '500 Internal Server Error');
+			$diagnostics->capture($e);
+			$this->output($diagnostics->response(array('success' => 'unsuccess', 'code' => 'calculation_unavailable')), '500 Internal Server Error');
 		}
 	}
 	private function output($json, $status = '200 OK') {

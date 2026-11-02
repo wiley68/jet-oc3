@@ -1,3 +1,10 @@
+> FIX-07: `python3 tests/ocmod.py` also executes `fix07-native.php` through the
+> actual modified native confirm fixtures; no ZIP is authorized in this task.
+
+> FIX-06: run `php tests/fix06.php` for minimum parity and privacy-safe diagnostic
+> regression checks. See [diagnostic procedure](../docs/FIX-06-DIAGNOSTICS.md).
+> Use builder `--source-only`; this task does not authorize an installer ZIP.
+
 > Current installer output: only the ZIP and its `.sha256` in flat `dist/`.
 > No generated build/verification reports or `dist-history/` are retained.
 > Run `python3 tests/builder.py` to verify the two-file output and safety checks;

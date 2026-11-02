@@ -2,6 +2,19 @@
 /** Pure EUR validation/calculation. No OpenCart writes or delivery side effects. */
 class JetCreditFinancialException extends RuntimeException {}
 
+/** Carries only bounded diagnostic metadata, never the rejected value. */
+class JetCreditIntegerException extends JetCreditFinancialException {
+	private $diagnosticField; private $diagnosticCategory;
+	public function __construct($field, $category) {
+		parent::__construct('invalid_integer');
+		$this->diagnosticField = in_array($field, array('session_order_id','order_product_id','order_quantity','cart_product_id','cart_quantity','cart_minimum','cart_id','option_id','option_value_id','reward','initial_term','currency_id'), true) ? $field : 'integer';
+		$this->diagnosticCategory = in_array($category, array('missing','empty','zero','wrong_type','invalid_format','out_of_range'), true) ? $category : 'invalid_format';
+	}
+	public function field() { return $this->diagnosticField; }
+	public function category() { return $this->diagnosticCategory; }
+}
+require_once __DIR__ . '/diagnostics.php';
+
 class JetCreditFinancial {
 	private const JETCREDIT_FINANCIAL_MAX_ITERATIONS = 128;
 	private const JETCREDIT_FINANCIAL_PRECISION = 1.0e-08;
@@ -65,7 +78,7 @@ class JetCreditFinancial {
 	}
 
 	public static function initialTerm($amount, $default) {
-		return self::money($amount) < 125 ? 9 : self::positiveInteger($default === null || $default === '' ? 12 : $default);
+		return self::money($amount) < 125 ? 9 : JetCreditDiagnostics::integer($default === null || $default === '' ? 12 : $default, 'initial_term');
 	}
 
 	public static function calculate($amount, $down, $term, $percent, $minimum = 75, $requireMonthly = true) {
@@ -93,7 +106,7 @@ class JetCreditFinancial {
 
 	public static function requireEur($config, $session, $currency) {
 		if (($session->data['currency'] ?? null) !== 'EUR') { throw new JetCreditFinancialException('non_eur_currency'); }
-		if (!$currency->has('EUR') || !self::positiveInteger($currency->getId('EUR')) || self::number($currency->getValue('EUR')) <= 0) { throw new JetCreditFinancialException('invalid_eur_currency'); }
+		if (!$currency->has('EUR') || !JetCreditDiagnostics::integer($currency->getId('EUR'), 'currency_id') || self::number($currency->getValue('EUR')) <= 0) { throw new JetCreditFinancialException('invalid_eur_currency'); }
 		// EUR's enabled flag is checked by the OC3 adapter against the currency row.
 	}
 
