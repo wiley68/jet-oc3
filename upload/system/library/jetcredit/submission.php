@@ -41,7 +41,7 @@ class JetCreditSubmission {
 		$result = 'manual_registered';
 		if ($verified['recipient']['mode'] === 'automatic') {
 			try {
-				$body = JetCreditSubmissionMail::bankBody($verified['person'], $this->orders->bankProducts($order), $verified['calculation'], $scheme);
+				$body = JetCreditSubmissionMail::bankBody($verified['person'], $this->orders->bankProducts($order, $verified['source']), $verified['calculation'], $scheme);
 				$merchant = $this->config->get('module_mt_jet_credit_id');
 				$preparedMail = $this->mail->prepare($verified['recipient']['addresses'], JetCreditSubmissionMail::bankSubject($merchant, 0), $body);
 			} catch (Throwable $e) {

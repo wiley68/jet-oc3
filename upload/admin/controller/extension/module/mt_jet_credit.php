@@ -15,6 +15,7 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 			$this->session->data['success'] = 'Успешно записахте направените промени.';
 			$this->cache->delete('module_mt_jet_credit');
 			$this->response->redirect($this->url->link('extension/module/mt_jet_credit', 'user_token=' . $this->session->data['user_token'], true));
+			return;
 		}
 		$data['breadcrumbs'] = array();
 		$data['breadcrumbs'][] = array(
@@ -37,11 +38,10 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		if (isset($this->session->data['jetcredit_install_error'])) { $this->error['warning'] = $this->session->data['jetcredit_install_error']; unset($this->session->data['jetcredit_install_error']); $data['success'] = ''; }
 		$data['jet_finance_diagnostic'] = '';
 		try {
-			if ($this->config->get('config_currency') !== 'EUR') { throw new JetCreditFinancialException('non_eur_currency'); }
 			$eur = $this->db->query("SELECT currency_id,status,value FROM `" . DB_PREFIX . "currency` WHERE code='EUR'");
-			if ($eur->num_rows !== 1 || (int)$eur->row['status'] !== 1 || JetCreditFinancial::number($eur->row['value']) !== 1.0) { throw new JetCreditFinancialException('invalid_eur_base'); }
+			if ($eur->num_rows !== 1 || (int)$eur->row['status'] !== 1 || JetCreditFinancial::number($eur->row['value']) <= 0) { throw new JetCreditFinancialException('invalid_eur_currency'); }
 			(new JetCreditInstallation($this->db, DB_PREFIX))->load($this->config);
-		} catch (Throwable $e) { $data['jet_finance_diagnostic'] = 'Финансирането изисква активна базова EUR и завършена clean инсталация. Липсваща/legacy/несъвместима schema не се мигрира автоматично. Secret и номерацията не се променят от този формуляр.'; }
+		} catch (Throwable $e) { $data['jet_finance_diagnostic'] = JetCreditInstallation::diagnostic($e); }
 
 
 		if (isset($this->error['warning'])) {
@@ -247,15 +247,22 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 	}
 
 	public function install() {
-		if (!$this->lifecycleAuthorized()) { $this->session->data['error_warning'] = 'Нямате права за инсталация в default store.'; return; }
+		if (isset($this->request->get['store_id']) || isset($this->request->post['store_id']) || !in_array($this->config->get('config_store_id'), array(null,0,'0'), true)) { $message = JetCreditInstallation::diagnostic(new JetCreditFinancialException('unsupported_store')); $this->session->data['jetcredit_install_error'] = $message; return array('jetcredit_installed'=>false,'message'=>$message); }
+		if (!$this->lifecycleAuthorized()) { $message = JetCreditInstallation::diagnostic(new JetCreditFinancialException('authorization')); $this->session->data['jetcredit_install_error'] = $message; return array('jetcredit_installed'=>false,'message'=>$message); }
 		$this->load->model('setting/setting');
 		try {
-			(new JetCreditInstallation($this->db, DB_PREFIX))->install($this->config, function () {
+			$status = (new JetCreditInstallation($this->db, DB_PREFIX))->install($this->config, function () {
 				$status = (int)$this->config->get('config_order_status_id');
 				$valid = $this->db->query('SELECT order_status_id FROM `' . DB_PREFIX . "order_status` WHERE order_status_id=" . $status . ' AND language_id=' . (int)$this->config->get('config_language_id'));
 				foreach (JetCreditInstallation::defaults($valid->num_rows ? $status : 0) as $code => $values) { $this->model_setting_setting->editSetting($code, $values, 0); }
 			});
-		} catch (Throwable $e) { $this->session->data['jetcredit_install_error'] = 'Инсталацията е отказана: изисква се чист магазин с активна базова EUR. Legacy или непълна инсталация изисква owner review; данните и ключът не се нулират.'; $this->response->redirect($this->url->link('extension/module/mt_jet_credit', 'user_token=' . $this->session->data['user_token'], true)); }
+			unset($this->session->data['jetcredit_install_error']);
+			return array('jetcredit_installed'=>true,'status'=>$status);
+		} catch (Throwable $e) {
+			$message = JetCreditInstallation::diagnostic($e);
+			$this->session->data['jetcredit_install_error'] = $message;
+			return array('jetcredit_installed'=>false,'message'=>$message);
+		}
 	}
 	public function uninstall() {
 		if (!$this->lifecycleAuthorized()) { return; }
@@ -271,17 +278,15 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 	}
 	private function validate() {
 		try {
-			if (!$this->lifecycleAuthorized()) { throw new RuntimeException('authorization'); }
+			if (!$this->lifecycleAuthorized()) { throw new JetCreditFinancialException('authorization'); }
 			(new JetCreditInstallation($this->db, DB_PREFIX))->load($this->config);
 			$values = JetCreditAdminSettings::module($this->request->post, $this->config);
 			if ($values['module_mt_jet_credit_status'] === '1') {
 				$eur = $this->db->query("SELECT currency_id,status,value FROM `" . DB_PREFIX . "currency` WHERE code='EUR'");
-				if ($this->config->get('config_currency') !== 'EUR' || $eur->num_rows !== 1 || (int)$eur->row['status'] !== 1 || JetCreditFinancial::number($eur->row['value']) !== 1.0) { throw new JetCreditFinancialException('invalid_eur_base'); }
-				JetCreditAdminSettings::payment(array(), $this->config, $this->db, 'jet');
-				if ($values['module_mt_jet_credit_status_card'] === '1') { JetCreditAdminSettings::payment(array(), $this->config, $this->db, 'jet_card'); }
+				if ($eur->num_rows !== 1 || (int)$eur->row['status'] !== 1 || JetCreditFinancial::number($eur->row['value']) <= 0) { throw new JetCreditFinancialException('invalid_eur_currency'); }
 			}
 			return true;
-		} catch (Throwable $e) { $this->error['warning'] = 'Проверете правата, clean инсталацията и настройките. Празен записан email означава ръчна регистрация; невалиден email се отказва.'; return false; }
+		} catch (Throwable $e) { $this->error['warning'] = JetCreditAdminSettings::diagnostic($e); return false; }
 	}
 
 	/**

@@ -34,6 +34,8 @@ class FSession {
 	public function getId() { return $this->id; }
 }
 class FCustomer {
+	public $firstname='Profile First'; public $lastname='Profile Last'; public $email='profile@example.test'; public $telephone='+359123456789';
+	public function getFirstName(){return $this->firstname;} public function getLastName(){return $this->lastname;} public function getEmail(){return $this->email;} public function getTelephone(){return $this->telephone;}
 	public $id = 7;
 	public function isLogged() { return $this->id > 0; }
 	public function getId() { return $this->id; }
@@ -41,8 +43,10 @@ class FCustomer {
 class FCurrency {
 	public $value = 1;
 	public $exists = true;
-	public function has($code) { return $this->exists && $code === 'EUR'; }
-	public function getValue($code) { return $this->value; }
+	public function has($code) { return $this->exists && in_array($code, array('EUR','RON','USD','BGN'), true); }
+	public $baseValue = 1;
+	public function getValue($code) { return $code === 'EUR' ? $this->value : $this->baseValue; }
+	public function convert($amount, $from, $to) { return $amount / $this->getValue($from) * $this->getValue($to); }
 	public function getId($code) { return 1; }
 	public function format($value, $code, $rate = 1) { return number_format((float)$value, 2, '.', ''); }
 }
@@ -54,6 +58,7 @@ class FTax {
 require __DIR__ . '/purchase-db-double.php';
 class FDb {
 	use PurchaseDbDouble;
+	public $baseCurrencyStatus = 1; public $baseCurrencyValue = 1;
 	public $currency = array('currency_id' => 1, 'status' => '1', 'value' => '1');
 	public $promos = array();
 	public $queries = array();
@@ -64,6 +69,7 @@ class FDb {
 		if (!preg_match('/^\s*SELECT /', $sql)) { throw new RuntimeException('WRITE ATTEMPT IN FINANCIAL TEST'); }
 		$rows = array();
 		if (strpos($sql, "currency WHERE code = 'EUR'") !== false) { $rows[] = $this->currency; }
+		elseif (preg_match("/currency WHERE code = '(RON|USD|BGN)'/", $sql)) { $rows[] = array('currency_id'=>2,'status'=>$this->baseCurrencyStatus,'value'=>$this->baseCurrencyValue); }
 		elseif (strpos($sql, 'FROM oc_jet_kop') !== false) {
 			preg_match("/jet_product_id = '([^']+)'\)/", $sql, $selector);
 			preg_match('/FIND_IN_SET\(([0-9]+),/', $sql, $term);

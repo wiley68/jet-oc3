@@ -1,3 +1,31 @@
+> Current installer output: only the ZIP and its `.sha256` in flat `dist/`.
+> No generated build/verification reports or `dist-history/` are retained.
+> Run `python3 tests/builder.py` to verify the two-file output and safety checks;
+> tests build in temporary directories. Historical phase notes below retain their
+> original scope. See [builder guide](../docs/BUILD-INSTALLER.md).
+
+> IMP-05B-FIX-05 adds 400 ms down-payment debounce, stale-offer safeguards,
+> empty-to-zero editing and scoped Step 1/Step 2 styles. Run the same full local
+> regression set with `python3 tests/popup-contracts.py` and
+> `node.exe < tests/security-ui.cjs` (or native `node`). No ZIP is authorized;
+> use `python3 tests/builder.py --source-only`. See [FIX-05 report](IMP-05B-FIX-05.md).
+
+> IMP-05B-FIX-04 adds `python3 tests/popup-contracts.py` and `php tests/prefill.php`.
+> Shared UI behavior is covered by `node.exe < tests/security-ui.cjs` (or native
+> `node`). Jet-Woo reference provenance is pinned in
+> `fixtures/jet-woo-ui-reference.json`; see [FIX-04 report](IMP-05B-FIX-04.md).
+> Use `builder.py --source-only`; no new installer is authorized in FIX-04.
+
+> IMP-05B-FIX-02 adds `python3 tests/admin-tabs.py` and
+> `php tests/admin-settings.php`. No replacement ZIP is authorized in FIX-02;
+> use builder `--source-only`. See [FIX-02 report](IMP-05B-FIX-02.md).
+
+> Current continuation: [IMP-05B-FIX-01](IMP-05B-FIX-01.md). Add
+> `php tests/currency.php` to regression. Use `python3 tests/builder.py --source-only`
+> in place of the archive-producing command below until a rebuild is authorized.
+> `ocmod.py` also runs native admin-install probes. Unknown 3.x labels on existing
+> fixtures test capability policy, not actual source/integration certification.
+
 # IMP-01 / IMP-02 / IMP-03 / IMP-04 / IMP-05A regression
 
 Run from the repository root with existing PHP CLI, Python 3 and Node.js:
@@ -136,12 +164,12 @@ outputs are directly in `dist/` for candidate and release modes, Git-ignored and
 protected against any existing bundle component/candidate-release collision.
 Run `bash tools/build-installer.sh candidate` for the current uncommitted source;
 use explicit `--output` only for isolated temporary verification. See
-[BUILD-INSTALLER.md](../docs/BUILD-INSTALLER.md) for report filenames and future
+[BUILD-INSTALLER.md](../docs/BUILD-INSTALLER.md) for the two-file output policy and future
 committed-source mode. Historical IMP-05A/R2 reports describe their own checkpoints.
 
 Development checkpoint: use [DEVELOPMENT-CHECKPOINT.md](../docs/DEVELOPMENT-CHECKPOINT.md)
 for the next work session. Legacy artifact paths in old phase reports record their
 original checkpoints; current output is only `dist/`. The immutable audit baseline
 is pinned in provenance/preservation tests so committing the new source does not
-change what those tests compare. Generated packages/reports and Windows download
+change what those tests compare. Generated packages/checksums and Windows download
 metadata are excluded from version control.

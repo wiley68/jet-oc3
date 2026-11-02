@@ -24,7 +24,7 @@ foreach (array('product', 'cart', 'checkout') as $context) {
 			fcheck($claim['state'] === 'complete' && $claim['result'] === $expected, 'durable completion');
 			fcheck($native->created === ($context === 'checkout' ? 0 : 1), 'order before bank / no second checkout order');
 			$order = $native->getOrder($result['order_id']);
-			fcheck($order['total'] === ($context === 'product' ? '240.00' : ($context === 'checkout' ? '235.0000' : '235.00')), 'authoritative order total');
+			fcheck($order['total'] === ($context === 'product' ? '240.00' : '235.0000'), 'authoritative order total');
 			fcheck((int)$order['order_status_id'] === ($scheme === 'jet' ? 3 : 4), 'gateway configured order status');
 			fcheck($native->nativeMails === 0 && $native->histories[0][3] === false, 'narrow native-mail scope / notify false');
 			fcheck($r->get('db')->counter === ($mode === 'automatic' ? 17 : 16) && ($claim['bank_reference'] !== null) === ($mode === 'automatic'), 'manual has no reference; automatic one reference');

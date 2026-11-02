@@ -5,13 +5,14 @@ class ModelExtensionPaymentJetCard extends Model {
 		try {
 			$this->load->model('extension/mt_jet_credit/financial');
 			$this->model_extension_mt_jet_credit_financial->ready('jet_card');
-			$total = JetCreditFinancial::money($total);
+			$native_total = JetCreditFinancial::number($total);
+			$total = (float)$this->model_extension_mt_jet_credit_financial->eurAmount($native_total);
 			$minimum = JetCreditFinancial::minimum($this->config->get('module_mt_jet_credit_price'));
 			$payment_minimum = JetCreditFinancial::money($this->config->get('payment_jet_card_total') ?: 0);
 		} catch (JetCreditFinancialException $e) { return array(); }
 		catch (Throwable $e) { return array(); }
 		$query = $this->db->query("SELECT * FROM " . DB_PREFIX . "zone_to_geo_zone WHERE geo_zone_id = '" . (int)$this->config->get('payment_jet_card_geo_zone_id') . "' AND country_id = '" . (int)$address['country_id'] . "' AND (zone_id = '" . (int)$address['zone_id'] . "' OR zone_id = '0')");
-		if ($payment_minimum > 0 && $payment_minimum > $total) {
+		if ($payment_minimum > 0 && $payment_minimum > $native_total) {
 			$status = false;
 		} elseif (!$this->config->get('payment_jet_card_geo_zone_id')) {
 			$status = true;

@@ -12,8 +12,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 	public function ready($scheme = 'jet') {
 		JetCreditRuntime::boot($this->registry);
 		JetCreditFinancial::requireEur($this->config, $this->session, $this->currency);
-		$currency = $this->db->query("SELECT currency_id, status, value FROM " . DB_PREFIX . "currency WHERE code = 'EUR'");
-		if ($currency->num_rows !== 1 || (int)$currency->row['status'] !== 1 || abs(JetCreditFinancial::number($currency->row['value']) - 1) > 1.0e-8) { throw new JetCreditFinancialException('invalid_eur_base'); }
+		$this->currencyContext();
 		if (!in_array($this->config->get('config_store_id'), array(null, 0, '0'), true)) { throw new JetCreditFinancialException('unsupported_store'); }
 		if (!in_array($scheme, array('jet', 'jet_card'), true) || !$this->enabled('module_mt_jet_credit_status') || ($scheme === 'jet_card' && !$this->enabled('module_mt_jet_credit_status_card'))) { throw new JetCreditFinancialException('financing_unavailable'); }
 		if ($this->config->get('config_customer_price') && !$this->customer->isLogged()) { throw new JetCreditFinancialException('financing_unavailable'); }
@@ -27,7 +26,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 	}
 
 	public function frontendData($context, $scheme = 'jet', $product_id = null) {
-		$data = array('is_active_jet' => false, 'jet_context' => $context, 'jet_scheme' => $scheme, 'jet_product_id' => $product_id ?? 0, 'jet_csrf' => '', 'jet_application_intent' => '', 'jet_sign' => 'EUR', 'jet_vnoski' => 12, 'jet_status' => false, 'jet_column_left' => 'jet_column_left', 'jet_column_right' => 'jet_column_right', 'jet_diagnostic' => 'Кредитното финансиране временно не е достъпно.');
+		$data = array('is_active_jet' => false, 'jet_context' => $context, 'jet_scheme' => $scheme, 'jet_product_id' => $product_id ?? 0, 'jet_csrf' => '', 'jet_application_intent' => '', 'jet_sign' => 'евро', 'jet_vnoski' => 12, 'jet_status' => false, 'jet_column_left' => 'jet_column_left', 'jet_column_right' => 'jet_column_right', 'jet_diagnostic' => 'Кредитното финансиране временно не е достъпно.');
 		try {
 			$this->ready($scheme);
 			if ($context === 'cart' && !$this->enabled('module_mt_jet_credit_cart_show')) { return $data; }
@@ -54,8 +53,15 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 			foreach (array('jet_offer_js' => 'creditjet_offers.js', 'jet_product_js' => 'creditjet_products.js', 'jet_product_css' => 'creditjet_products.css') as $key => $file) {
 				$data[$key] = $base . $file . '?ver=' . filemtime(DIR_APPLICATION . 'view/theme/default/template/extension/mt_jet_credit/' . $file);
 			}
-			// Quote DTOs contain no customer identity fields.
+			// Profile data belongs only to the current customer's rendered popup, never quote DTOs.
 			$data['jet_name'] = $data['jet_lastname'] = $data['jet_email'] = $data['jet_phone'] = '';
+			if ($context !== 'checkout' && $this->customer->isLogged()) {
+				$this->response->addHeader('Cache-Control: private, no-store');
+				foreach (array('jet_name'=>'getFirstName','jet_lastname'=>'getLastName','jet_email'=>'getEmail','jet_phone'=>'getTelephone') as $key=>$method) {
+					try { $data[$key] = JetCreditSubmissionInput::line($this->customer->$method(), 255, false); }
+					catch (JetCreditFinancialException $e) { $data[$key] = ''; }
+				}
+			}
 		} catch (JetCreditFinancialException $e) { $data['is_active_jet'] = false; }
 		return $data;
 	}
@@ -140,7 +146,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		$reward = $product['reward'] ?? 0;
 		$reward = $reward === null || $reward === 0 || $reward === '0' ? 0 : JetCreditFinancial::positiveInteger($reward);
 		$line = $this->line($id, $quantity, $options, $price, $price * $quantity, $tax, $reward * $quantity);
-		return array('amount' => number_format(($price + $tax) * $quantity, 2, '.', ''), 'lines' => array($line), 'totals' => array(), 'pricing_context' => $this->pricingContext());
+		return array('base_amount' => number_format(($price + $tax) * $quantity, 2, '.', ''), 'amount' => $this->eurAmount(($price + $tax) * $quantity), 'lines' => array($line), 'totals' => array(), 'pricing_context' => $this->pricingContext());
 	}
 
 	private function validateOptions($specs, $selection, $quantity) {
@@ -229,7 +235,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 			$this->{'model_extension_total_' . $code}->getTotal($total_data);
 		}
 		$totals = $this->normalizeTotals($totals, $total);
-		return array('amount' => number_format(JetCreditFinancial::number($total), 2, '.', ''), 'lines' => $lines, 'totals' => $totals, 'pricing_context' => $this->pricingContext());
+		return array('base_amount' => number_format(JetCreditFinancial::number($total), 4, '.', ''), 'amount' => $this->eurAmount($total), 'lines' => $lines, 'totals' => $totals, 'pricing_context' => $this->pricingContext());
 	}
 
 	public function orderSnapshot($scheme) {
@@ -238,7 +244,7 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		$this->load->model('checkout/order');
 		$order = $this->model_checkout_order->getOrder($id);
 		if ($this->model_checkout_order->getOrderVouchers($id)) { throw new JetCreditFinancialException('unsupported_pricing'); }
-		if (!$order || (int)$order['store_id'] !== 0 || $order['payment_code'] !== $scheme || $order['currency_code'] !== 'EUR' || abs(JetCreditFinancial::number($order['currency_value']) - 1) > 1.0e-8) { throw new JetCreditFinancialException('invalid_order_context'); }
+		if (!$order || (int)$order['store_id'] !== 0 || $order['payment_code'] !== $scheme || $order['currency_code'] !== 'EUR' || abs(JetCreditFinancial::number($order['currency_value']) - (float)$this->currencyContext()['eur_value']) > 1.0e-8) { throw new JetCreditFinancialException('invalid_order_context'); }
 		if ($this->customer->isLogged()) {
 			if ((int)$order['customer_id'] !== (int)$this->customer->getId()) { throw new JetCreditFinancialException('invalid_order_context'); }
 		} elseif ((int)$order['customer_id'] !== 0 || !isset($this->session->data['guest']['email']) || strcasecmp($this->session->data['guest']['email'], $order['email']) !== 0) { throw new JetCreditFinancialException('invalid_order_context'); }
@@ -255,8 +261,8 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		if (!$lines) { throw new JetCreditFinancialException('invalid_order_context'); }
 		$totals = $this->normalizeTotals($this->model_checkout_order->getOrderTotals($id), $order['total']);
 		$cart = $this->cartSnapshot();
-		if ($this->comparisonLines($lines) !== $this->comparisonLines($cart['lines']) || $totals !== $cart['totals'] || number_format(JetCreditFinancial::number($order['total']), 2, '.', '') !== $cart['amount']) { throw new JetCreditFinancialException('stale_order'); }
-		return array('order_id' => $id, 'amount' => number_format(JetCreditFinancial::number($order['total']), 2, '.', ''), 'lines' => $lines, 'totals' => $totals, 'cart_digest_source' => $cart, 'pricing_context' => $this->pricingContext());
+		if ($this->comparisonLines($lines) !== $this->comparisonLines($cart['lines']) || $totals !== $cart['totals'] || number_format(JetCreditFinancial::number($order['total']), 4, '.', '') !== $cart['base_amount']) { throw new JetCreditFinancialException('stale_order'); }
+		return array('order_id' => $id, 'base_amount' => number_format(JetCreditFinancial::number($order['total']), 4, '.', ''), 'amount' => $this->eurAmount($order['total']), 'lines' => $lines, 'totals' => $totals, 'cart_digest_source' => $cart, 'pricing_context' => $this->pricingContext());
 	}
 
 	private function line($id, $quantity, $options, $net, $net_total, $tax, $reward = 0) {
@@ -310,7 +316,30 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		return array('application_intent'=>$intent,'generation'=>$this->model_extension_mt_jet_credit_submission->identity()->generation($context,$context==='product'?$source['lines'][0]['product_id']:null,$intent),'store' => 0, 'session' => $this->session->getId(), 'customer' => (int)$this->customer->getId(), 'group' => $this->config->get('config_customer_group_id'), 'context' => $context, 'scheme' => $scheme, 'order' => $source['order_id'] ?? null);
 	}
 	public function pricingContext() {
-		return array('base' => $this->config->get('config_currency'), 'session_currency' => $this->session->data['currency'] ?? null, 'group' => $this->config->get('config_customer_group_id'), 'tax' => $this->config->get('config_tax'), 'stock_checkout' => $this->config->get('config_stock_checkout'), 'payment_address' => $this->session->data['payment_address'] ?? null, 'shipping_address' => $this->session->data['shipping_address'] ?? null, 'shipping_method' => $this->session->data['shipping_method'] ?? null, 'coupon' => $this->session->data['coupon'] ?? null, 'voucher' => $this->session->data['voucher'] ?? null, 'reward' => $this->session->data['reward'] ?? null);
+		return array('conversion' => $this->currencyContext(), 'base' => $this->config->get('config_currency'), 'session_currency' => $this->session->data['currency'] ?? null, 'group' => $this->config->get('config_customer_group_id'), 'tax' => $this->config->get('config_tax'), 'stock_checkout' => $this->config->get('config_stock_checkout'), 'payment_address' => $this->session->data['payment_address'] ?? null, 'shipping_address' => $this->session->data['shipping_address'] ?? null, 'shipping_method' => $this->session->data['shipping_method'] ?? null, 'coupon' => $this->session->data['coupon'] ?? null, 'voucher' => $this->session->data['voucher'] ?? null, 'reward' => $this->session->data['reward'] ?? null);
+	}
+	/** Native amounts stay in base units; only financing DTOs cross this boundary. */
+	public function currencyContext() {
+		JetCreditFinancial::requireEur($this->config, $this->session, $this->currency);
+		$base = $this->config->get('config_currency');
+		if (!is_string($base) || !preg_match('/^[A-Z]{3}$/D', $base) || !$this->currency->has($base)) { throw new JetCreditFinancialException('invalid_base_currency'); }
+		$baseValue = JetCreditFinancial::number($this->currency->getValue($base));
+		$eurValue = JetCreditFinancial::number($this->currency->getValue('EUR'));
+		if ($baseValue <= 0 || $eurValue <= 0) { throw new JetCreditFinancialException('invalid_currency_rate'); }
+		$eur = $this->db->query("SELECT currency_id, status, value FROM " . DB_PREFIX . "currency WHERE code = 'EUR'");
+		if ($eur->num_rows !== 1 || (int)$eur->row['status'] !== 1 || (int)$eur->row['currency_id'] !== (int)$this->currency->getId('EUR') || abs(JetCreditFinancial::number($eur->row['value']) - $eurValue) > 1.0e-8) { throw new JetCreditFinancialException('invalid_eur_currency'); }
+		if ($base !== 'EUR') {
+			$record = $this->db->query("SELECT currency_id, status, value FROM " . DB_PREFIX . "currency WHERE code = '" . $this->db->escape($base) . "'");
+			if ($record->num_rows !== 1 || (int)$record->row['status'] !== 1 || abs(JetCreditFinancial::number($record->row['value']) - $baseValue) > 1.0e-8) { throw new JetCreditFinancialException('invalid_base_currency'); }
+		}
+		$rate = JetCreditFinancial::number($this->currency->convert(1, $base, 'EUR'));
+		if ($rate <= 0) { throw new JetCreditFinancialException('invalid_currency_rate'); }
+		return array('base'=>$base, 'session'=>'EUR', 'financing'=>'EUR', 'base_value'=>number_format($baseValue, 8, '.', ''), 'eur_value'=>number_format($eurValue, 8, '.', ''), 'rate'=>number_format($rate, 12, '.', ''), 'eur_id'=>(int)$eur->row['currency_id'], 'eur_status'=>1);
+	}
+	public function eurAmount($amount) { return number_format($this->toEur($amount), 2, '.', ''); }
+	public function toEur($amount) {
+		$context = $this->currencyContext();
+		return JetCreditFinancial::number($this->currency->convert(JetCreditFinancial::number($amount), $context['base'], 'EUR'));
 	}
 	private function recipientConfiguration() {
 		$value = $this->config->get('module_mt_jet_credit_mail');

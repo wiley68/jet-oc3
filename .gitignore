@@ -1,4 +1,4 @@
-# Canonical installer output: generated ZIPs, checksums, reports and staging data.
+# Canonical installer output: generated ZIPs, checksums and transient staging data.
 /dist/
 
 # Windows download metadata and local interpreter caches.
@@ -10,4 +10,3 @@ __pycache__/
 # Installer outputs are generated locally, including explicit verification output paths.
 *.ocmod.zip
 *.ocmod.zip.sha256
-*.ocmod.zip.build-report.json

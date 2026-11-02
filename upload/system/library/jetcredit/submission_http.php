@@ -20,7 +20,7 @@ class JetCreditSubmissionHttp {
 			if ($code === 'method_not_allowed') { $status = '405 Method Not Allowed'; $controller->response->addHeader('Allow: POST'); }
 			elseif ($code==='review_required') { $status='409 Conflict'; }
 			elseif (in_array($code, $validation, true)) { $status = '400 Bad Request'; }
-			else { $code = 'submission_unavailable'; $status = '503 Service Unavailable'; }
+			else { $availability = array('native_mail_guard_unavailable','missing_schema','incomplete_schema','incorrect_schema_revision','invalid_eur_currency','invalid_base_currency','invalid_currency_rate','submission_storage_unavailable'); if (!in_array($code, $availability, true)) { $code = 'submission_unavailable'; } $status = '503 Service Unavailable'; }
 			$result = array('success' => 'unsuccess', 'code' => $code);
 		} catch (Throwable $e) { $result = array('success' => 'unsuccess', 'code' => 'submission_unavailable'); $status = '503 Service Unavailable'; }
 		$controller->response->addHeader('HTTP/1.1 ' . $status);

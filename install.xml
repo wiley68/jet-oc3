@@ -47,7 +47,7 @@ $data['products'] = array();
                     {% if jet_btn_logo == 1 %}<img src="catalog/view/theme/default/image/jet_logo.png" alt="ПБ Лични Финанси" class="jet_wide_button_logo" />{% endif %}
                 </div>
                 {% if jet_vnoska == 1 %}
-                    <div class="jet_wide_button_text">
+                    <div class="jet_wide_button_text jet_button_installment" style="display:none" data-jet-installment="jet">
 
                             <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}
 
@@ -61,7 +61,7 @@ $data['products'] = array();
                     {% if jet_btn_logo == 1 %}<img src="catalog/view/theme/default/image/jet_logo.png" alt="ПБ Лични Финанси" class="jet_wide_button_logo" />{% endif %}
                 </div>
                 {% if jet_vnoska == 1 %}
-                    <div class="jet_wide_button_text">
+                    <div class="jet_wide_button_text jet_button_installment" style="display:none" data-jet-installment="jet_card">
 
                             <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}
 
@@ -87,7 +87,7 @@ $data['products'] = array();
             <tr>
                 <td class="jet_button_table">
 
-                        <p><span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}</p>
+                        <p class="jet_button_installment" style="display:none" data-jet-installment="jet"><span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}</p>
 
                 </td>
             </tr>
@@ -110,7 +110,7 @@ $data['products'] = array();
             <tr>
                 <td class="jet_button_table">
 
-                        <p><span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}</p>
+                        <p class="jet_button_installment" style="display:none" data-jet-installment="jet_card"><span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}</p>
 
                 </td>
             </tr>
@@ -122,6 +122,7 @@ $data['products'] = array();
     
     <div id="jet-product-popup-container" class="modalpayment_jet">
         <div class="modalpayment-content_jet">
+            <div class="jet_offer_loader" role="status" aria-live="polite"><span>Преизчисляване…</span></div>
             <div id="jet_body">
                 <div class="jet_PopUp_Detailed_v1">
                     <div class="jet_Mask">
@@ -133,16 +134,11 @@ $data['products'] = array();
                                 <div class="jet_column_right">
                                     <input 
                                         class="jet_input_text_active" 
-                                        type="number" 
-                                        min="0"
+                                        type="text"
+                                        inputmode="decimal"
                                         id="jet_parva" 
                                         value=0 
                                     />
-                                    <button 
-                                        type="button" 
-                                        id="btn_preizcisli" 
-                                        class="jet_button_preizcisli"
-                                    >Преизчисли</button>
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -294,7 +290,6 @@ $data['products'] = array();
                                     type="button" 
                                     class="jet_btn" 
                                     id="buy_jetcredit" 
-                                    style="opacity: 0.5;" 
                                     disabled
                                 >Купи на изплащане</button>
                             </div>
@@ -424,7 +419,6 @@ $data['products'] = array();
                                     type="button" 
                                     class="jet_btn" 
                                     id="buy2_jetcredit" 
-                                    style="opacity: 0.5;" 
                                     disabled
                                 >Изпрати</button>
                             </div>
@@ -508,7 +502,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                     {% if jet_btn_logo == 1 %}<img src="catalog/view/theme/default/image/jet_logo.png" alt="ПБ Лични Финанси" class="jet_wide_button_logo" />{% endif %}
                 </div>
                 {% if jet_vnoska == 1 %}
-                    <div class="jet_wide_button_text">
+                    <div class="jet_wide_button_text jet_button_installment" style="display:none" data-jet-installment="jet">
 
                             <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}
 
@@ -522,7 +516,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                     {% if jet_btn_logo == 1 %}<img src="catalog/view/theme/default/image/jet_logo.png" alt="ПБ Лични Финанси" class="jet_wide_button_logo" />{% endif %}
                 </div>
                 {% if jet_vnoska == 1 %}
-                    <div class="jet_wide_button_text">
+                    <div class="jet_wide_button_text jet_button_installment" style="display:none" data-jet-installment="jet_card">
 
                             <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}
 
@@ -548,7 +542,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
             <tr>
                 <td class="jet_button_table">
 
-                        <p><span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}</p>
+                        <p class="jet_button_installment" style="display:none" data-jet-installment="jet"><span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}</p>
 
                 </td>
             </tr>
@@ -571,7 +565,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
             <tr>
                 <td class="jet_button_table">
 
-                        <p><span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}</p>
+                        <p class="jet_button_installment" style="display:none" data-jet-installment="jet_card"><span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}</p>
 
                 </td>
             </tr>
@@ -583,6 +577,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
     
     <div id="jet-product-popup-container" class="modalpayment_jet">
         <div class="modalpayment-content_jet">
+            <div class="jet_offer_loader" role="status" aria-live="polite"><span>Преизчисляване…</span></div>
             <div id="jet_body">
                 <div class="jet_PopUp_Detailed_v1">
                     <div class="jet_Mask">
@@ -594,16 +589,11 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                 <div class="jet_column_right">
                                     <input 
                                         class="jet_input_text_active" 
-                                        type="number" 
-                                        min="0"
+                                        type="text"
+                                        inputmode="decimal"
                                         id="jet_parva" 
                                         value=0 
                                     />
-                                    <button 
-                                        type="button" 
-                                        id="btn_preizcisli" 
-                                        class="jet_button_preizcisli"
-                                    >Преизчисли</button>
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -750,7 +740,6 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                     type="button" 
                                     class="jet_btn" 
                                     id="buy_jetcredit" 
-                                    style="opacity: 0.5;" 
                                     disabled
                                 >Купи на изплащане</button>
                             </div>
@@ -880,7 +869,6 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                     type="button" 
                                     class="jet_btn" 
                                     id="buy2_jetcredit" 
-                                    style="opacity: 0.5;" 
                                     disabled
                                 >Изпрати</button>
                             </div>
@@ -919,4 +907,11 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                 }
             } else {
                 $this->session->data['order_id'] = $this->model_checkout_order->addOrder($order_data);
-            }]]></add></operation></file></modification>
+            }]]></add></operation></file><file path="admin/controller/extension/extension/module.php"><operation error="abort"><ignoreif><![CDATA[JETCREDIT:ADMIN-INSTALL:v1]]></ignoreif><search><![CDATA[$this->load->controller('extension/module/' . $this->request->get['extension'] . '/install');]]></search><add position="replace"><![CDATA[// JETCREDIT:ADMIN-INSTALL:v1
+                $jet_install_result = $this->load->controller('extension/module/' . $this->request->get['extension'] . '/install');
+                if ($this->request->get['extension'] === 'mt_jet_credit' && (!is_array($jet_install_result) || empty($jet_install_result['jetcredit_installed']))) {
+                    $this->error['warning'] = is_array($jet_install_result) && isset($jet_install_result['message']) ? $jet_install_result['message'] : 'Jet: installation status unavailable; open module settings for diagnostics.';
+                    unset($this->session->data['success']);
+                    $this->getList();
+                    return;
+                }]]></add></operation></file></modification>

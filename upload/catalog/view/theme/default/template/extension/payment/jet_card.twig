@@ -121,31 +121,8 @@ input[type="text"].jet_input_text_active.error, input[type="number"].jet_input_t
 	border: 1px solid #ED1C24;
 	color: #ED1C24;
 }
-.jet_button_preizcisli {
-	height: 32px !important;
-	background-color: #166534 !important;
-	border-radius: 3px !important;
-	border: 0px none white !important;
-	text-align: center !important;
-	font-weight: 500 !important;
-	font-size: 14px !important;
-	line-height: 16px !important;
-	padding: 0px 5px !important;
-	margin-left: 3px !important;
-	color: #f0fdf4 !important;
-	cursor: pointer !important;
-	-webkit-box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.4) !important;
-	box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.4) !important;
-	user-select: none !important;
-	-moz-user-select: none !important;
-	-khtml-user-select: none !important;
-	-webkit-user-select: none !important;
-	-o-user-select: none !important;
-}
-.jet_button_preizcisli:hover {
-	background-color: #14532d !important;
-	color: #f0fdf4 !important;
-}
+
+
 .jet_input_text {
 	display: flex !important;
 	-webkit-box-sizing: border-box !important;
@@ -289,17 +266,12 @@ input[type="checkbox"].jet_uslovia{
 		<div class="{{ jet_column_right|e('html') }}">
 			<input 
 				class="jet_input_text_active" 
-				type="number" 
-				min="0"
+				type="text"
+				inputmode="decimal"
 				id="jet_card_parva" 
 				name="jet_card_parva_input"
 				value=0 
 			/>
-			<button 
-				type="button" 
-				id="btn_card_preizcisli" 
-				class="jet_button_preizcisli"
-			>Преизчисли</button>
 		</div>
 	</div>
 	<div class="jet_row">

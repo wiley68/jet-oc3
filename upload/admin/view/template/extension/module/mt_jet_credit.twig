@@ -41,12 +41,6 @@
 	<div class="container-fluid">
 		<div class="panel panel-default" id="mt-jet-credit-module-settings">
 			<style>
-				#mt-jet-credit-module-settings .tab-content > form > .tab-pane {
-					display: none;
-				}
-				#mt-jet-credit-module-settings .tab-content > form > .tab-pane.active {
-					display: block;
-				}
 				#mt-jet-credit-module-settings #mt-jet-credit-settings-tabs {
 					margin-top: 6px;
 				}
@@ -277,8 +271,8 @@
 					<a href="#mt-jet-tab-filtri" data-toggle="tab">Форма за въвеждане на лихвени филтри</a>
 				</li>
 			</ul>
-			<div class="tab-content" style="padding: 0;">
-				<form action="{{ form_action|replace({'&amp;': '&'})|e('html') }}" method="post" enctype="multipart/form-data" id="form-html" class="form-horizontal" data-jet-promotion-create-url="{{ jet_promotion_create_url|e('html') }}" data-jet-promotion-delete-url="{{ jet_promotion_delete_url|e('html') }}">
+			<form action="{{ form_action|replace({'&amp;': '&'})|e('html') }}" method="post" enctype="multipart/form-data" id="form-html" class="form-horizontal" data-jet-promotion-create-url="{{ jet_promotion_create_url|e('html') }}" data-jet-promotion-delete-url="{{ jet_promotion_delete_url|e('html') }}">
+				<div class="tab-content" style="padding: 0;">
 					<div id="mt-jet-tab-upravlenie" class="tab-pane active" role="tabpanel">
 						<div class="panel-body">
 							<div class="form-group">
@@ -328,7 +322,6 @@
 									<div class="text-small">Дали да се показва текст, в дясно от бутона указващ месечната вноска за избрания период на лизинг?</div>
 								</div>
 							</div>
-							</div>
 						</div>
 					</div>
 
@@ -345,7 +338,7 @@
 							<div class="form-group">
 								<label class="col-sm-4 control-label" for="module_mt_jet_credit_id">Избери идентификатор на магазина за изпращане</label>
 								<div class="col-sm-8">
-									<input type="text" name="module_mt_jet_credit_id" value="{{ module_mt_jet_credit_id|e('html') }}" placeholder="Избери идентификатор на магазина за изпращане" id="module_mt_jet_credit_id" class="form-control"/>
+									<input type="text" name="module_mt_jet_credit_id" value="{{ module_mt_jet_credit_id|e('html') }}" placeholder="Избери идентификатор на магазина за изпращане" id="module_mt_jet_credit_id" class="form-control" required maxlength="128"/>
 									<div class="small">Избери идентификатор на магзина, който да се изпраща към Банката заедно със заявката за лизинг. По този идентификатор Банката ще разпознава Вашите заявки</div>
 								</div>
 							</div>
@@ -646,24 +639,28 @@
 							</div>
 						</div>
 					</div>
-				</form>
-			</div>
+				</div>
+			</form>
 		</div>
 	</div>
 </div>
 
 <script>
 	$(function () {
+		$('#module_mt_jet_credit_id').on('invalid', function () {
+			$('#mt-jet-credit-settings-tabs a[href="#mt-jet-tab-funkcionalni"]').tab('show');
+		});
 		var tabStorageKey = 'mt_jet_credit_active_tab';
 		var $tabs = $('#mt-jet-credit-settings-tabs a[data-toggle="tab"]');
-		var savedTab = sessionStorage.getItem(tabStorageKey);
+		var savedTab = null;
+		try { savedTab = sessionStorage.getItem(tabStorageKey); } catch (e) { /* Optional tab memory. */ }
 
 		if (savedTab && $tabs.filter('[href="' + savedTab + '"]').length) {
 			$tabs.filter('[href="' + savedTab + '"]').tab('show');
 		}
 
 		$tabs.on('shown.bs.tab', function (e) {
-			sessionStorage.setItem(tabStorageKey, $(e.target).attr('href'));
+			try { sessionStorage.setItem(tabStorageKey, $(e.target).attr('href')); } catch (err) { /* Optional tab memory. */ }
 		});
 
 		function syncJetButtonTypePreview() {

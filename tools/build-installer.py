@@ -12,7 +12,6 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
-import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = 'docs/release-manifest.json'
@@ -204,35 +203,24 @@ def build(root, mode, output, ref=None):
         raise BuildError('Build output must be outside runtime upload sources.')
     source = Source(root, mode, ref)
     version, assets, raw_manifest = validate(source)
-    records = [{'path': p, 'bytes': len(d), 'sha256': sha(d)} for p, d in sorted(assets.items())]
-    fingerprint = sha(json.dumps(records, sort_keys=True, separators=(',', ':')).encode())
     data = archive_bytes(assets)
     filename = 'CC_OpenCart.3.x_JET_v.' + version + '.ocmod.zip'
     # Candidate and release intentionally share the canonical flat filename.
-    # Refuse even byte-identical collisions: their provenance/report can differ.
+    # Refuse even byte-identical collisions; replacement remains explicit.
     destination = Path(output).resolve()
-    report_filename = filename + '.build-report.json'
     report = {'status': 'TEST / UNRELEASED' if mode == 'candidate' else 'COMMITTED BUILD / NOT PUBLISHED',
               'mode': mode, 'version': version, 'version_source': VERSION_SOURCE,
               'git_commit': source.commit, 'git_tag': source.ref if mode == 'release' and not re.fullmatch(r'[a-fA-F0-9]{40}', source.ref) else None,
               'working_tree_used': mode == 'candidate',
               'git_status_porcelain': git(source.root, 'status', '--porcelain=v1', '--untracked-files=all').decode() if mode == 'candidate' else None,
-              'source_fingerprint': fingerprint, 'source_manifest_sha256': sha(raw_manifest),
               'filename': filename, 'sha256': sha(data), 'bytes': len(data),
-              'report_filename': report_filename, 'output_layout': 'flat',
-              'archive_roots': ['install.xml', 'upload/'], 'files': records,
-              'builder_sha256': sha(Path(__file__).read_bytes()),
-              'toolchain': {'python': sys.version.split()[0], 'zlib': zlib.ZLIB_VERSION,
-                            'php': subprocess.check_output(['php', '-r', 'echo PHP_VERSION;']).decode()},
-              'validation': 'exact inventory; SHA-256/size; XML/version; includes/assets; all runtime PHP lint; ZIP CRC and byte equality',
-              'limitations': 'No real MySQL, native cache refresh, browser/store E2E or SMTP certification.'}
+              'output_layout': 'flat'}
     # Recheck candidate sources before publishing the in-memory snapshot; never re-read them into ZIP.
     if mode == 'candidate':
         if source.inventory() != set(assets) or any(source.read(p) != d for p, d in assets.items()) or source.read(MANIFEST) != raw_manifest:
             raise BuildError('Sources changed during build; no artifact published.')
     bundle = {filename: data,
-              filename + '.sha256': (sha(data) + '  ' + filename + '\n').encode(),
-              report_filename: (json.dumps(report, indent=2) + '\n').encode()}
+              filename + '.sha256': (sha(data) + '  ' + filename + '\n').encode()}
     destination.mkdir(parents=True, exist_ok=True)
     lock = destination / '.jet-installer.lock'
     try:
@@ -241,7 +229,7 @@ def build(root, mode, output, ref=None):
         raise BuildError('Output is locked; inspect the other build or interrupted build before retrying: ' + str(lock)) from exc
     try:
         if any(os.path.lexists(destination / name) for name in bundle):
-            raise BuildError('Artifact already exists; nothing overwritten. Explicitly archive/remove the prior ZIP, checksum and report before replacement: ' + str(destination / filename))
+            raise BuildError('Artifact already exists; nothing overwritten. Explicitly remove the prior ZIP and checksum before replacement: ' + str(destination / filename))
         with tempfile.TemporaryDirectory(prefix='.jet-build-', dir=destination) as temporary:
             staging = Path(temporary)
             for name, content in bundle.items():

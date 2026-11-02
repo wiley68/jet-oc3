@@ -61,8 +61,7 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(report['working_tree_used'])
         self.assertEqual(destination, self.directory.resolve())
         self.assertEqual(report['output_layout'], 'flat')
-        self.assertEqual(report['report_filename'], report['filename'] + '.build-report.json')
-        self.assertEqual({p.name for p in destination.iterdir()}, {report['filename'], report['filename'] + '.sha256', report['report_filename']})
+        self.assertEqual({p.name for p in destination.iterdir()}, {report['filename'], report['filename'] + '.sha256'})
         data = (destination / report['filename']).read_bytes()
         self.assertEqual(hashlib.sha256(data).hexdigest(), report['sha256'])
         checksum = (destination / (report['filename'] + '.sha256')).read_text()
@@ -249,7 +248,7 @@ class InstallerTests(unittest.TestCase):
     @unittest.skipIf(SOURCE_ONLY, 'Source-only mode forbids ZIP generation')
     def test_any_existing_bundle_component_blocks_publication(self):
         filename='CC_OpenCart.3.x_JET_v.'+self.version+'.ocmod.zip'
-        for index,name in enumerate([filename,filename+'.sha256',filename+'.build-report.json']):
+        for index,name in enumerate([filename,filename+'.sha256']):
             output=self.directory/str(index);output.mkdir()
             (output/name).write_bytes(b'prior content must survive')
             with self.assertRaisesRegex(builder.BuildError,'already exists'):
@@ -265,7 +264,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_canonical_generated_outputs_are_git_ignored(self):
         filename='CC_OpenCart.3.x_JET_v.'+self.version+'.ocmod.zip'
-        names=['dist/'+filename,'dist/'+filename+'.sha256','dist/'+filename+'.build-report.json','dist/verification.json']
+        names=['dist/'+filename,'dist/'+filename+'.sha256']
         result=subprocess.run(['git','check-ignore','--stdin'],input='\n'.join(names)+'\n',text=True,capture_output=True,cwd=ROOT)
         self.assertEqual(result.returncode,0)
         self.assertEqual(result.stdout.splitlines(),names)

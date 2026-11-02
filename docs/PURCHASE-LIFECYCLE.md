@@ -131,3 +131,12 @@ eight-worker successor/draft tests, but remains DEFERRED here: no approved DB or
 connection. Full OpenCart/cache refresh/browser/Twig/SMTP E2E remains external
 owner work using the reviewed R3 test candidate. The earlier candidate is
 not suitable for validating R2.
+
+## IMP-05B-FIX-01 currency context
+
+A new financing attempt requires EUR session and active valid EUR. Base store
+currency may differ. Native drafts retain base amounts and actual EUR metadata;
+rate/currency changes invalidate quote snapshots and inconsistent draft reuse.
+No automatic draft rewrite or reservation reset is introduced. Completed claims
+still replay their authorized result without current pricing conversion or a new
+bank send. Starting a new generation also requires valid EUR currency context.

@@ -66,11 +66,18 @@ def main():
                 if file.suffix == '.php':
                     result = subprocess.run(['php','-l',str(file)], capture_output=True)
                     check(result.returncode == 0, 'full modified native PHP syntax: ' + path)
+            admin = subprocess.run(['php', str(ROOT / 'tests/admin-install.php'), str(dest)], capture_output=True, text=True)
+            check(admin.returncode == 0, 'native admin install flow: ' + admin.stdout + admin.stderr)
+            print(admin.stdout.strip())
             if (ROOT / 'tests/native-integration.php').exists():
                 r = subprocess.run(['php', str(ROOT / 'tests/native-integration.php'), version, str(dest)], capture_output=True, text=True)
                 check(r.returncode == 0, 'native fixture execution ' + version + ': ' + r.stdout + r.stderr)
                 print(r.stdout.strip())
-                for runtime_version in [version, '3.0.3.9-unsupported']:
+                # Version labels on representative source prove policy, not actual patch certification.
+                for label in ['3.0.3.9', '3.99.99']:
+                    sample = subprocess.run(['php', str(ROOT / 'tests/native-integration.php'), label, str(dest)], capture_output=True, text=True)
+                    check(sample.returncode == 0, 'OC3 capability acceptance on representative source ' + label + ': ' + sample.stdout + sample.stderr)
+                for runtime_version in [version, '4.0.0']:
                     mail_file = dest / 'catalog/controller/mail/order.php'
                     original_mail = mail_file.read_text()
                     if runtime_version == version:
@@ -78,6 +85,19 @@ def main():
                     negative = subprocess.run(['php', str(ROOT / 'tests/native-unavailable.php'), runtime_version, str(dest)], capture_output=True, text=True)
                     mail_file.write_text(original_mail)
                     check(negative.returncode == 0, 'missing/unsupported capability gates: ' + negative.stdout + negative.stderr)
+                # Keep capability constants/markers but remove executable protection.
+                mail_file = dest / 'catalog/controller/mail/order.php'
+                original_mail = mail_file.read_text()
+                mail_file.write_text(original_mail.replace('$jet_scope->suppresses(', '$jet_scope->owns('))
+                negative = subprocess.run(['php', str(ROOT / 'tests/native-unavailable.php'), version, str(dest)], capture_output=True, text=True)
+                check(negative.returncode == 0, 'marker-only mail capability refused: ' + negative.stdout + negative.stderr)
+                mail_file.write_text(original_mail)
+                checkout_file = dest / 'catalog/controller/checkout/confirm.php'
+                original_checkout = checkout_file.read_text()
+                checkout_file.write_text(original_checkout.replace('->orderForIntent(', '->missingReservation('))
+                negative = subprocess.run(['php', str(ROOT / 'tests/native-unavailable.php'), version, str(dest)], capture_output=True, text=True)
+                check(negative.returncode == 0, 'marker-only checkout capability refused: ' + negative.stdout + negative.stderr)
+                checkout_file.write_text(original_checkout)
         broken = dict(modified)
         # A missing anchor on original source must abort, never silently skip a guard.
         original = (ROOT / 'tests/fixtures/oc3' / version / 'upload/catalog/controller/mail/order.php').read_text()

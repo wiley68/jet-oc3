@@ -1,3 +1,5 @@
+@import url('./creditjet_products.css');
+
 @font-face {
 	font-family: 'Roboto Condensed';
 	font-style: normal;
@@ -239,15 +241,12 @@
 		flex-direction: column !important;
 		justify-content: flex-start !important;
 	}
-	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right .jet_input_text_active,
-	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right .jet_button_preizcisli {
+	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right .jet_input_text_active {
 		width: 100% !important;
 		max-width: 100% !important;
 		flex: 0 0 auto !important;
 	}
-	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right .jet_button_preizcisli {
-		margin-left: 0 !important;
-	}
+
 }
 input[type="text"].jet_input_text_active, input[type="number"].jet_input_text_active{
 	flex: 1 !important;
@@ -289,31 +288,8 @@ input[type="text"].jet_input_text_active.error, input[type="number"].jet_input_t
 	border: 1px solid #ED1C24;
 	color: #ED1C24;
 }
-.jet_button_preizcisli {
-	height: 48px !important;
-	background-color: #166534 !important;
-	border-radius: 3px !important;
-	border: 0px none white !important;
-	text-align: center !important;
-	font-weight: 500 !important;
-	font-size: 16px !important;
-	line-height: 22px !important;
-	padding: 0px 20px !important;
-	margin-left: 5px !important;
-	color: #f0fdf4 !important;
-	cursor: pointer !important;
-	-webkit-box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.4) !important;
-	box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.4) !important;
-	user-select: none !important;
-	-moz-user-select: none !important;
-	-khtml-user-select: none !important;
-	-webkit-user-select: none !important;
-	-o-user-select: none !important;
-}
-.jet_button_preizcisli:hover {
-	background-color: #14532d !important;
-	color: #f0fdf4 !important;
-}
+
+
 .jet_input_text {
 	display: flex !important;
 	-webkit-box-sizing: border-box !important;

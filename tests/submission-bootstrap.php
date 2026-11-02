@@ -31,6 +31,10 @@ class SDb extends FDb {
 		if ($sql === 'COMMIT') { $this->transaction = false; $this->snapshot = null; if($this->onCommit){$hook=$this->onCommit;$this->onCommit=null;$hook();} return $this->result(); }
 		if ($sql === 'ROLLBACK') { if ($this->transaction) { list($this->claims, $this->counter, $this->purchaseRows) = $this->snapshot; } $this->transaction = false; return $this->result(); }
 		if (strpos($sql, 'SHOW TABLE STATUS') === 0) { return $this->result(array(array('Engine' => $this->engine))); }
+		if (strpos($sql, 'SHOW COLUMNS') === 0) {
+			preg_match_all('/^ ([a-z_]+) [A-Z]/m', JetCreditSubmissionSchema::createSql(''), $columns);
+			return $this->result(array_map(function ($name) { return array('Field'=>$name); }, $columns[1]));
+		}
 		if (strpos($sql, 'SHOW INDEX') === 0) {
 			$rows = array();
 			foreach (array('PRIMARY' => array('submission_id'), 'jet_intent' => array('store_id', 'record_type', 'intent'), 'jet_order' => array('store_id', 'record_type', 'order_id'), 'jet_reference' => array('store_id', 'bank_reference'), 'jet_successor'=>array('store_id','record_type','previous_intent'), 'jet_generation'=>array('store_id','record_type','purchase_scope','purchase_generation')) as $name => $columns) {

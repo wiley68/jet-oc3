@@ -1,19 +1,24 @@
-# Jet OC3 2.0.0 — R3 TEST / UNRELEASED installation candidate
+> IMP-05B-FIX-01 supersedes the previous runtime and installer. Do not use the
+> existing dist/ ZIP to test these fixes. No replacement ZIP was built. See
+> [implementation report](../tests/IMP-05B-FIX-01.md) before owner review/build.
 
-R3 packages the accepted R2 runtime and fresh schema revision 2. The canonical
-installer is `dist/CC_OpenCart.3.x_JET_v.2.0.0.ocmod.zip`, with its checksum and
-versioned build report alongside it. Verify the R3 report before installation.
-The earlier IMP-05A ZIP was **SUPERSEDED** and its obsolete `artifacts/` directory
-was removed after R3 verification. Use only the current package in `dist/`. See [PURCHASE-LIFECYCLE.md](PURCHASE-LIFECYCLE.md) for the corrected generation
-and checkout reservation contract. The instructions below apply to the R3 test
-candidate, never the superseded archive.
+# Jet OC3 2.0.0 — TEST / UNRELEASED installation
+
+IMP-05B-FIX-01 updates the local source while retaining fresh schema revision 2.
+The existing `dist/CC_OpenCart.3.x_JET_v.2.0.0.ocmod.zip` predates these changes
+and is superseded at that historical checkpoint. Current packaging retains only
+the ZIP and its checksum; generated reports/history are no longer kept.
+A replacement installer requires owner review and a separately authorized build.
+The installation procedure below describes that future reviewed package.
+See [PURCHASE-LIFECYCLE.md](PURCHASE-LIFECYCLE.md) for generation and reservation rules.
 
 This is owner-operated test source, not a published release or a production
 installation approval. Version metadata was explicitly prepared in IMP-05A and
-remains uncommitted. `upload/system/library/jetcredit/version.php` is authoritative;
+remains 2.0.0; the current fixes are uncommitted. `upload/system/library/jetcredit/version.php` is authoritative;
 the XML, manifest and payment controllers must agree. Build and checksum
-instructions are in [BUILD-INSTALLER.md](BUILD-INSTALLER.md). Keep the build report
-and this guide beside the ZIP; documentation and tests are not inside the installer.
+instructions are in [BUILD-INSTALLER.md](BUILD-INSTALLER.md). The builder writes
+only ZIP/checksum and prints TEST / UNRELEASED to the terminal; documentation and
+tests are not inside the installer.
 
 ## Prerequisites and limits
 
@@ -21,15 +26,19 @@ Use an isolated external **test store** with a restorable file/database backup,
 synthetic customer data and an owner-controlled mail capture service. The agent
 has not accessed a store, opened a DB connection or delivered mail.
 
-- Supported source fixtures: **OpenCart 3.0.3.8 or 3.0.5.1**, standard default theme
-  and native checkout. Other versions, themes, checkout overrides, event handlers
-  and OCMOD combinations require separate validation.
+- Target series: **OpenCart 3.x**, one installer. Runtime checks executable native
+  mail/checkout capabilities, without a patch-version allowlist. Regression source
+  samples are 3.0.3.8 and 3.0.5.1; the actual 3.0.3.9 store, custom themes, checkout
+  overrides, events and OCMOD combinations have not been certified.
 - Local checks used PHP 8.3.6; this does not certify a full OC3 bootstrap on every
   PHP version. Use an owner-validated OpenCart/PHP/database combination. PHP mysqli,
   cryptographic randomness/HMAC and functioning mail transport are required.
-- Default store **0** only. Active base currency **EUR, value 1**, and visitor
-  session currency **EUR**. Configure the native currency settings before install;
-  Jet never converts existing records or changes global currency settings.
+- Default store **0** only. EUR must be installed and active with a valid positive
+  rate; visitor session currency must be EUR for financing. The base currency may
+  differ. Jet uses native currency conversion for financing, preserves native base
+  amounts in orders and does not change global settings/rates. The owner test rates
+  of 1 are accepted unchanged. Native payment total settings remain base-currency
+  availability floors; module/promotion financing thresholds are EUR.
 - HTTPS is required for personal-data submissions. Both the browser and trusted
   native PHP `HTTPS` server flag must reflect TLS; configure the trusted proxy/web
   server accordingly. Forwarded headers alone are not proof of HTTPS.
@@ -39,20 +48,21 @@ has not accessed a store, opened a DB connection or delivered mail.
   fail closed. No financing formula or bank template was changed in IMP-05A.
 
 **2.0.0 provides no upgrade migration from 1.9.1.** Use a clean Jet installation.
-Legacy Jet tables/settings/orders without the protected clean-install marker are
-refused. Do not delete business records to bypass this guard. Use a separate clean
-test store or obtain a separately reviewed migration.
+Historical Jet orders alone are preserved and do not block installation. Conflicting
+legacy financial settings/promotions and partial new schemas require owner review.
+Do not delete business records to bypass a diagnostic; no automatic migration occurs.
 
 ## Upload, install and configure
 
-1. Verify the ZIP SHA-256 against its sidecar and build report. The filename must
+1. Verify the ZIP SHA-256 against its sidecar. The filename must
    be `CC_OpenCart.3.x_JET_v.2.0.0.ocmod.zip`, with `install.xml` and `upload/`
-   at its root. Check the report says **TEST / UNRELEASED**.
+   at its root. Use the reviewed candidate build, labeled **TEST / UNRELEASED**
+   in the builder terminal output.
 2. Back up test-store files, database and existing modification state. In native
    **Extensions → Installer**, upload the `.ocmod.zip`. Do not copy modified core
    files manually. Confirm the installer completes and all manifest assets exist.
 3. In **Extensions → Modifications**, refresh modifications. Refresh native theme/
-   template caches. Inspect modification logs: all ten operations across seven
+   template caches. Inspect modification logs: all eleven operations across eight
    explicit file blocks must apply. Confirm both native mail guards and the native
    checkout integration exist in the active modification cache. Missing or altered
    anchors are incompatible; do not edit guards out to make submissions work.
@@ -156,3 +166,36 @@ or overwrite 1.9.1 records. Verify ordinary non-Jet checkout/mail after rollback
 
 Real MySQL contention, full browser/Twig/cache-refresh E2E, controlled SMTP behavior
 and target-store conflicts remain owner validation gates before any final release.
+
+## Installation state classification after IMP-05B-FIX-01
+
+Historical Jet orders alone are allowed and preserved (`installed_historical_only`).
+Extension/permission registrations do not imply a conflicting financial state.
+A disabled-status-only setting residue is harmless; obsolete financial settings,
+any pre-existing promotions table without a valid new installation, and identifiable
+old/unrecognized `cc_jet` OCMOD require owner review. No deletion or 1.9.1 migration
+is automatic. Missing new submission storage is normal before fresh install.
+Partial schemas, wrong revision, incomplete seed, invalid secret and missing unique
+constraints block reactivation. Never reset secrets/counters to retry.
+
+The install hook returns a status object, not HTML or a redirect. The installer
+OCMOD checks that result before native success rendering. Apply the reviewed
+modification through the normal owner-operated process when a new installer is
+approved; old cached modifications cannot provide the new admin status handling.
+Opening module settings explicitly keeps normal header/column/footer composition.
+
+## Monetary snapshots
+
+Product pricing (special/discount/options/tax) and the native cart total chain run
+in base units. Their final authoritative amounts cross the native currency API
+boundary once to EUR. Native order products/taxes/totals stay in base units with
+EUR metadata and the actual EUR currency value. Bank product prices and financing
+calculations are EUR; banking template bytes/formulas are unchanged.
+
+Checkout compares persisted order and cart in base units and requires recorded
+EUR currency_value to match the current currency context. A rate/currency change
+invalidates the old quote/draft context; no reserved order is silently rewritten.
+Use the existing explicit new-purchase lifecycle where applicable. Completed
+claims remain authorized historical replays, without another order/mail/reference.
+Conversion context (base/session codes, rates, EUR ID/status) is included in the
+source digest; customer identity is not added to signed offer payloads.

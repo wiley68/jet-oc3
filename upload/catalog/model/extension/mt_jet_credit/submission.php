@@ -91,6 +91,8 @@ class ModelExtensionMtJetCreditSubmission extends Model {
 		$csrf=$this->session->data['jetcredit_csrf']??null;
 		if (!is_string($csrf) || !is_string($input['jet_csrf']??null) || !hash_equals($csrf,$input['jet_csrf'])) { throw new JetCreditFinancialException('invalid_token'); }
 		JetCreditRuntime::boot($this->registry);
+		$this->load->model('extension/mt_jet_credit/financial');
+		$this->model_extension_mt_jet_credit_financial->currencyContext();
 		$context=$input['jet_context']??null; $entity=$context==='product'?JetCreditFinancial::positiveInteger($input['jet_product_id']??null):null;
 		$this->purchaseRepository();
 		$next=$this->identity()->advance($context,$entity,$input['jet_intent']??null,$input['jet_transition']??null);

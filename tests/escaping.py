@@ -134,7 +134,7 @@ for tag in ['name', 'code', 'author', 'link']:
     check(xml.findtext(tag) == old_xml.findtext(tag), 'OCMOD metadata unchanged: ' + tag)
 version = re.search(r"public const VERSION = '([0-9.]+)';", source('upload/system/library/jetcredit/version.php'))[1]
 check(xml.findtext('version') == version + ' for OpenCart 3.x', 'explicit IMP-05A candidate version matches authoritative runtime version')
-check(len(xml.findall('file')) == 7 and len(xml.findall('.//operation')) == 10, 'view plus native mail/checkout operations')
+check(len(xml.findall('file')) == 8 and len(xml.findall('.//operation')) == 11, 'view plus native mail/checkout operations')
 for file in xml.findall('file'):
     check('error' not in file.attrib and '*' not in file.attrib['path'], 'operation error scope / explicit default theme')
     for operation in file.findall('operation'):

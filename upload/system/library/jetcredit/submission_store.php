@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/financial.php';
+require_once __DIR__ . '/submission_schema.php';
 /** Requires a dedicated OC3 DB connection owned only by this repository.
  * InnoDB claim-only transactions. Native order tables are NEVER part of rollback. */
 class JetCreditSubmissionStore {
@@ -16,11 +17,15 @@ class JetCreditSubmissionStore {
 		if (!is_string($value) || !preg_match('/^[a-f0-9]{64}$/D', $value)) { throw new JetCreditFinancialException('invalid_application_context'); }
 		return $this->q($value);
 	}
-	public function ready() {
+	public function ready($structureOnly = false) {
 		try {
 			$this->connectionReady();
 			$table = $this->db->query('SHOW TABLE STATUS WHERE Name = ' . $this->q($this->table));
 			if ($table->num_rows !== 1 || strcasecmp($table->row['Engine'] ?? '', 'InnoDB') !== 0) { throw new RuntimeException('engine'); }
+			$columns = $this->db->query('SHOW COLUMNS FROM `' . $this->table . '`');
+			$names = array_column($columns->rows, 'Field');
+			preg_match_all('/^ ([a-z_]+) [A-Z]/m', JetCreditSubmissionSchema::createSql(''), $required);
+			if (array_diff($required[1], $names)) { throw new JetCreditFinancialException('incomplete_schema'); }
 			$indexes = $this->db->query('SHOW INDEX FROM `' . $this->table . '`'); $found = array();
 			foreach ($indexes->rows as $index) {
 				if ((int)$index['Non_unique'] === 0) { $found[$index['Key_name']][(int)$index['Seq_in_index']] = $index['Column_name']; }
@@ -29,11 +34,14 @@ class JetCreditSubmissionStore {
 				$actual = $found[$name] ?? array(); ksort($actual);
 				if (array_values($actual) !== $columns) { throw new RuntimeException('unique'); }
 			}
+			if ($structureOnly) { return; }
 			$row = $this->db->query("SELECT schema_version FROM `" . $this->table . "` WHERE record_type='counter' AND store_id=" . $this->store . ' AND intent=' . $this->q(hash('sha256', 'jet-bank-reference-v1')));
-			if ($row->num_rows !== 1 || (int)$row->row['schema_version'] !== 2) { throw new RuntimeException('seed'); }
+			if ($row->num_rows !== 1) { throw new JetCreditFinancialException('incomplete_schema'); }
+			if ((int)$row->row['schema_version'] !== 2) { throw new JetCreditFinancialException('incorrect_schema_revision'); }
 			// Probe every required column without modifying the database.
 			$this->db->query('SELECT submission_id,authorization,request_digest,owner_run,purchase_scope,purchase_generation,previous_intent,order_digest,context,scheme,order_id,state,recipient_mode,bank_state,bank_reference,counter_value,admin_state,customer_state,cleanup_state,result,consent_flags,consent_version,consent_at,created_at,updated_at FROM `' . $this->table . '` LIMIT 0');
-		} catch (Throwable $e) { throw new JetCreditFinancialException('submission_storage_unavailable'); }
+		} catch (JetCreditFinancialException $e) { throw $e; }
+		catch (Throwable $e) { throw new JetCreditFinancialException('submission_storage_unavailable'); }
 	}
 	private function connectionReady() {
 		try {

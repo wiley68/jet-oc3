@@ -1,3 +1,8 @@
+> Local continuation: IMP-05B-FIX-01 changes are uncommitted on top of
+> 2cc75057219f3c76a95b4107e9f78f44825daedc. The old ZIP is superseded.
+> Do not run the historical build instructions until owner review authorizes a
+> replacement. See [current report](../tests/IMP-05B-FIX-01.md).
+
 # Development checkpoint — 2.0.0 TEST / UNRELEASED
 
 This checkpoint contains IMP-01 through IMP-05A-R3, including the accepted R2
@@ -36,23 +41,13 @@ there. No Composer/npm, Docker or full OpenCart install is needed for these test
 
 ## Local installer output
 
-`dist/` is deliberately Git-ignored and will not arrive through clone/pull.
-The current R3 ZIP is preserved on the original workstation:
+`dist/` is Git-ignored and does not arrive through clone/pull. It contains only
+`CC_OpenCart.3.x_JET_v.2.0.0.ocmod.zip` and its `.sha256` sidecar. Generated build
+reports and `dist-history/` were removed at the owner's request; the builder does
+not recreate them. Historical phase reports describe their earlier checkpoints.
 
-```text
-dist/CC_OpenCart.3.x_JET_v.2.0.0.ocmod.zip
-SHA-256: 376cfe2c54f2d315b8ca113050709a16f0104cf2c79e5cb7b7d72eb8fe82f47a
-```
-
-It was built from the uncommitted R2 source before this development checkpoint;
-its original build report is retained unchanged and does not claim the checkpoint
-SHA as its build origin. Runtime/manifest bytes remain the reviewed R3 source.
-The obsolete `artifacts/` directory has been removed; no runtime/build depends on
-it. Old phase reports retain historical paths with an explanatory note.
-
-To obtain a local TEST / UNRELEASED installer at the office, either transfer the
-verified ZIP/checksum/report separately, or build a candidate from the clean
-checkpoint after the offline tests pass:
+Transfer the verified ZIP/checksum pair separately or, when a new build is
+requested and the offline tests pass, run:
 
 ```bash
 bash tools/build-installer.sh candidate
@@ -60,10 +55,12 @@ cd dist
 sha256sum --check CC_OpenCart.3.x_JET_v.2.0.0.ocmod.zip.sha256
 ```
 
-The builder refuses existing ZIP/checksum/report files. Do not remove the verified
-bundle merely to rerun a command. Different Python/zlib versions can change ZIP
-compression bytes; verify the new sidecar/report and recorded source hashes.
-Use candidate mode for continued test work; do not create a release tag.
+The builder refuses an existing ZIP or checksum and does not silently replace or
+archive them. A replacement needs explicit removal of the prior pair. Compare ZIP
+bytes in temporary directories for repeated verification. Different Python/zlib
+versions can change compression bytes. See [BUILD-INSTALLER.md](BUILD-INSTALLER.md).
+Current local source can contain UI changes made after the existing ZIP; cleaning
+outputs does not rebuild it. Candidate mode prints TEST / UNRELEASED to the terminal.
 
 ## Remaining gates
 

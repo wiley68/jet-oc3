@@ -13,18 +13,19 @@ const check = (condition, label) => { ++checks; assert.ok(condition, label); };
 
 function harness({runReady = true, options = false, inputGroup = false} = {}) {
     const requests = [], alerts = [], logs = [], inserted = [], handlers = [], elements = new Map(), timers = [];
+    let now = 0;
     const optionNodes = [];
     const document = {querySelectorAll: () => optionNodes};
     const location = {origin: 'https://test.invalid', protocol: 'https:', href: 'https://test.invalid/index.php', reloadCount: 0, reload() { this.reloadCount++; }};
     class Element {
-        constructor(key) { this.key = key; this.length = 1; this.value = '0'; this.attributes = {}; this.properties = {}; }
+        constructor(key) { this.key = key; this.length = 1; this.value = '0'; this.attributes = {}; this.properties = {}; this.styles = {}; this.classes = new Set(); this.visible = true; }
         ready(fn) { if (runReady) fn($); return this; }
         on(event, selector, fn) {
             if (typeof selector === 'function') fn = selector;
             handlers.push({key: this.key, event, selector: typeof selector === 'string' ? selector : null, fn});
             return this;
         }
-        off() { return this; }
+        off(namespace) { if (namespace) for (let i=handlers.length-1;i>=0;i--) if (handlers[i].key===this.key && handlers[i].event.includes(namespace)) handlers.splice(i,1); return this; }
         empty() { return this; }
         trigger() { return this; }
         val(value) { if (value === undefined) return this.value; this.value = value; return this; }
@@ -35,17 +36,17 @@ function harness({runReady = true, options = false, inputGroup = false} = {}) {
         find() { return this; }
         filter() { return this; }
         parent() { return this; }
-        hasClass() { return inputGroup; }
+        hasClass(value) { return inputGroup || this.classes.has(value); }
         is() { return false; }
         eq() { return this; }
         first() { return this; }
-        addClass(value) { this.className = value; return this; }
-        removeClass() { return this; }
+        addClass(value) { this.className = value; value.split(' ').forEach(x=>this.classes.add(x)); return this; }
+        removeClass(value) { if(value)value.split(' ').forEach(x=>this.classes.delete(x));return this; }
         remove() { return this; }
-        show() { return this; }
-        hide() { return this; }
-        css() { return this; }
-        toggle() { return this; }
+        show() { this.visible=true; return this; }
+        hide() { this.visible=false; return this; }
+        css(name,value) { if(typeof name==='object')Object.assign(this.styles,name);else if(value===undefined)return this.styles[name];else this.styles[name]=value;return this; }
+        toggle(value) { this.visible=!!value; return this; }
         tab() { return this; }
         prependTo() { return this; }
         append(value) { inserted.push(value); return this; }
@@ -75,12 +76,13 @@ function harness({runReady = true, options = false, inputGroup = false} = {}) {
         alert: message => alerts.push(message), FormData: FakeFormData,
         sessionStorage: {getItem() { return null; }, setItem() {}},
         console: {error: (...args) => logs.push(args), log: (...args) => logs.push(args)},
-        URL, setTimeout(fn, delay) { timers.push({fn, delay}); return timers.length; }, clearTimeout() {}});
+        URL, setTimeout(fn, delay) { timers.push({fn, delay, due:now+delay, cancelled:false, fired:false}); return timers.length; }, clearTimeout(id) { if(timers[id-1])timers[id-1].cancelled=true; }});
     return {$, context, requests, alerts, logs, handlers, inserted, location, timers, optionNodes,
-        fire(key, event = 'click', selector = null, target) {
+        tick(ms) { const until=now+ms; for (;;) { const next=timers.filter(t=>!t.cancelled&&!t.fired&&t.due<=until).sort((a,b)=>a.due-b.due)[0]; if(!next)break; now=next.due; next.fired=true; next.fn(); } now=until; },
+        fire(key, event = 'click', selector = null, target, extra = {}) {
             const handler = handlers.find(h => h.key === key && h.event === event && h.selector === selector);
             assert.ok(handler, `handler ${key} ${event} ${selector}`);
-            handler.fn.call(target, {preventDefault() {}});
+            handler.fn.call(target, {preventDefault() {}, ...extra});
         }};
 }
 
@@ -233,4 +235,173 @@ for (const [context, scheme] of [['product','jet'],['cart','jet'],['checkout','j
     fresh.success({...reply(context,scheme,true,'fresh-offer'),application_intent:next});
     check(h.$('#jet_finance_context').value==='fresh-offer','fresh matching quote accepted');
 }
+
+// FIX-04: actual shared popup handlers, visual/real disabled state and loader lifecycle.
+const formEvent = '#uslovia, #uslovia1, #uslovia2, #jet_name, #jet_lastname, #jet_phone, #jet_email, #jet_egn, #jet_uslovia, #jet_uslovia1, #jet_card_egn, #jet_card_uslovia, #jet_card_uslovia1';
+for (const context of ['product','cart']) {
+    const {h} = mount(context,'jet');
+    const popup = h.$('#jet-product-popup-container');
+    check(popup.hasClass('jet_offer_loading') && popup.attr('aria-busy')==='true','loader visible immediately on asynchronous quote');
+    const first = h.requests.at(-1);
+    h.fire('document','click.jetcredit','#btn_jet, #btn_jet_card',{id:'btn_jet'});
+    const second = h.requests.at(-1);
+    check(first.aborted && popup.hasClass('jet_offer_loading'),'replacement quote aborts old request without hiding new loader');
+    first.error({status:0});
+    check(popup.hasClass('jet_offer_loading'),'late old failure cannot hide new loader');
+    second.success(reply(context,'jet',true));
+    check(!popup.hasClass('jet_offer_loading') && popup.attr('aria-busy')==='false','latest success clears loader');
+    check(h.$('#buy_jetcredit').prop('disabled')===true && h.$('#buy_jetcredit').css('opacity')===0.5,'step one requires both consents visually and functionally');
+    h.$('#uslovia').prop('checked',true);h.$('#uslovia1').prop('checked',true);
+    h.fire('document','change.jetcredit input.jetcredit',formEvent);
+    check(h.$('#buy_jetcredit').prop('disabled')===false && h.$('#buy_jetcredit').css('opacity')===1,'ready step one is visually active');
+    h.$('#jet_parva').val('25');h.$('#jet_vnoski').val('9');
+    h.fire('document','change.jetcredit','#jet_vnoski');
+    const selected=h.requests.at(-1);
+    check(selected.data.jet_parva==='25' && selected.data.jet_vnoski==='9','changed financial selection sent for authoritative quote');
+    const selectedReply=reply(context,'jet',true,'selected-offer');selectedReply.calculation.term=9;selected.success(selectedReply);
+    const count=h.requests.length, offer=h.$('#jet_finance_context').val(), term=h.$('#jet_vnoski').val();
+    h.fire('document','click.jetcredit','#buy_jetcredit');
+    check(!h.$('#jet_step_1').visible && h.$('#jet_step_2').visible,'forward navigation switches steps');
+    for(const [key,value]of Object.entries({name:'Иван',lastname:'Петров',email:'ivan@example.test',phone:'+359888123456',egn:'9001010000'}))h.$('#jet_'+key).val(value);
+    h.$('#uslovia2').prop('checked',true);h.fire('document','change.jetcredit input.jetcredit',formEvent);
+    check(h.$('#buy2_jetcredit').prop('disabled')===false && h.$('#buy2_jetcredit').css('opacity')===1,'personal fields and all consents enable actual/visual submit together');
+    for(const checkbox of ['#uslovia','#uslovia1','#uslovia2']) {
+        h.$(checkbox).prop('checked',false);h.fire('document','change.jetcredit input.jetcredit',formEvent);
+        check(h.$('#buy2_jetcredit').prop('disabled')===true && h.$('#buy2_jetcredit').css('opacity')===0.5,'each consent revocation disables submit');
+        h.fire('document','click.jetcredit','#buy2_jetcredit, #button-confirm');
+        check(h.requests.length===count,'disabled submit cannot execute even with programmatic click');
+        h.$(checkbox).prop('checked',true);
+    }
+    h.$('#jet_email').val('bad');h.fire('document','change.jetcredit input.jetcredit',formEvent);
+    check(h.$('#buy2_jetcredit').prop('disabled')===true,'invalid email keeps submit disabled');h.$('#jet_email').val('ivan@example.test');
+    for(let i=0;i<3;i++) {
+        h.fire('document','click.jetcredit','#back2_jetcredit');
+        check(h.$('#jet_step_1').visible && !h.$('#jet_step_2').visible,'back restores step one');
+        h.fire('document','click.jetcredit','#buy_jetcredit');
+    }
+    check(h.requests.length===count && h.$('#jet_finance_context').val()===offer && h.$('#jet_vnoski').val()===term && h.$('#jet_parva').val()==='25','navigation preserves signed quote/term and performs no AJAX order/submission');
+    check(h.$('#jet_name').val()==='Иван' && h.$('#jet_email').val()==='ivan@example.test','navigation never overwrites profile corrections');
+    h.fire('document','change.jetcredit input.jetcredit',formEvent);
+    h.fire('document','click.jetcredit','#buy2_jetcredit, #button-confirm');
+    check(h.requests.length===count+1 && popup.hasClass('jet_offer_loading') && h.$('#buy2_jetcredit').prop('disabled')===true,'submission loading locks actual button');
+    h.fire('document','click.jetcredit','#buy2_jetcredit, #button-confirm');
+    check(h.requests.length===count+1,'loading submission cannot duplicate');
+    h.requests.at(-1).error({status:400,responseJSON:{code:'invalid_customer_input'}});
+    check(!popup.hasClass('jet_offer_loading'),'submission error clears loader');
+}
+for(const action of ['error','cancel','destroy','mismatch']) {
+    const {h}=mount('product','jet'), quote=h.requests.at(-1), popup=h.$('#jet-product-popup-container');
+    if(action==='error')quote.error({status:0});
+    if(action==='mismatch')quote.success({...reply('product','jet',true),application_intent:'wrong'});
+    if(action==='cancel')h.fire('document','click.jetcredit','#close_jetcredit, #back_jetcredit');
+    if(action==='destroy')h.context.window.JetCreditOffers.mount().destroy();
+    check(!popup.hasClass('jet_offer_loading') && popup.attr('aria-busy')==='false','loader cleared for '+action);
+    if(action==='cancel'||action==='destroy') {
+        quote.success(reply('product','jet',true,'late-token'));
+        check(h.$('#jet_finance_context').val()==='' && !popup.hasClass('jet_offer_loading'),'late cancelled response cannot restore offer/loading');
+    }
+}
+const {h:remount}=mount('product','jet');
+remount.context.window.JetCreditOffers.mount();
+check(remount.handlers.filter(h=>h.selector==='#back2_jetcredit').length===1,'remount has one backward handler');
+
+const {h:lateSubmit}=mount('product','jet');
+lateSubmit.requests.at(-1).success(reply('product','jet',true));
+for(const selector of ['#uslovia','#uslovia1','#uslovia2'])lateSubmit.$(selector).prop('checked',true);
+for(const [key,value]of Object.entries({name:'A',lastname:'B',phone:'123',email:'a@example.test',egn:'9001010000'}))lateSubmit.$('#jet_'+key).val(value);
+lateSubmit.fire('document','click.jetcredit','#buy2_jetcredit, #button-confirm');const originalPost=lateSubmit.requests.at(-1);
+originalPost.error({status:0});lateSubmit.fire('document','click.jetcredit','#buy2_jetcredit, #button-confirm');const replayPost=lateSubmit.requests.at(-1);
+originalPost.success({success:'success',code:'manual_registered',redirect:'https://test.invalid/index.php?route=extension/mt_jet_credit/success&receipt=old'});
+check(lateSubmit.$('#jet-product-popup-container').hasClass('jet_offer_loading') && !lateSubmit.location.href.includes('receipt=old'),'late first submit response cannot override active replay/loading');
+replayPost.success({success:'success',code:'manual_registered',redirect:'https://test.invalid/index.php?route=extension/mt_jet_credit/success&receipt=current'});
+check(!lateSubmit.$('#jet-product-popup-container').hasClass('jet_offer_loading') && lateSubmit.location.href.includes('receipt=current'),'latest replay completion clears loader and navigates');
+
+// FIX-05: virtual clock exercises actual trailing-edge handlers, not wall-clock sleeps.
+const downEvent='change.jetcredit input.jetcredit';
+for(const [context,scheme]of [['product','jet'],['cart','jet'],['checkout','jet'],['checkout','jet_card']]) {
+    const {h,prefix}=mount(context,scheme);
+    const quote=(token='fresh',selectedScheme=scheme)=>reply(context,selectedScheme,true,token);
+    h.requests.at(-1).success(quote('zero'));
+    const edit=value=>{h.$(prefix+'parva').val(value);h.fire('document',downEvent,prefix+'parva');};
+    const initial=h.requests.length, visible=h.$(prefix+'priceall').val();
+    edit('1');h.tick(200);edit('12');h.tick(200);edit('12.5');
+    check(h.requests.length===initial && h.$(prefix+'priceall').val()===visible,'typing retains last visual values without AJAX/flicker');
+    check(h.$('#jet_finance_context').val()==='' && h.$('#buy2_jetcredit').prop('disabled')===true,'typing clears exposed token and disables stale submission immediately');
+    check(!h.$('#jet_popup_notice').isText && h.$('#jet_finance_notice').val().includes('обновява'),'editing status stays on page without adding popup header text');
+    check(h.$('#jet_finance_context').attr('data-quote-state')==='updating' && !h.$('#jet-product-popup-container').hasClass('jet_offer_loading'),'waiting debounce has explicit updating status without spinner flashing');
+    h.tick(399);check(h.requests.length===initial,'trailing edge waits full 400 ms after latest edit');
+    h.tick(1);check(h.requests.length===initial+1 && h.requests.at(-1).data.jet_parva==='12.5','one authoritative quote after burst uses latest amount');
+    h.requests.at(-1).success(quote('positive'));
+    edit('012.500');h.tick(400);
+    check(h.requests.length===initial+1 && h.$('#jet_finance_context').val()==='positive','equivalent normalized amount reuses unexpired identical quote');
+    edit('');h.tick(399);check(h.$(prefix+'parva').val()==='','empty field remains editable until debounce');
+    h.tick(1);check(h.$(prefix+'parva').val()==='0' && h.requests.at(-1).data.jet_parva==='0','empty normalizes to zero and requests zero quote');
+    h.requests.at(-1).success(quote('zero-again'));
+    check(h.$(prefix+'priceall').val()==='240.00' && h.$('#jet_finance_context').val()==='zero-again','zero restores server result/token');
+    const zeroCount=h.requests.length;edit('');h.tick(400);
+    check(h.requests.length===zeroCount && h.$(prefix+'parva').val()==='0','empty equivalent to current zero avoids redundant recalculation');
+    edit('5');h.tick(10);h.fire('document','blur.jetcredit',prefix+'parva');
+    check(h.requests.length===zeroCount+1 && h.requests.at(-1).data.jet_parva==='5','blur flushes pending edit immediately');
+    h.tick(800);check(h.requests.length===zeroCount+1,'blur cancels trailing timer');
+    h.requests.at(-1).success(quote('five'));
+    edit('6');h.fire('document','keydown.jetcredit',prefix+'parva',undefined,{key:'Enter'});
+    const enter=h.requests.at(-1), enterCount=h.requests.length;
+    check(enter.data.jet_parva==='6','Enter flushes latest amount without native submit');
+    h.fire('document','blur.jetcredit',prefix+'parva');h.fire('document',downEvent,prefix+'parva');h.tick(800);
+    check(h.requests.length===enterCount,'blur/change/Enter for identical in-flight value do not duplicate requests');
+    enter.success(quote('six'));
+    edit('7');h.tick(100);h.$(prefix+'vnoski').val('9');h.fire('document','change.jetcredit',prefix+'vnoski');
+    const termRequest=h.requests.at(-1), termCount=h.requests.length;
+    check(termRequest.data.jet_parva==='7' && termRequest.data.jet_vnoski==='9','term change resolves pending amount in one authoritative request');
+    h.tick(800);check(h.requests.length===termCount,'term change cancels pending debounce');
+    const termReply=quote('term-nine');termReply.calculation.term=9;termRequest.success(termReply);
+    edit('8');h.tick(400);const stale=h.requests.at(-1);
+    edit('9');h.tick(400);const current=h.requests.at(-1);
+    check(stale.aborted,'new edit aborts stale quote');stale.success(quote('stale'));
+    check(h.$('#jet_finance_context').val()==='' && h.$('#jet-product-popup-container').hasClass('jet_offer_loading'),'stale success cannot reactivate offer or hide current loader');
+    current.error({status:400,responseJSON:{code:'invalid_down_payment'}});
+    check(!h.$('#jet-product-popup-container').hasClass('jet_offer_loading') && h.$('#jet_finance_context').val()==='' && h.$('#buy2_jetcredit').prop('disabled')===true,'failed quote clears loading but never enables stale submit');
+    check(h.$(prefix+'priceall').val()==='240.00' && h.$('#jet_finance_context').attr('data-quote-state')==='stale','failed quote preserves explicitly stale last visual results');
+    edit('');h.tick(400);h.requests.at(-1).success(quote('recovered-zero'));
+    check(h.$('#jet_finance_context').val()==='recovered-zero','empty-to-zero recovers after failure');
+    if(context!=='checkout') {
+        const before=h.requests.length;edit('10');h.tick(100);h.fire('document','click.jetcredit','#btn_jet, #btn_jet_card',{id:'btn_jet_card'});
+        check(h.requests.length===before+1 && h.requests.at(-1).data.jet_parva==='10' && h.requests.at(-1).data.jet_card==='1','scheme switch resolves current down payment');
+        h.tick(800);check(h.requests.length===before+1,'scheme switch cancels old edit timer');h.requests.at(-1).success(quote('card','jet_card'));
+    }
+    const beforeClose=h.requests.length;edit('11');h.fire('document','click.jetcredit','#close_jetcredit, #back_jetcredit');h.tick(1000);
+    check(h.requests.length===beforeClose && !h.$('#jet-product-popup-container').hasClass('jet_offer_loading'),'close cancels pending timer');
+    h.context.window.JetCreditOffers.mount();h.requests.at(-1).success(quote('reopened'));edit('12');
+    const beforeDestroy=h.requests.length;h.context.window.JetCreditOffers.mount().destroy();const afterDestroy=h.requests.length;h.tick(1000);
+    check(afterDestroy===beforeDestroy+1 && h.requests.length===afterDestroy,'destroy/remount clears old timers and creates no late recalculations');
+}
+// Disabled continuation cannot use old signed data, even if invoked programmatically.
+const {h:continuation}=mount('product','jet');continuation.requests.at(-1).success(reply('product','jet',true,'before-edit'));
+continuation.$('#uslovia').prop('checked',true);continuation.$('#uslovia1').prop('checked',true);
+continuation.$('#jet_parva').val('15');continuation.fire('document',downEvent,'#jet_parva');
+const beforeContinue=continuation.requests.length;continuation.fire('document','click.jetcredit','#buy_jetcredit');
+check(continuation.requests.length===beforeContinue+1 && continuation.requests.at(-1).url.endsWith('/jet_calculate'),'continuation flushes quote rather than creating order/submission');
+check(!continuation.$('#jet_step_2').visible || continuation.$('#jet_finance_context').val()==='','stale continuation cannot expose a usable offer');
+continuation.requests.at(-1).success(reply('product','jet',true,'after-edit'));continuation.fire('document','click.jetcredit','#buy_jetcredit');
+check(continuation.$('#jet_step_2').visible && continuation.requests.length===beforeContinue+1,'forward works after fresh authoritative quote');
+for(const bad of ['-1','not-a-number','99999999999999999999']) {
+    continuation.$('#jet_parva').val(bad);continuation.fire('document',downEvent,'#jet_parva');continuation.tick(400);
+    check(continuation.requests.at(-1).data.jet_parva===bad,'invalid input is not silently converted to zero');
+    continuation.requests.at(-1).error({status:400,responseJSON:{code:'invalid_money'}});
+    check(continuation.$('#jet_finance_context').val()==='','server invalid amount refusal leaves no usable token');
+}
+
+const {h:expiredEdit}=mount('product','jet');expiredEdit.requests.at(-1).success(reply('product','jet',true,'expiring'));
+const expiryDuringEdit=expiredEdit.timers.at(-1);expiredEdit.$('#jet_parva').val('0.00');expiredEdit.fire('document',downEvent,'#jet_parva');
+expiryDuringEdit.fn();const expiredCount=expiredEdit.requests.length;expiredEdit.tick(400);
+check(expiredEdit.requests.length===expiredCount+1 && expiredEdit.$('#jet_finance_context').val()==='','equivalent input cannot restore an expired signed offer');
+const {h:longZero}=mount('product','jet');longZero.requests.at(-1).success(reply('product','jet',true,'valid-zero'));
+longZero.$('#jet_parva').val('0'.repeat(41));longZero.fire('document',downEvent,'#jet_parva');const beforeLongZero=longZero.requests.length;longZero.tick(400);
+check(longZero.requests.length===beforeLongZero+1 && longZero.requests.at(-1).data.jet_parva==='0'.repeat(41),'oversized numeric input reaches server validation instead of reusing normalized zero');
+check(longZero.$('#jet_finance_context').val()==='' && longZero.$('#buy2_jetcredit').prop('disabled')===true,'oversized numeric input cannot restore valid zero offer');
+const {h:submitEdit}=mount('product','jet');submitEdit.requests.at(-1).success(reply('product','jet',true,'old'));
+submitEdit.$('#jet_parva').val('25');submitEdit.fire('document',downEvent,'#jet_parva');const submitEditCount=submitEdit.requests.length;
+submitEdit.fire('document','click.jetcredit','#buy2_jetcredit, #button-confirm');
+check(submitEdit.requests.length===submitEditCount+1 && submitEdit.requests.at(-1).url.endsWith('/jet_calculate'),'submit attempt flushes stale input only to quote, never submission');
+check(submitEdit.$('#jet_finance_context').val()==='' && submitEdit.$('#buy2_jetcredit').prop('disabled')===true,'stale signed offer cannot be submitted while flush is pending');
 console.log(`T-ESCAPE / JS PASS: ${checks} checks; actual admin/quote/submit/replay/error callbacks, no network.`);

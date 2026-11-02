@@ -92,8 +92,8 @@ class JetCreditFinancial {
 	}
 
 	public static function requireEur($config, $session, $currency) {
-		if ($config->get('config_currency') !== 'EUR' || ($session->data['currency'] ?? null) !== 'EUR') { throw new JetCreditFinancialException('non_eur_currency'); }
-		if (!$currency->has('EUR') || !self::positiveInteger($currency->getId('EUR')) || abs(self::number($currency->getValue('EUR')) - 1) > 1.0e-8) { throw new JetCreditFinancialException('invalid_eur_base'); }
+		if (($session->data['currency'] ?? null) !== 'EUR') { throw new JetCreditFinancialException('non_eur_currency'); }
+		if (!$currency->has('EUR') || !self::positiveInteger($currency->getId('EUR')) || self::number($currency->getValue('EUR')) <= 0) { throw new JetCreditFinancialException('invalid_eur_currency'); }
 		// EUR's enabled flag is checked by the OC3 adapter against the currency row.
 	}
 

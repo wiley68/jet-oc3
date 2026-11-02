@@ -31,9 +31,9 @@ class ModelExtensionMtJetCreditSubmissionOrder extends Model {
 		foreach ($totals as &$row) { $row['title'] = JetCreditSubmissionInput::nativeText($row['title'], 255, true); } unset($row);
 		if ($context === 'product') {
 			$line = $source['lines'][0];
-			$totals = array(array('code' => 'sub_total', 'title' => 'Междинна сума', 'value' => $line['net_total'], 'sort_order' => 1), array('code' => 'tax', 'title' => 'Данък', 'value' => (float)$line['tax'] * $line['quantity'], 'sort_order' => 2), array('code' => 'total', 'title' => 'Общо', 'value' => $source['amount'], 'sort_order' => 3));
+			$totals = array(array('code' => 'sub_total', 'title' => 'Междинна сума', 'value' => $line['net_total'], 'sort_order' => 1), array('code' => 'tax', 'title' => 'Данък', 'value' => (float)$line['tax'] * $line['quantity'], 'sort_order' => 2), array('code' => 'total', 'title' => 'Общо', 'value' => $source['base_amount'], 'sort_order' => 3));
 		}
-		$data = array('invoice_prefix' => (string)$this->config->get('config_invoice_prefix'), 'store_id' => 0, 'store_name' => JetCreditSubmissionInput::nativeText($this->config->get('config_name'), 64, true), 'store_url' => defined('HTTP_SERVER') ? HTTP_SERVER : (string)$this->config->get('config_url'), 'customer_id' => (int)$this->customer->getId(), 'customer_group_id' => (int)$this->config->get('config_customer_group_id'), 'firstname' => JetCreditSubmissionInput::native($person['firstname']), 'lastname' => JetCreditSubmissionInput::native($person['lastname']), 'email' => JetCreditSubmissionInput::native($person['email']), 'telephone' => JetCreditSubmissionInput::native($person['telephone']), 'custom_field' => array(), 'payment_method' => $scheme === 'jet_card' ? 'ПБ Лични Финанси на вноски с кредитна карта' : 'ПБ Лични Финанси', 'payment_code' => $scheme, 'shipping_method' => '', 'shipping_code' => '', 'comment' => 'Jet registration ' . $intent, 'total' => $source['amount'], 'affiliate_id' => 0, 'commission' => 0, 'marketing_id' => 0, 'tracking' => '', 'language_id' => (int)$this->config->get('config_language_id'), 'currency_id' => $this->currency->getId('EUR'), 'currency_code' => 'EUR', 'currency_value' => 1, 'ip' => '', 'forwarded_ip' => '', 'user_agent' => '', 'accept_language' => '', 'products' => $products, 'totals' => $totals, 'vouchers' => array());
+		$data = array('invoice_prefix' => (string)$this->config->get('config_invoice_prefix'), 'store_id' => 0, 'store_name' => JetCreditSubmissionInput::nativeText($this->config->get('config_name'), 64, true), 'store_url' => defined('HTTP_SERVER') ? HTTP_SERVER : (string)$this->config->get('config_url'), 'customer_id' => (int)$this->customer->getId(), 'customer_group_id' => (int)$this->config->get('config_customer_group_id'), 'firstname' => JetCreditSubmissionInput::native($person['firstname']), 'lastname' => JetCreditSubmissionInput::native($person['lastname']), 'email' => JetCreditSubmissionInput::native($person['email']), 'telephone' => JetCreditSubmissionInput::native($person['telephone']), 'custom_field' => array(), 'payment_method' => $scheme === 'jet_card' ? 'ПБ Лични Финанси на вноски с кредитна карта' : 'ПБ Лични Финанси', 'payment_code' => $scheme, 'shipping_method' => '', 'shipping_code' => '', 'comment' => 'Jet registration ' . $intent, 'total' => $source['base_amount'], 'affiliate_id' => 0, 'commission' => 0, 'marketing_id' => 0, 'tracking' => '', 'language_id' => (int)$this->config->get('config_language_id'), 'currency_id' => $this->currency->getId('EUR'), 'currency_code' => 'EUR', 'currency_value' => (float)$source['pricing_context']['conversion']['eur_value'], 'ip' => '', 'forwarded_ip' => '', 'user_agent' => '', 'accept_language' => '', 'products' => $products, 'totals' => $totals, 'vouchers' => array());
 		foreach (array('payment', 'shipping') as $kind) {
 			$address = $this->session->data[$kind . '_address'] ?? array();
 			foreach (array('firstname', 'lastname', 'company', 'address_1', 'address_2', 'city', 'postcode', 'country', 'zone', 'address_format') as $key) {
@@ -56,7 +56,7 @@ class ModelExtensionMtJetCreditSubmissionOrder extends Model {
 	public function verify($id, $scheme, $prepared) {
 		$this->load->model('checkout/order');
 		$order = $this->model_checkout_order->getOrder($id); $source = $prepared['source'];
-		if (!$order || (int)$order['store_id'] !== 0 || (int)$order['customer_id'] !== (int)$this->customer->getId() || $order['payment_code'] !== $scheme || $order['currency_code'] !== 'EUR' || JetCreditFinancial::number($order['currency_value']) !== 1.0 || number_format(JetCreditFinancial::number($order['total']), 2, '.', '') !== $source['amount']) { throw new JetCreditFinancialException('invalid_persisted_order'); }
+		if (!$order || (int)$order['store_id'] !== 0 || (int)$order['customer_id'] !== (int)$this->customer->getId() || $order['payment_code'] !== $scheme || $order['currency_code'] !== 'EUR' || JetCreditFinancial::number($order['currency_value']) !== (float)$source['pricing_context']['conversion']['eur_value'] || number_format(JetCreditFinancial::number($order['total']), 4, '.', '') !== number_format((float)$source['base_amount'], 4, '.', '')) { throw new JetCreditFinancialException('invalid_persisted_order'); }
 		foreach (array('firstname', 'lastname', 'email', 'telephone') as $field) { if (JetCreditSubmissionInput::line($order[$field] ?? null, 254) !== $prepared['person'][$field]) { throw new JetCreditFinancialException('invalid_persisted_order'); } }
 		$actual = array();
 		foreach ($this->model_checkout_order->getOrderProducts($id) as $product) {
@@ -81,7 +81,8 @@ class ModelExtensionMtJetCreditSubmissionOrder extends Model {
 		usort($normalized, function ($a, $b) { return ($a[0] <=> $b[0]) ?: ($a[1] <=> $b[1]); });
 		return array(JetCreditFinancial::positiveInteger($id), JetCreditFinancial::positiveInteger($quantity), number_format(JetCreditFinancial::number($net), 4, '.', ''), number_format(JetCreditFinancial::number($total), 4, '.', ''), number_format(JetCreditFinancial::number($tax), 4, '.', ''), $normalized, (int)$reward);
 	}
-	public function bankProducts($id) {
+	public function bankProducts($id, $source) {
+			if ($this->model_extension_mt_jet_credit_financial->currencyContext() !== $source['pricing_context']['conversion']) { throw new JetCreditFinancialException('stale_offer'); }
 		$this->load->model('catalog/product'); $this->load->model('catalog/category'); $products = array();
 		foreach ($this->model_checkout_order->getOrderProducts($id) as $product) {
 			$category = ' - ';
@@ -89,7 +90,7 @@ class ModelExtensionMtJetCreditSubmissionOrder extends Model {
 				$info = $this->model_catalog_category->getCategory($row['category_id']); if ($info) { $category = $info['name']; }
 			}
 			$options = array_column($this->model_checkout_order->getOrderOptions($id, $product['order_product_id']), 'value');
-			$products[] = array('product_id' => $product['product_id'], 'name' => $product['name'], 'category' => $category, 'options' => $options, 'unit' => JetCreditFinancial::number($product['price']) + JetCreditFinancial::number($product['tax']), 'quantity' => $product['quantity']);
+			$products[] = array('product_id' => $product['product_id'], 'name' => $product['name'], 'category' => $category, 'options' => $options, 'unit' => $this->model_extension_mt_jet_credit_financial->toEur(JetCreditFinancial::number($product['price']) + JetCreditFinancial::number($product['tax'])), 'quantity' => $product['quantity']);
 		}
 		return $products;
 	}
