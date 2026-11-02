@@ -1,6 +1,4 @@
 <?php
-require_once DIR_SYSTEM . 'library/jetcredit/installation.php';
-require_once DIR_SYSTEM . 'library/jetcredit/admin_settings.php';
 class ControllerExtensionModuleMTJetCredit extends Controller {
 
 	private $error = array();
@@ -11,11 +9,10 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		$this->document->setTitle('ПБ Лични Финанси');
 		$this->load->model('setting/setting');
 		if (($this->request->server['REQUEST_METHOD'] == 'POST') && $this->validate()) {
-			$this->model_setting_setting->editSetting('module_mt_jet_credit', JetCreditAdminSettings::module($this->request->post, $this->config), 0);
+			$this->model_setting_setting->editSetting('module_mt_jet_credit', $this->request->post);
 			$this->session->data['success'] = 'Успешно записахте направените промени.';
 			$this->cache->delete('module_mt_jet_credit');
 			$this->response->redirect($this->url->link('extension/module/mt_jet_credit', 'user_token=' . $this->session->data['user_token'], true));
-			return;
 		}
 		$data['breadcrumbs'] = array();
 		$data['breadcrumbs'][] = array(
@@ -32,18 +29,7 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		);
 		$data['cancel'] = $this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'], true);
 		$data['form_action'] = $this->url->link('extension/module/mt_jet_credit', 'user_token=' . $this->session->data['user_token'], true);
-		$data['jet_promotion_create_url'] = html_entity_decode($this->url->link('extension/module/mt_jet_credit/createSchema', 'user_token=' . $this->session->data['user_token'], true), ENT_QUOTES, 'UTF-8');
-		$data['jet_promotion_delete_url'] = html_entity_decode($this->url->link('extension/module/mt_jet_credit/deleteSchema', 'user_token=' . $this->session->data['user_token'], true), ENT_QUOTES, 'UTF-8');
 		$data['success'] = isset($this->session->data['success']) ? $this->session->data['success'] : '';
-		if (isset($this->session->data['jetcredit_install_error'])) { $this->error['warning'] = $this->session->data['jetcredit_install_error']; unset($this->session->data['jetcredit_install_error']); $data['success'] = ''; }
-		$data['jet_finance_diagnostic'] = '';
-		try {
-			$eur = $this->db->query("SELECT currency_id,status,value FROM `" . DB_PREFIX . "currency` WHERE code='EUR'");
-			if ($eur->num_rows !== 1 || (int)$eur->row['status'] !== 1 || JetCreditFinancial::number($eur->row['value']) <= 0) { throw new JetCreditFinancialException('invalid_eur_currency'); }
-			(new JetCreditInstallation($this->db, DB_PREFIX))->load($this->config);
-		} catch (Throwable $e) { $data['jet_finance_diagnostic'] = JetCreditInstallation::diagnostic($e); }
-
-
 		if (isset($this->error['warning'])) {
 			$data['error_warning'] = $this->error['warning'];
 		} else {
@@ -150,11 +136,11 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		}
 		$data['mt_jet_button_scheme_labels_json'] = json_encode(
 			array_map(function ($s) { return $s['label'] ?? ''; }, $data['mt_jet_button_schemes']),
-			JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+			JSON_UNESCAPED_UNICODE
 		);
 		$data['mt_jet_button_scheme_styles_for_js'] = json_encode(
 			$data['mt_jet_button_scheme_style_json'],
-			JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 		);
 		if (isset($this->request->post['module_mt_jet_credit_purcent'])) {
 			$data['module_mt_jet_credit_purcent'] = $this->request->post['module_mt_jet_credit_purcent'];
@@ -170,6 +156,16 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 			$data['module_mt_jet_credit_vnoska'] = $this->request->post['module_mt_jet_credit_vnoska'];
 		} else {
 			$data['module_mt_jet_credit_vnoska'] = $this->config->get('module_mt_jet_credit_vnoska') == '' ? 1 : $this->config->get('module_mt_jet_credit_vnoska');
+		}
+		if (isset($this->request->post['module_mt_jet_credit_count'])) {
+			$data['module_mt_jet_credit_count'] = $this->request->post['module_mt_jet_credit_count'];
+		} else {
+			$data['module_mt_jet_credit_count'] = $this->config->get('module_mt_jet_credit_count') == "" ? 1 : $this->config->get('module_mt_jet_credit_count');
+		}
+		if (isset($this->request->post['module_mt_jet_credit_eur'])) {
+			$data['module_mt_jet_credit_eur'] = $this->request->post['module_mt_jet_credit_eur'];
+		} else {
+			$data['module_mt_jet_credit_eur'] = $this->config->get('module_mt_jet_credit_eur') == "" ? 0 : $this->config->get('module_mt_jet_credit_eur');
 		}
 		if (isset($this->request->post['module_mt_jet_credit_price'])) {
 			$data['module_mt_jet_credit_price'] = $this->request->post['module_mt_jet_credit_price'];
@@ -189,104 +185,93 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		unset($this->session->data['success']);
 	}
 
-	public function createSchema() {
-		if (!$this->authorizePromotionMutation()) {
-			return;
-		}
-		try {
-			$this->load->model('extension/module/jetcredit');
-			$result = $this->model_extension_module_jetcredit->addKop($this->request->post);
-			$this->promotionResponse(array('success' => $result !== 0 ? 'success' : 'unsuccess', 'exist' => $result === -1 ? 'Вече имате такъв филтър!' : ''));
-		} catch (InvalidArgumentException $e) {
-			$this->promotionResponse(array('success' => 'unsuccess', 'code' => 'invalid_promotion'), '400 Bad Request');
-		} catch (Throwable $e) {
-			$this->promotionResponse(array('success' => 'unsuccess', 'code' => 'promotion_failed'), '500 Internal Server Error');
-		}
-	}
-
-	public function deleteSchema() {
-		if (!$this->authorizePromotionMutation()) {
-			return;
-		}
-		try {
-			$this->load->model('extension/module/jetcredit');
-			$result = $this->model_extension_module_jetcredit->deleteKop($this->request->post['promotion_id'] ?? null);
-			$this->promotionResponse(array('success' => $result > 0 ? 'success' : 'unsuccess'));
-		} catch (InvalidArgumentException $e) {
-			$this->promotionResponse(array('success' => 'unsuccess', 'code' => 'invalid_promotion'), '400 Bad Request');
-		} catch (Throwable $e) {
-			$this->promotionResponse(array('success' => 'unsuccess', 'code' => 'promotion_failed'), '500 Internal Server Error');
-		}
-	}
-
-	private function authorizePromotionMutation() {
-		if (($this->request->server['REQUEST_METHOD'] ?? '') !== 'POST') {
-			$this->response->addHeader('Allow: POST');
-			$this->promotionResponse(array('success' => 'unsuccess', 'code' => 'method_not_allowed'), '405 Method Not Allowed');
-			return false;
-		}
-		$expected = $this->session->data['user_token'] ?? null;
-		$token = $this->request->get['user_token'] ?? null;
-		if (!$this->user->isLogged() || !is_string($expected) || $expected === '' || !is_string($token) || !hash_equals($expected, $token) || !$this->user->hasPermission('modify', 'extension/module/mt_jet_credit')) {
-			$this->promotionResponse(array('success' => 'unsuccess', 'code' => 'permission_denied'), '403 Forbidden');
-			return false;
-		}
-		// The existing promotion table has no store column. Never accept a client scope.
-		$store_id = $this->config->get('config_store_id');
-		if (array_key_exists('store_id', $this->request->post) || array_key_exists('store_id', $this->request->get) || !in_array($store_id, array(null, 0, '0'), true)) {
-			$this->promotionResponse(array('success' => 'unsuccess', 'code' => 'unsupported_store'), '403 Forbidden');
-			return false;
-		}
-		return true;
-	}
-
-	private function promotionResponse($json, $status = '200 OK') {
-		$this->response->addHeader('HTTP/1.1 ' . $status);
-		$this->response->addHeader('Content-Type: application/json');
-		$this->response->setOutput(json_encode($json));
-	}
-
 	public function install() {
-		if (isset($this->request->get['store_id']) || isset($this->request->post['store_id']) || !in_array($this->config->get('config_store_id'), array(null,0,'0'), true)) { $message = JetCreditInstallation::diagnostic(new JetCreditFinancialException('unsupported_store')); $this->session->data['jetcredit_install_error'] = $message; return array('jetcredit_installed'=>false,'message'=>$message); }
-		if (!$this->lifecycleAuthorized()) { $message = JetCreditInstallation::diagnostic(new JetCreditFinancialException('authorization')); $this->session->data['jetcredit_install_error'] = $message; return array('jetcredit_installed'=>false,'message'=>$message); }
 		$this->load->model('setting/setting');
-		try {
-			$status = (new JetCreditInstallation($this->db, DB_PREFIX))->install($this->config, function () {
-				$status = (int)$this->config->get('config_order_status_id');
-				$valid = $this->db->query('SELECT order_status_id FROM `' . DB_PREFIX . "order_status` WHERE order_status_id=" . $status . ' AND language_id=' . (int)$this->config->get('config_language_id'));
-				foreach (JetCreditInstallation::defaults($valid->num_rows ? $status : 0) as $code => $values) { $this->model_setting_setting->editSetting($code, $values, 0); }
-			});
-			unset($this->session->data['jetcredit_install_error']);
-			return array('jetcredit_installed'=>true,'status'=>$status);
-		} catch (Throwable $e) {
-			$message = JetCreditInstallation::diagnostic($e);
-			$this->session->data['jetcredit_install_error'] = $message;
-			return array('jetcredit_installed'=>false,'message'=>$message);
-		}
+		$this->model_setting_setting->editSetting('module_mt_jet_credit', $this->request->post);
+		$table_kop_name = DB_PREFIX . 'jet_kop';
+		$this->db->query("CREATE TABLE IF NOT EXISTS `$table_kop_name` (
+			`id` int(11) NOT NULL AUTO_INCREMENT,
+			`jet_product_id` varchar(20) NOT NULL,
+			`jet_product_percent` DECIMAL(5,2) NOT NULL,
+			`jet_product_meseci` varchar(50) NOT NULL,
+			`jet_product_price` DECIMAL(10,2) UNSIGNED NOT NULL,
+			`jet_product_start` DATE NOT NULL,
+			`jet_product_end` DATE NOT NULL,
+			PRIMARY KEY (`id`),
+			FULLTEXT idx (`jet_product_id`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;");
 	}
+	
 	public function uninstall() {
-		if (!$this->lifecycleAuthorized()) { return; }
-		// Business records, promotions, claims, secret and reference counter survive.
 		$this->load->model('setting/setting');
-		$values = $this->model_setting_setting->getSetting('module_mt_jet_credit', 0);
-		$values['module_mt_jet_credit_status'] = '0';
-		$this->model_setting_setting->editSetting('module_mt_jet_credit', $values, 0);
+		$this->model_setting_setting->deleteSetting('module_mt_jet_credit');
+		$table_kop_name = DB_PREFIX . 'jet_kop';
+		$this->db->query("DROP TABLE IF EXISTS `$table_kop_name`;");
+		$this->load->controller('extension/modification/refresh');
 	}
-	private function lifecycleAuthorized() {
-		$token = $this->request->get['user_token'] ?? null; $expected = $this->session->data['user_token'] ?? null;
-		return $this->user->isLogged() && $this->user->hasPermission('modify', 'extension/module/mt_jet_credit') && is_string($token) && is_string($expected) && $expected !== '' && hash_equals($expected, $token) && !isset($this->request->get['store_id']) && !isset($this->request->post['store_id']) && in_array($this->config->get('config_store_id'), array(null,0,'0'), true);
-	}
+
 	private function validate() {
-		try {
-			if (!$this->lifecycleAuthorized()) { throw new JetCreditFinancialException('authorization'); }
-			(new JetCreditInstallation($this->db, DB_PREFIX))->load($this->config);
-			$values = JetCreditAdminSettings::module($this->request->post, $this->config);
-			if ($values['module_mt_jet_credit_status'] === '1') {
-				$eur = $this->db->query("SELECT currency_id,status,value FROM `" . DB_PREFIX . "currency` WHERE code='EUR'");
-				if ($eur->num_rows !== 1 || (int)$eur->row['status'] !== 1 || JetCreditFinancial::number($eur->row['value']) <= 0) { throw new JetCreditFinancialException('invalid_eur_currency'); }
+		if (!$this->user->hasPermission('modify', 'extension/module/mt_jet_credit')) {
+			$this->error['warning'] = 'Нямате права за тази операция!';
+		}
+	
+		if (isset($this->request->post['module_mt_jet_credit_gap'])) {
+			$cr_gap = $this->request->post['module_mt_jet_credit_gap'];
+		} else {
+			$cr_gap = $this->config->get('module_mt_jet_credit_gap');
+		}
+		if (!is_numeric($cr_gap)) {
+			$this->error['warning'] = 'Моля въведете числова стойност в полето "Празно място над бутона"!';
+		}
+	
+		if (isset($this->request->post['module_mt_jet_credit_id'])) {
+			$cr_id = $this->request->post['module_mt_jet_credit_id'];
+		} else {
+			$cr_id = $this->config->get('module_mt_jet_credit_id');
+		}
+		if (trim($cr_id) == '') {
+			$this->error['warning'] = 'Необходимо е да въведете стойност в полето "Избери идентификатор на магазина за изпращане"!';
+		}
+	
+		if (isset($this->request->post['module_mt_jet_credit_price'])) {
+			$cr_price = $this->request->post['module_mt_jet_credit_price'];
+		} else {
+			$cr_price = $this->config->get('module_mt_jet_credit_price');
+		}
+		if (!is_numeric($cr_price)) {
+			$this->error['warning'] = 'Моля въведете числова стойност в полето "Минимална сума"!';
+		}
+
+		if (isset($this->request->post['module_mt_jet_credit_btn_max_width'])) {
+			$raw_mw = $this->request->post['module_mt_jet_credit_btn_max_width'];
+			if ($raw_mw !== '' && $raw_mw !== null) {
+				if (!is_numeric($raw_mw) || (int) $raw_mw < 30 || (int) $raw_mw > 1200) {
+					$this->error['warning'] = 'Поле "Максимална ширина на бутона" трябва да е цяло число (px) между 30 и 1200.';
+				}
 			}
+		}
+		if (isset($this->request->post['module_mt_jet_credit_btn_round'])) {
+			$raw_r = $this->request->post['module_mt_jet_credit_btn_round'];
+			if ($raw_r !== '' && $raw_r !== null) {
+				if (!is_numeric($raw_r) || (int) $raw_r < 0 || (int) $raw_r > 25) {
+					$this->error['warning'] = 'Поле "Радиус на закръгление" трябва да е цяло число (px) между 0 и 25.';
+				}
+			}
+		}
+		if (isset($this->request->post['module_mt_jet_credit_btn_font'])) {
+			$raw_f = $this->request->post['module_mt_jet_credit_btn_font'];
+			if ($raw_f !== '' && $raw_f !== null) {
+				if (!is_numeric($raw_f) || (int) $raw_f < 6 || (int) $raw_f > 36) {
+					$this->error['warning'] = 'Поле "Размер на шрифт в бутона" трябва да е цяло число (px) между 6 и 36.';
+				}
+			}
+		}
+	
+		if ($this->error) {
+			return false;
+		} else {
 			return true;
-		} catch (Throwable $e) { $this->error['warning'] = JetCreditAdminSettings::diagnostic($e); return false; }
+		}
 	}
 
 	/**

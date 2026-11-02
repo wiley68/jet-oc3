@@ -1,5 +1,32 @@
 <?php
 class ModelExtensionMtJetCreditJetcredit extends Model {
+	public function addKop( $data ) {
+		$query_check = $this->db->query("
+			SELECT * FROM `" . DB_PREFIX . "jet_kop` 
+			WHERE jet_product_id = '" . $this->db->escape($data['mt_jet_credit_product_id']) . "'"
+		);
+		if ($query_check->num_rows == 0) {
+			$this->db->query("
+				INSERT INTO `" . DB_PREFIX . "jet_kop` 
+				SET 
+				jet_product_id = '" . $this->db->escape($data['mt_jet_credit_product_id']) . "', 
+				jet_product_percent = '" . $this->db->escape($data['mt_jet_credit_product_percent']) . "', 
+				jet_product_meseci = '" . $this->db->escape($data['mt_jet_credit_product_meseci']) . "', 
+				jet_product_price = '" . $this->db->escape($data['mt_jet_credit_product_price']) . "', 
+				jet_product_start = '" . $this->db->escape($data['mt_jet_credit_product_start']) . "', 
+				jet_product_end = '" . $this->db->escape($data['mt_jet_credit_product_end']) . "'"
+			);
+			return (int) $this->db->countAffected();
+		} else {
+			return (int) -1;
+		}
+	}
+
+	public function deleteKop( $jet_product_id ) {
+		$this->db->query("DELETE FROM " . DB_PREFIX . "jet_kop WHERE jet_product_id = '" . $jet_product_id . "'");
+		return $this->db->countAffected();
+	}
+
 	public function getAllKops() {
 		$query_check = $this->db->query("SHOW TABLES LIKE '" . DB_PREFIX . "jet_kop'");
 		if ($query_check->num_rows) {
@@ -11,8 +38,8 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 	}
 
 	public function getPromo($jet_product_id, $jet_vnoski, $jet_total_credit_price) {
-		$jet_purcent      = $this->config->get('module_mt_jet_credit_purcent');
-		$jet_purcent_card = $this->config->get('module_mt_jet_credit_purcent_card');
+		$jet_purcent      = (float)$this->config->get('module_mt_jet_credit_purcent');
+		$jet_purcent_card = (float)$this->config->get('module_mt_jet_credit_purcent_card');
 		$jet_show_button  = true;
 
 		$product_id = $this->db->escape((string)$jet_product_id);
@@ -20,7 +47,7 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		$total      = (float)$jet_total_credit_price;
 
 		$sql = "
-			SELECT jet_product_percent, jet_product_id, id, jet_product_meseci, jet_product_price, jet_product_start, jet_product_end
+			SELECT jet_product_percent, jet_product_id, id
 			FROM " . DB_PREFIX . "jet_kop
 			WHERE (jet_product_id = '*' OR jet_product_id = '{$product_id}')
 			  AND FIND_IN_SET({$vnoski}, REPLACE(jet_product_meseci, '_', ','))
@@ -42,16 +69,15 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 			if ((float)$row['jet_product_percent'] === -1.00) {
 				$jet_show_button = false;
 			} else {
-				$jet_purcent = $row['jet_product_percent'];
-				$jet_purcent_card = $row['jet_product_percent'];
+				$jet_purcent = (float)$row['jet_product_percent'];
+				$jet_purcent_card = (float)$row['jet_product_percent'];
 			}
 		}
 
 		return [
 			'jet_show_button' => $jet_show_button,
 			'jet_purcent' => $jet_purcent,
-			'jet_purcent_card' => $jet_purcent_card,
-			'promotion' => $row
+			'jet_purcent_card' => $jet_purcent_card
 		];
 	}
 

@@ -1,47 +1,150 @@
 <modification>
     <name>Кредитен Калкулатор ПБ Лични Финанси</name>
     <code>cc_jet</code>
-    <version>2.0.0 for OpenCart 3.x</version>
+    <version>1.9.1 for OpenCart 3.x</version>
     <author>Авалон ООД</author>
     <link>http://avalonbg.com</link>
 
-    <file path="catalog/controller/product/product.php">
-        <operation error="abort"><ignoreif><![CDATA[JETCREDIT:VIEW-0:v1]]></ignoreif>
+    <file path="catalog/controller/product/product.php" error="abort">
+        <operation>
             <search><![CDATA[
 $data['products'] = array();
             ]]></search>
             <add position="after"><![CDATA[
-// JETCREDIT:VIEW-0:v1
+        /** avalon кредитен калкулатор **/
+        $data['is_active_jet'] = true;
+        $data['jet_product_css'] = '';
+        $data['jet_product_js'] = '';
+        $jet_status = $this->config->get('module_mt_jet_credit_status');
+        if ($jet_status) {
+            if (isset($this->request->get['product_id'])) {
+                $data['jet_product_id'] = (int)$this->request->get['product_id'];
+            } else {
+                $data['jet_product_id'] = 0;
+            }
+            $config_customer_price = $this->config->get('config_customer_price');
+            if (($config_customer_price && $this->customer->isLogged()) || !$config_customer_price) {
+                if ((float)$product_info['special']){
+                    $jet_price = $this->tax->calculate($product_info['special'], $product_info['tax_class_id'], $this->config->get('config_tax'));
+                }else{
+                    $jet_price = $this->tax->calculate($product_info['price'], $product_info['tax_class_id'], $this->config->get('config_tax'));
+                }
+            } else {
+                $jet_price = 0;
+            }
+            $data['jet_price'] = (float)$jet_price;
+            
+            $jet_currency_code = $this->session->data['currency'];
+            // Проверка дали продуктът е в наличност
+            $product_in_stock = $product_info['quantity'] > 0;
+            
+            if ($product_in_stock && ($jet_currency_code == 'EUR' || $jet_currency_code == 'BGN')) {
+                $data['jet_eur'] = (int) $this->config->get('module_mt_jet_credit_eur');
+                $data['jet_sign'] = 'лв.';
+                $data['jet_sign_second'] = 'евро';
+                $jet_min_250 = 250.00;
+                switch ($data['jet_eur']) {
+                    case 0:
+                        $data['jet_sign'] = 'лв.';
+                        $data['jet_sign_second'] = '';
+                        break;
+                    case 1:
+                        if ($jet_currency_code == "EUR") {
+                            $jet_price = number_format($jet_price * 1.95583, 2, ".", "");
+                        }
+                        $data['jet_sign'] = 'лв.';
+                        $data['jet_sign_second'] = 'евро';
+                        break;
+                    case 2:
+                        if ($jet_currency_code == "BGN") {
+                            $jet_price = number_format($jet_price / 1.95583, 2, ".", "");
+                        }
+                        $data['jet_sign'] = 'евро';
+                        $data['jet_sign_second'] = 'лв.';
+                        $jet_min_250 = 125.00;
+                        break;
+                    case 3:
+                        if ($jet_currency_code == "BGN") {
+                            $jet_price = number_format($jet_price / 1.95583, 2, ".", "");
+                        }
+                        $data['jet_sign'] = 'евро';
+                        $data['jet_sign_second'] = '';
+                        $jet_min_250 = 125.00;
+                        break;
+                }
+                
+                if ($jet_price < $jet_min_250) {
+                    $data['jet_vnoski'] = '9';
+                }else{
+                    $data['jet_vnoski'] = $this->config->get('module_mt_jet_credit_vnoski');
+                }
+                $data['jet_card_in'] = (int)$this->config->get('module_mt_jet_credit_status_card');
+                $data['jet_gap'] = (int)$this->config->get('module_mt_jet_credit_gap');
+                $data['jet_button_type'] = $this->config->get('module_mt_jet_credit_button_type') ? $this->config->get('module_mt_jet_credit_button_type') : 'standard';
+                $this->load->model('extension/mt_jet_credit/jetcredit');
+                $data['jet_button_scheme_style'] = $this->model_extension_mt_jet_credit_jetcredit->getJetWideButtonInlineStyle($this->config->get('module_mt_jet_credit_button_scheme'));
+                $_jbtn = $this->config->get('module_mt_jet_credit_btn_text');
+                $data['jet_btn_text'] = ($_jbtn === null || $_jbtn === '') ? 'Купи на изплащане с' : $_jbtn;
+                $_jbtnc = $this->config->get('module_mt_jet_credit_btn_text_card');
+                $data['jet_btn_text_card'] = ($_jbtnc === null || $_jbtnc === '') ? 'На вноски с твоята кредитна карта' : $_jbtnc;
+                $_jblg = $this->config->get('module_mt_jet_credit_btn_logo');
+                $data['jet_btn_logo'] = $_jblg === null || $_jblg === '' ? 1 : ((int) $_jblg ? 1 : 0);
+                $_jbmw = $this->config->get('module_mt_jet_credit_btn_max_width');
+                $data['jet_button_scheme_style'] .= '--jet-wide-max-width:' . (($_jbmw === null || $_jbmw === '') ? 570 : min(1200, max(30, (int) $_jbmw))) . 'px;';
+                $_jbrnd = $this->config->get('module_mt_jet_credit_btn_round');
+                $data['jet_button_scheme_style'] .= '--jet-wide-radius:' . (($_jbrnd === null || $_jbrnd === '') ? 16 : min(25, max(0, (int) $_jbrnd))) . 'px;';
+                $_jbfnt = $this->config->get('module_mt_jet_credit_btn_font');
+                $data['jet_button_scheme_style'] .= '--jet-wide-font-size:' . (($_jbfnt === null || $_jbfnt === '') ? 14 : min(36, max(6, (int) $_jbfnt))) . 'px;';
+                $data['jet_vnoska'] = (int)$this->config->get('module_mt_jet_credit_vnoska');
+                $data['image_jet'] = 'catalog/view/theme/default/image/jet.png';
+                $data['image_jet_card'] = 'catalog/view/theme/default/image/jet_card.png';
+                $jet_assets_base = DIR_APPLICATION . 'view/theme/default/template/extension/mt_jet_credit/';
+                $data['jet_product_css'] = 'catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_products.css?ver=' . filemtime($jet_assets_base . 'creditjet_products.css');
+                $data['jet_product_js'] = 'catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_products.js?ver=' . filemtime($jet_assets_base . 'creditjet_products.js');
+                
+                $this->load->model('account/customer');
+                $data['jet_name'] = "";
+                $data['jet_lastname'] = "";
+                $data['jet_email'] = "";
+                $data['jet_phone'] = "";
+                if ($this->customer->isLogged()) {
+                    $customer_id = $this->customer->getId();
+                    $customer_info = $this->model_account_customer->getCustomer($customer_id);
+                    $data['jet_name'] = $customer_info['firstname'];
+                    $data['jet_lastname'] = $customer_info['lastname'];
+                    $data['jet_email'] = $this->customer->getEmail();
+                    $data['jet_phone'] = $customer_info['telephone'];
+                }
 
-        $this->load->model('extension/mt_jet_credit/financial');
-        $data = array_merge($data, $this->model_extension_mt_jet_credit_financial->frontendData('product', 'jet', (int)$product_info['product_id']));
-]]></add>
+            }else{
+                $data['is_active_jet'] = false;
+            }
+        }else{
+            $data['is_active_jet'] = false;
+        }
+        /** avalon кредитен калкулатор **/
+            ]]></add>
         </operation>
     </file>
 
-  <file path="catalog/view/theme/default/template/product/product.twig">
-    <operation error="abort"><ignoreif><![CDATA[JETCREDIT:VIEW-1:v1]]></ignoreif>
+  <file path="catalog/view/theme/*/template/product/product.twig" error="abort">
+    <operation>
       <search>
         <![CDATA[
 {% if minimum > 1 %}
         ]]>
       </search>
-        <add position="before"><![CDATA[
-<!-- JETCREDIT:VIEW-1:v1 -->
-
-
+        <add position="before">
+        <![CDATA[
 <!-- avalon кредитен калкулатор -->
 {% if is_active_jet %}
-    <input type="hidden" id="jet_finance_context" data-intent="{{ jet_application_intent|e('html') }}" data-context="{{ jet_context|e('html') }}" data-scheme="{{ jet_scheme|e('html') }}" data-csrf="{{ jet_csrf|e('html') }}" data-product-id="{{ jet_product_id|e('html') }}" value="" />
-    <p id="jet_finance_notice" role="status">Кандидатстването временно не е достъпно. Не е изпратена заявка.</p>
-
-    <input type="hidden" id="jet_product_id" value="{{ jet_product_id|e('html') }}" />
-    <div id="jet-product-button-container" style="display:none;padding-top:{{ jet_gap|e('html') }}px;">
+    <input type="hidden" id="jet_price" value="{{ jet_price }}" />
+    <input type="hidden" id="jet_product_id" value="{{ jet_product_id }}" />
+    <input type="hidden" id="jet_variation_id" value="" />
+    <input type="hidden" id="jet_card_in" value="{{ jet_card_in }}" />
+    <div id="jet-product-button-container" style="display:none;padding-top:{{ jet_gap }}px;">
         <div id="jet_alert_overlay" class="jet_alert_overlay"></div>
-        <div id="jet_alert_box" role="alertdialog" aria-modal="true" aria-describedby="jet_alert_message" aria-hidden="true" style="display:none">
-            <p id="jet_alert_message"></p>
-            <button type="button" id="jet_alert_ok">Добре</button>
-        </div>
+        <div id="jet_alert_box"></div>
         {% if jet_button_type == 'wide' %}
         <div class="jet_wide_button_wrap" style="{{ jet_button_scheme_style|e('html') }}">
             <button type="button" id="btn_jet" class="jet_wide_button">
@@ -50,10 +153,13 @@ $data['products'] = array();
                     {% if jet_btn_logo == 1 %}<img src="catalog/view/theme/default/image/jet_logo.png" alt="ПБ Лични Финанси" class="jet_wide_button_logo" />{% endif %}
                 </div>
                 {% if jet_vnoska == 1 %}
-                    <div class="jet_wide_button_text jet_button_installment" style="display:none" data-jet-installment="jet">
-
-                            <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}
-
+                    <div class="jet_wide_button_text">
+                        {% if jet_sign_second == '' %}
+                            <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign }}
+                        {% else %}
+                            <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign }}
+                            <span class="jet_wide_button_text_second">(<span id="jet_vnoska_second"></span> {{ jet_sign_second }})</span>
+                        {% endif %}
                     </div>
                 {% endif %}
             </button>
@@ -64,10 +170,13 @@ $data['products'] = array();
                     {% if jet_btn_logo == 1 %}<img src="catalog/view/theme/default/image/jet_logo.png" alt="ПБ Лични Финанси" class="jet_wide_button_logo" />{% endif %}
                 </div>
                 {% if jet_vnoska == 1 %}
-                    <div class="jet_wide_button_text jet_button_installment" style="display:none" data-jet-installment="jet_card">
-
-                            <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}
-
+                    <div class="jet_wide_button_text">
+                        {% if jet_sign_second == '' %}
+                            <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign }}
+                        {% else %}
+                            <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign }}
+                            <span class="jet_wide_button_text_second">(<span id="jet_vnoska_card_second"></span> {{ jet_sign_second }})</span>
+                        {% endif %}
                     </div>
                 {% endif %}
             </button>
@@ -80,7 +189,7 @@ $data['products'] = array();
                     <img 
                         id="btn_jet"
                         class="jet_logo" 
-                        src="{{ image_jet|e('html') }}"
+                        src="{{ image_jet }}" 
                         alt="Кредитен модул ПБ Лични Финанси" 
                         title="Кредитен модул ПБ Лични Финанси" 
                     />
@@ -89,9 +198,14 @@ $data['products'] = array();
             {% if jet_vnoska == 1 %}
             <tr>
                 <td class="jet_button_table">
-
-                        <p class="jet_button_installment" style="display:none" data-jet-installment="jet"><span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}</p>
-
+                    {% if jet_sign_second == '' %}
+                        <p><span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign }}</p>
+                    {% else %}
+                        <p>
+                            <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign }}<br />
+                            <span style="font-size:75%;font-weight:400;">(<span id="jet_vnoska_second"></span> {{ jet_sign_second }})</span>
+                        </p>
+                    {% endif %}
                 </td>
             </tr>
             {% endif %}
@@ -103,7 +217,7 @@ $data['products'] = array();
                     <img 
                         id="btn_jet_card"
                         class="jet_logo" 
-                        src="{{ image_jet_card|e('html') }}"
+                        src="{{ image_jet_card }}" 
                         alt="Специални предложения само за клиенти, които вече имат кредитна карта, издадена от ПБ Лични Финанси." 
                         title="Специални предложения само за клиенти, които вече имат кредитна карта, издадена от ПБ Лични Финанси." 
                     />
@@ -112,9 +226,14 @@ $data['products'] = array();
             {% if jet_vnoska == 1 %}
             <tr>
                 <td class="jet_button_table">
-
-                        <p class="jet_button_installment" style="display:none" data-jet-installment="jet_card"><span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}</p>
-
+                    {% if jet_sign_second == '' %}
+                        <p><span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign }}</p>
+                    {% else %}
+                        <p>
+                            <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign }}<br />
+                            <span style="font-size:75%;font-weight:400;">(<span id="jet_vnoska_card_second"></span> {{ jet_sign_second }})</span>
+                        </p>
+                    {% endif %}
                 </td>
             </tr>
             {% endif %}
@@ -125,38 +244,52 @@ $data['products'] = array();
     
     <div id="jet-product-popup-container" class="modalpayment_jet">
         <div class="modalpayment-content_jet">
-            <div class="jet_offer_loader" role="status" aria-live="polite"><span>Преизчисляване…</span></div>
             <div id="jet_body">
                 <div class="jet_PopUp_Detailed_v1">
                     <div class="jet_Mask">
                         <div id="jet_step_1">
                             <div class="jet_row">
                                 <div class="jet_column_left">
-                                    Първоначална вноска ({{ jet_sign|e('html') }})
+                                    Първоначална вноска ({{ jet_sign }})
                                 </div>
                                 <div class="jet_column_right">
                                     <input 
                                         class="jet_input_text_active" 
-                                        type="text"
-                                        inputmode="decimal"
+                                        type="number" 
+                                        min="0"
                                         id="jet_parva" 
                                         value=0 
                                     />
+                                    <button 
+                                        type="button" 
+                                        id="btn_preizcisli" 
+                                        class="jet_button_preizcisli"
+                                    >Преизчисли</button>
                                 </div>
                             </div>
                             <div class="jet_row">
                                 <div class="jet_column_left">
-
-                                        Цена на стоките ({{ jet_sign|e('html') }})
-
+                                    {% if jet_sign_second == '' %}
+                                        Цена на стоките ({{ jet_sign }})
+                                    {% else %}
+                                        Цена на стоките ({{ jet_sign }}
+                                        <span style='font-size:60%;font-weight:400;height:16px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
+                                    {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-
+                                    {% if jet_eur == 0 or jet_eur == 3 %}
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_priceall"></span></div>
-
+                                            <div></div>
                                         </div>
-
+                                    {% else %}
+                                        <div class="jet_input_text jet_disable">
+                                            <div><span id="jet_priceall"></span></div>
+                                            <div>
+                                                <span>/</span><span id="jet_priceall_second"></span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -168,38 +301,67 @@ $data['products'] = array();
                                         id="jet_vnoski" 
                                         class="jet_input_text"
                                     >
-                                        <option value="">Изчисляване…</option>
+                                        <option value="3" {% if jet_vnoski == 3 %}selected{% endif %}>3 месеца</option>
+                                        <option value="6" {% if jet_vnoski == 6 %}selected{% endif %}>6 месеца</option>
+                                        <option value="9" {% if jet_vnoski == 9 %}selected{% endif %}>9 месеца</option>
+                                        <option value="10" {% if jet_vnoski == 10 %}selected{% endif %}>10 месеца</option>
+                                        <option value="12" {% if jet_vnoski == 12 %}selected{% endif %}>12 месеца</option>
+                                        <option value="15" {% if jet_vnoski == 15 %}selected{% endif %}>15 месеца</option>
+                                        <option value="18" {% if jet_vnoski == 18 %}selected{% endif %}>18 месеца</option>
+                                        <option value="24" {% if jet_vnoski == 24 %}selected{% endif %}>24 месеца</option>
+                                        <option value="30" {% if jet_vnoski == 30 %}selected{% endif %}>30 месеца</option>
+                                        <option value="36" {% if jet_vnoski == 36 %}selected{% endif %}>36 месеца</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="jet_row">
                                 <div class="jet_column_left">
-
-                                        Общо кредит ({{ jet_sign|e('html') }})
-
+                                    {% if jet_sign_second == '' %}
+                                        Общо кредит ({{ jet_sign }})
+                                    {% else %}
+                                        Общо кредит ({{ jet_sign }}
+                                        <span style='font-size:60%;font-weight:400;height:16px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
+                                    {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-
+                                    {% if jet_eur == 0 or jet_eur == 3 %}
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_total_credit_price"></span></div>
-
+                                            <div></div>
                                         </div>
-
+                                    {% else %}
+                                        <div class="jet_input_text jet_disable">
+                                            <div><span id="jet_total_credit_price"></span></div>
+                                            <div>
+                                                <span>/</span><span id="jet_total_credit_price_second"></span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="jet_row">
                                 <div class="jet_column_left">
-
-                                        Месечна вноска ({{ jet_sign|e('html') }})
-
+                                    {% if jet_sign_second == '' %}
+                                        Месечна вноска ({{ jet_sign }})
+                                    {% else %}
+                                        Месечна вноска ({{ jet_sign }}
+                                        <span style='font-size:60%;font-weight:400;height:16px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
+                                    {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-
+                                    {% if jet_eur == 0 or jet_eur == 3 %}
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_vnoska_popup"></span></div>
-
+                                            <div></div>
                                         </div>
-
+                                    {% else %}
+                                        <div class="jet_input_text jet_disable">
+                                            <div><span id="jet_vnoska_popup"></span></div>
+                                            <div>
+                                                <span>/</span><span id="jet_vnoska_popup_second"></span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -209,7 +371,7 @@ $data['products'] = array();
                                 <div class="jet_column_right">
                                     <div class="jet_input_text jet_disable">
                                         <div><span id="jet_gpr"></span></div>
-
+                                        <div></div>
                                     </div>
                                 </div>
                             </div>
@@ -220,23 +382,33 @@ $data['products'] = array();
                                 <div class="jet_column_right">
                                     <div class="jet_input_text jet_disable">
                                         <div><span id="jet_glp"></span></div>
-
+                                        <div></div>
                                     </div>
                                 </div>
                             </div>
                             <div class="jet_row">
                                 <div class="jet_column_left">
-
-                                        Общо плащания ({{ jet_sign|e('html') }})
-
+                                    {% if jet_sign_second == '' %}
+                                        Общо плащания ({{ jet_sign }})
+                                    {% else %}
+                                        Общо плащания ({{ jet_sign }}
+                                        <span style='font-size:60%;font-weight:400;height:16px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
+                                    {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-
+                                    {% if jet_eur == 0 or jet_eur == 3 %}
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_obshto"></span></div>
-
+                                            <div></div>
                                         </div>
-
+                                    {% else %}
+                                        <div class="jet_input_text jet_disable">
+                                            <div><span id="jet_obshto"></span></div>
+                                            <div>
+                                                <span>/</span><span id="jet_obshto_second"></span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="jet_hr"></div>
@@ -293,6 +465,7 @@ $data['products'] = array();
                                     type="button" 
                                     class="jet_btn" 
                                     id="buy_jetcredit" 
+                                    style="opacity: 0.5;" 
                                     disabled
                                 >Купи на изплащане</button>
                             </div>
@@ -309,7 +482,7 @@ $data['products'] = array();
                                         type="text"
                                         id="jet_name" 
                                         autocomplete="off"
-                                        value="{{ jet_name|e('html') }}"
+                                        value="{{ jet_name }}" 
                                     />
                                     <input 
                                         type="hidden"
@@ -329,7 +502,7 @@ $data['products'] = array();
                                         type="text"
                                         id="jet_lastname" 
                                         autocomplete="off"
-                                        value="{{ jet_lastname|e('html') }}"
+                                        value="{{ jet_lastname }}" 
                                     />
                                 </div>
                             </div>
@@ -357,7 +530,7 @@ $data['products'] = array();
                                         type="text"
                                         id="jet_phone" 
                                         autocomplete="off"
-                                        value="{{ jet_phone|e('html') }}"
+                                        value="{{ jet_phone }}" 
                                     />
                                 </div>
                             </div>
@@ -371,7 +544,7 @@ $data['products'] = array();
                                         type="text"
                                         id="jet_email" 
                                         autocomplete="off"
-                                        value="{{ jet_email|e('html') }}"
+                                        value="{{ jet_email }}" 
                                     />
                                 </div>
                             </div>
@@ -422,6 +595,7 @@ $data['products'] = array();
                                     type="button" 
                                     class="jet_btn" 
                                     id="buy2_jetcredit" 
+                                    style="opacity: 0.5;" 
                                     disabled
                                 >Изпрати</button>
                             </div>
@@ -433,68 +607,212 @@ $data['products'] = array();
         </div>
     </div>
 {% if jet_product_css and jet_product_js %}
-<link rel="stylesheet" href="{{ jet_product_css|e('html') }}" />
-<script src="{{ jet_offer_js|e('html') }}"></script>
-<script src="{{ jet_product_js|e('html') }}"></script>
+<link rel="stylesheet" href="{{ jet_product_css }}" />
+<script src="{{ jet_product_js }}"></script>
 {% endif %}
 {% endif %}
 <!-- avalon кредитен калкулатор -->
-
-            ]]></add>
+        ]]>
+            </add>
         </operation>
     </file>
     
-    <file path="catalog/controller/checkout/cart.php">
-        <operation error="abort"><ignoreif><![CDATA[JETCREDIT:VIEW-2:v1]]></ignoreif>
+    <file path="catalog/controller/checkout/cart.php" error="abort">
+        <operation>
             <search><![CDATA[
 $this->document->setTitle($this->language->get('heading_title'));
             ]]></search>
             <add position="after"><![CDATA[
-// JETCREDIT:VIEW-2:v1
-
-        $jet_base = 'catalog/view/theme/default/template/extension/mt_jet_credit/';
-        foreach (array('creditjet_offers.js', 'creditjet_cart.js') as $jet_asset) {
-            $this->document->addScript($jet_base . $jet_asset . '?ver=' . filemtime(DIR_APPLICATION . 'view/theme/default/template/extension/mt_jet_credit/' . $jet_asset));
-        }
-        $this->document->addStyle($jet_base . 'creditjet_cart.css?ver=' . filemtime(DIR_APPLICATION . 'view/theme/default/template/extension/mt_jet_credit/creditjet_cart.css'));
-]]></add>
+        /** avalon кредитен калкулатор **/
+        $this->document->addScript('catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_cart.js?ver='.filemtime(DIR_APPLICATION . "view/theme/default/template/extension/mt_jet_credit/creditjet_cart.js"));
+        $this->document->addStyle('catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_cart.css?ver='.filemtime(DIR_APPLICATION . "view/theme/default/template/extension/mt_jet_credit/creditjet_cart.css"));
+        /** avalon кредитен калкулатор **/
+            ]]></add>
         </operation>
     </file>
     
+    <file path="catalog/controller/checkout/cart.php" error="abort">
+        <operation>
+            <search><![CDATA[
+$products = $this->cart->getProducts();
+            ]]></search>
+            <add position="after"><![CDATA[
+        /** avalon кредитен калкулатор jet **/
+        $products_jet = [];
+        $products_jet['id'] = '';
+        $products_jet['pr'] = '';
+        $products_jet['quantity'] = '';
+        $products_jet['price'] = 0;
+        $products_jet['option'] = [];
+        $products_jet_index = 0;
+        /** avalon кредитен калкулатор jet **/
+            ]]></add>
+        </operation>
+    </file>
     
+    <file path="catalog/controller/checkout/cart.php" error="abort">
+        <operation>
+            <search><![CDATA[
+'href'      => $this->url->link('product/product', 'product_id=' . $product['product_id'])
+            ]]></search>
+            <add position="after" offset="1"><![CDATA[
+        /** avalon кредитен калкулатор jet **/
+        $products_jet['id'] .= $product['product_id'] . '_';
+        $products_jet['pr'] .= $this->tax->calculate($product['price'], $product['tax_class_id'], $this->config->get('config_tax')) . '_';
+        $products_jet['quantity'] .= $product['quantity'] . '_';
+        foreach ($product['option'] as $key => $value) {
+            $products_jet['option'][$products_jet_index][$key]['product_option_id'] = $value['product_option_id'];
+            $products_jet['option'][$products_jet_index][$key]['product_option_value_id'] = $value['product_option_value_id'];
+            $products_jet['option'][$products_jet_index][$key]['option_id'] = $value['option_id'];
+            $products_jet['option'][$products_jet_index][$key]['option_value_id'] = $value['option_value_id'];
+            $products_jet['option'][$products_jet_index][$key]['name'] = $value['name'];
+            $products_jet['option'][$products_jet_index][$key]['value'] = $value['value'];
+            $products_jet['option'][$products_jet_index][$key]['type'] = $value['type'];
+        }
+        $products_jet_index++;
+        /** avalon кредитен калкулатор jet **/
+            ]]></add>
+        </operation>
+    </file>
     
-
-
-
+    <file path="catalog/controller/checkout/cart.php" error="abort">
+        <operation>
+            <search><![CDATA[
+foreach ($totals as $total) {
+            ]]></search>
+            <add position="after"><![CDATA[
+        /** avalon кредитен калкулатор jet **/
+        $products_jet['price'] = $total['value'];
+        /** avalon кредитен калкулатор jet **/
+            ]]></add>
+        </operation>
+    </file>
     
-    <file path="catalog/controller/checkout/cart.php">
-        <operation error="abort"><ignoreif><![CDATA[JETCREDIT:VIEW-3:v1]]></ignoreif>
+    <file path="catalog/controller/checkout/cart.php" error="abort">
+        <operation>
             <search><![CDATA[
 $this->response->setOutput($this->load->view('checkout/cart', $data));
             ]]></search>
             <add position="before"><![CDATA[
-// JETCREDIT:VIEW-3:v1
+        /** avalon кредитен калкулатор jet **/
+        $data['is_active_jet'] = true;
+        $jet_status = $this->config->get('module_mt_jet_credit_status');
+        $jet_card_show = $this->config->get('module_mt_jet_credit_cart_show');
+        if ($jet_status && $jet_card_show) {
+            $data['jet_products'] = substr($products_jet['id'], 0, -1);
+            $data['jet_products_pr'] = substr($products_jet['pr'], 0, -1);
+            $data['jet_products_qt'] = substr($products_jet['quantity'], 0, -1);
+            $data['jet_products_vr'] = json_encode($products_jet['option']);
+            $jet_price = $products_jet['price'];
+            $data['jet_price'] = $jet_price;
+            
+            $jet_currency_code = $this->session->data['currency'];
+            if ($jet_currency_code == 'EUR' || $jet_currency_code == 'BGN') {
+                $data['jet_eur'] = (int) $this->config->get('module_mt_jet_credit_eur');
+                $data['jet_sign'] = 'лв.';
+                $data['jet_sign_second'] = 'евро';
+                $jet_min_250 = 250.00;
+                switch ($data['jet_eur']) {
+                    case 0:
+                        $data['jet_sign'] = 'лв.';
+                        $data['jet_sign_second'] = '';
+                        break;
+                    case 1:
+                        if ($jet_currency_code == "EUR") {
+                            $jet_price = number_format($jet_price * 1.95583, 2, ".", "");
+                        }
+                        $data['jet_sign'] = 'лв.';
+                        $data['jet_sign_second'] = 'евро';
+                        break;
+                    case 2:
+                        if ($jet_currency_code == "BGN") {
+                            $jet_price = number_format($jet_price / 1.95583, 2, ".", "");
+                        }
+                        $data['jet_sign'] = 'евро';
+                        $data['jet_sign_second'] = 'лв.';
+                        $jet_min_250 = 125.00;
+                        break;
+                    case 3:
+                        if ($jet_currency_code == "BGN") {
+                            $jet_price = number_format($jet_price / 1.95583, 2, ".", "");
+                        }
+                        $data['jet_sign'] = 'евро';
+                        $data['jet_sign_second'] = '';
+                        $jet_min_250 = 125.00;
+                        break;
+                }
+                
+                $_minprice = $this->config->get('module_mt_jet_credit_price');
+                if ($jet_price >= $_minprice) {
+                    if ($jet_price < $jet_min_250) {
+                        $data['jet_vnoski'] = '9';
+                    }else{
+                        $data['jet_vnoski'] = $this->config->get('module_mt_jet_credit_vnoski');
+                    }
+                    $data['jet_card_in'] = (int)$this->config->get('module_mt_jet_credit_status_card');
+                    $data['jet_gap'] = (int)$this->config->get('module_mt_jet_credit_gap');
+                    $data['jet_button_type'] = $this->config->get('module_mt_jet_credit_button_type') ? $this->config->get('module_mt_jet_credit_button_type') : 'standard';
+                    $this->load->model('extension/mt_jet_credit/jetcredit');
+                    $data['jet_button_scheme_style'] = $this->model_extension_mt_jet_credit_jetcredit->getJetWideButtonInlineStyle($this->config->get('module_mt_jet_credit_button_scheme'));
+                    $_jbtn = $this->config->get('module_mt_jet_credit_btn_text');
+                    $data['jet_btn_text'] = ($_jbtn === null || $_jbtn === '') ? 'Купи на изплащане с' : $_jbtn;
+                    $_jbtnc = $this->config->get('module_mt_jet_credit_btn_text_card');
+                    $data['jet_btn_text_card'] = ($_jbtnc === null || $_jbtnc === '') ? 'На вноски с твоята кредитна карта' : $_jbtnc;
+                    $_jblg = $this->config->get('module_mt_jet_credit_btn_logo');
+                    $data['jet_btn_logo'] = $_jblg === null || $_jblg === '' ? 1 : ((int) $_jblg ? 1 : 0);
+                    $_jbmw = $this->config->get('module_mt_jet_credit_btn_max_width');
+                    $data['jet_button_scheme_style'] .= '--jet-wide-max-width:' . (($_jbmw === null || $_jbmw === '') ? 570 : min(1200, max(30, (int) $_jbmw))) . 'px;';
+                    $_jbrnd = $this->config->get('module_mt_jet_credit_btn_round');
+                    $data['jet_button_scheme_style'] .= '--jet-wide-radius:' . (($_jbrnd === null || $_jbrnd === '') ? 16 : min(25, max(0, (int) $_jbrnd))) . 'px;';
+                    $_jbfnt = $this->config->get('module_mt_jet_credit_btn_font');
+                    $data['jet_button_scheme_style'] .= '--jet-wide-font-size:' . (($_jbfnt === null || $_jbfnt === '') ? 14 : min(36, max(6, (int) $_jbfnt))) . 'px;';
+                    $data['jet_vnoska'] = (int)$this->config->get('module_mt_jet_credit_vnoska');
+                    $data['image_jet'] = 'catalog/view/theme/default/image/jet.png';
+                    $data['image_jet_card'] = 'catalog/view/theme/default/image/jet_card.png';
+                    
+                    $this->load->model('account/customer');
+                    $data['jet_name'] = "";
+                    $data['jet_lastname'] = "";
+                    $data['jet_email'] = "";
+                    $data['jet_phone'] = "";
+                    if ($this->customer->isLogged()) {
+                        $customer_id = $this->customer->getId();
+                        $customer_info = $this->model_account_customer->getCustomer($customer_id);
+                        $data['jet_name'] = $customer_info['firstname'];
+                        $data['jet_lastname'] = $customer_info['lastname'];
+                        $data['jet_email'] = $this->customer->getEmail();
+                        $data['jet_phone'] = $customer_info['telephone'];
+                    }
 
-        $this->load->model('extension/mt_jet_credit/financial');
-        $data = array_merge($data, $this->model_extension_mt_jet_credit_financial->frontendData('cart'));
-]]></add>
+                }else{
+                    $data['is_active_jet'] = false;
+                }
+            }else{
+                $data['is_active_jet'] = false;
+            }
+        }else{
+            $data['is_active_jet'] = false;
+        }
+        /** avalon кредитен калкулатор jet **/
+            ]]></add>
         </operation>
     </file>
     
-    <file path="catalog/view/theme/default/template/checkout/cart.twig">
-        <operation error="abort"><ignoreif><![CDATA[JETCREDIT:VIEW-4:v1]]></ignoreif>
+    <file path="catalog/view/theme/*/template/checkout/cart.twig" error="abort">
+        <operation>
             <search><![CDATA[
 {{ content_bottom }}</div>
             ]]></search>
             <add position="before"><![CDATA[
-<!-- JETCREDIT:VIEW-4:v1 -->
-
             <!-- avalon кредитен калкулатор jet -->
             {% if is_active_jet %}
-    <input type="hidden" id="jet_finance_context" data-intent="{{ jet_application_intent|e('html') }}" data-context="{{ jet_context|e('html') }}" data-scheme="{{ jet_scheme|e('html') }}" data-csrf="{{ jet_csrf|e('html') }}" data-product-id="{{ jet_product_id|e('html') }}" value="" />
-    <p id="jet_finance_notice" role="status">Кандидатстването временно не е достъпно. Не е изпратена заявка.</p>
-
-    <div id="jet-product-button-container" style="padding-top:{{ jet_gap|e('html') }}px;">
+    <input type="hidden" id="jet_price" value="{{ jet_price }}" />
+    <input type="hidden" id="jet_card_in" value="{{ jet_card_in }}" />
+    <input type="hidden" id="jet_products" value="{{ jet_products }}" />
+    <input type="hidden" id="jet_products_qt" value="{{ jet_products_qt }}" />
+    <input type="hidden" id="jet_products_pr" value="{{ jet_products_pr }}" />
+    <input type="hidden" id="jet_products_vr" value='{{ jet_products_vr }}' />
+    <div id="jet-product-button-container" style="padding-top:{{ jet_gap }}px;">
         <div id="jet_alert_overlay" class="jet_alert_overlay"></div>
         <div id="jet_alert_box"></div>
         {% if jet_button_type == 'wide' %}
@@ -505,10 +823,13 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                     {% if jet_btn_logo == 1 %}<img src="catalog/view/theme/default/image/jet_logo.png" alt="ПБ Лични Финанси" class="jet_wide_button_logo" />{% endif %}
                 </div>
                 {% if jet_vnoska == 1 %}
-                    <div class="jet_wide_button_text jet_button_installment" style="display:none" data-jet-installment="jet">
-
-                            <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}
-
+                    <div class="jet_wide_button_text">
+                        {% if jet_sign_second == '' %}
+                            <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign }}
+                        {% else %}
+                            <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign }}
+                            <span class="jet_wide_button_text_second">(<span id="jet_vnoska_second"></span> {{ jet_sign_second }})</span>
+                        {% endif %}
                     </div>
                 {% endif %}
             </button>
@@ -519,10 +840,13 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                     {% if jet_btn_logo == 1 %}<img src="catalog/view/theme/default/image/jet_logo.png" alt="ПБ Лични Финанси" class="jet_wide_button_logo" />{% endif %}
                 </div>
                 {% if jet_vnoska == 1 %}
-                    <div class="jet_wide_button_text jet_button_installment" style="display:none" data-jet-installment="jet_card">
-
-                            <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}
-
+                    <div class="jet_wide_button_text">
+                        {% if jet_sign_second == '' %}
+                            <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign }}
+                        {% else %}
+                            <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign }}
+                            <span class="jet_wide_button_text_second">(<span id="jet_vnoska_card_second"></span> {{ jet_sign_second }})</span>
+                        {% endif %}
                     </div>
                 {% endif %}
             </button>
@@ -535,7 +859,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                     <img 
                         id="btn_jet"
                         class="jet_logo" 
-                        src="{{ image_jet|e('html') }}"
+                        src="{{ image_jet }}" 
                         alt="Кредитен модул ПБ Лични Финанси" 
                         title="Кредитен модул ПБ Лични Финанси" 
                     />
@@ -544,9 +868,14 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
             {% if jet_vnoska == 1 %}
             <tr>
                 <td class="jet_button_table">
-
-                        <p class="jet_button_installment" style="display:none" data-jet-installment="jet"><span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign|e('html') }}</p>
-
+                    {% if jet_sign_second == '' %}
+                        <p><span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign }}</p>
+                    {% else %}
+                        <p>
+                            <span id="jet_vnoski_text"></span> x <span id="jet_vnoska"></span> {{ jet_sign }}<br />
+                            <span style="font-size:75%;font-weight:400;">(<span id="jet_vnoska_second"></span> {{ jet_sign_second }})</span>
+                        </p>
+                    {% endif %}
                 </td>
             </tr>
             {% endif %}
@@ -558,7 +887,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                     <img 
                         id="btn_jet_card"
                         class="jet_logo" 
-                        src="{{ image_jet_card|e('html') }}"
+                        src="{{ image_jet_card }}" 
                         alt="Специални предложения само за клиенти, които вече имат кредитна карта, издадена от ПБ Лични Финанси." 
                         title="Специални предложения само за клиенти, които вече имат кредитна карта, издадена от ПБ Лични Финанси." 
                     />
@@ -567,9 +896,14 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
             {% if jet_vnoska == 1 %}
             <tr>
                 <td class="jet_button_table">
-
-                        <p class="jet_button_installment" style="display:none" data-jet-installment="jet_card"><span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign|e('html') }}</p>
-
+                    {% if jet_sign_second == '' %}
+                        <p><span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign }}</p>
+                    {% else %}
+                        <p>
+                            <span id="jet_vnoski_text_card"></span> x <span id="jet_vnoska_card"></span> {{ jet_sign }}<br />
+                            <span style="font-size:75%;font-weight:400;">(<span id="jet_vnoska_card_second"></span> {{ jet_sign_second }})</span>
+                        </p>
+                    {% endif %}
                 </td>
             </tr>
             {% endif %}
@@ -580,38 +914,52 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
     
     <div id="jet-product-popup-container" class="modalpayment_jet">
         <div class="modalpayment-content_jet">
-            <div class="jet_offer_loader" role="status" aria-live="polite"><span>Преизчисляване…</span></div>
             <div id="jet_body">
                 <div class="jet_PopUp_Detailed_v1">
                     <div class="jet_Mask">
                         <div id="jet_step_1">
                             <div class="jet_row">
                                 <div class="jet_column_left">
-                                    Първоначална вноска ({{ jet_sign|e('html') }})
+                                    Първоначална вноска ({{ jet_sign }})
                                 </div>
                                 <div class="jet_column_right">
                                     <input 
                                         class="jet_input_text_active" 
-                                        type="text"
-                                        inputmode="decimal"
+                                        type="number" 
+                                        min="0"
                                         id="jet_parva" 
                                         value=0 
                                     />
+                                    <button 
+                                        type="button" 
+                                        id="btn_preizcisli" 
+                                        class="jet_button_preizcisli"
+                                    >Преизчисли</button>
                                 </div>
                             </div>
                             <div class="jet_row">
                                 <div class="jet_column_left">
-
-                                        Цена на стоките ({{ jet_sign|e('html') }})
-
+                                    {% if jet_sign_second == '' %}
+                                        Цена на стоките ({{ jet_sign }})
+                                    {% else %}
+                                        Цена на стоките ({{ jet_sign }}
+                                        <span style='font-size:60%;font-weight:400;height:16px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
+                                    {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-
+                                    {% if jet_eur == 0 or jet_eur == 3 %}
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_priceall"></span></div>
-
+                                            <div></div>
                                         </div>
-
+                                    {% else %}
+                                        <div class="jet_input_text jet_disable">
+                                            <div><span id="jet_priceall"></span></div>
+                                            <div>
+                                                <span>/</span><span id="jet_priceall_second"></span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -623,38 +971,67 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                         id="jet_vnoski" 
                                         class="jet_input_text"
                                     >
-                                        <option value="">Изчисляване…</option>
+                                        <option value="3" {% if jet_vnoski == 3 %}selected{% endif %}>3 месеца</option>
+                                        <option value="6" {% if jet_vnoski == 6 %}selected{% endif %}>6 месеца</option>
+                                        <option value="9" {% if jet_vnoski == 9 %}selected{% endif %}>9 месеца</option>
+                                        <option value="10" {% if jet_vnoski == 10 %}selected{% endif %}>10 месеца</option>
+                                        <option value="12" {% if jet_vnoski == 12 %}selected{% endif %}>12 месеца</option>
+                                        <option value="15" {% if jet_vnoski == 15 %}selected{% endif %}>15 месеца</option>
+                                        <option value="18" {% if jet_vnoski == 18 %}selected{% endif %}>18 месеца</option>
+                                        <option value="24" {% if jet_vnoski == 24 %}selected{% endif %}>24 месеца</option>
+                                        <option value="30" {% if jet_vnoski == 30 %}selected{% endif %}>30 месеца</option>
+                                        <option value="36" {% if jet_vnoski == 36 %}selected{% endif %}>36 месеца</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="jet_row">
                                 <div class="jet_column_left">
-
-                                        Общо кредит ({{ jet_sign|e('html') }})
-
+                                    {% if jet_sign_second == '' %}
+                                        Общо кредит ({{ jet_sign }})
+                                    {% else %}
+                                        Общо кредит ({{ jet_sign }}
+                                        <span style='font-size:60%;font-weight:400;height:16px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
+                                    {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-
+                                    {% if jet_eur == 0 or jet_eur == 3 %}
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_total_credit_price"></span></div>
-
+                                            <div></div>
                                         </div>
-
+                                    {% else %}
+                                        <div class="jet_input_text jet_disable">
+                                            <div><span id="jet_total_credit_price"></span></div>
+                                            <div>
+                                                <span>/</span><span id="jet_total_credit_price_second"></span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="jet_row">
                                 <div class="jet_column_left">
-
-                                        Месечна вноска ({{ jet_sign|e('html') }})
-
+                                    {% if jet_sign_second == '' %}
+                                        Месечна вноска ({{ jet_sign }})
+                                    {% else %}
+                                        Месечна вноска ({{ jet_sign }}
+                                        <span style='font-size:60%;font-weight:400;height:16px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
+                                    {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-
+                                    {% if jet_eur == 0 or jet_eur == 3 %}
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_vnoska_popup"></span></div>
-
+                                            <div></div>
                                         </div>
-
+                                    {% else %}
+                                        <div class="jet_input_text jet_disable">
+                                            <div><span id="jet_vnoska_popup"></span></div>
+                                            <div>
+                                                <span>/</span><span id="jet_vnoska_popup_second"></span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -664,7 +1041,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                 <div class="jet_column_right">
                                     <div class="jet_input_text jet_disable">
                                         <div><span id="jet_gpr"></span></div>
-
+                                        <div></div>
                                     </div>
                                 </div>
                             </div>
@@ -675,23 +1052,33 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                 <div class="jet_column_right">
                                     <div class="jet_input_text jet_disable">
                                         <div><span id="jet_glp"></span></div>
-
+                                        <div></div>
                                     </div>
                                 </div>
                             </div>
                             <div class="jet_row">
                                 <div class="jet_column_left">
-
-                                        Общо плащания ({{ jet_sign|e('html') }})
-
+                                    {% if jet_sign_second == '' %}
+                                        Общо плащания ({{ jet_sign }})
+                                    {% else %}
+                                        Общо плащания ({{ jet_sign }}
+                                        <span style='font-size:60%;font-weight:400;height:16px;'>&nbsp;/&nbsp;{{ jet_sign_second }}</span>)
+                                    {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-
+                                    {% if jet_eur == 0 or jet_eur == 3 %}
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_obshto"></span></div>
-
+                                            <div></div>
                                         </div>
-
+                                    {% else %}
+                                        <div class="jet_input_text jet_disable">
+                                            <div><span id="jet_obshto"></span></div>
+                                            <div>
+                                                <span>/</span><span id="jet_obshto_second"></span>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="jet_hr"></div>
@@ -743,6 +1130,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                     type="button" 
                                     class="jet_btn" 
                                     id="buy_jetcredit" 
+                                    style="opacity: 0.5;" 
                                     disabled
                                 >Купи на изплащане</button>
                             </div>
@@ -759,7 +1147,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                         type="text"
                                         id="jet_name" 
                                         autocomplete="off"
-                                        value="{{ jet_name|e('html') }}"
+                                        value="{{ jet_name }}" 
                                     />
                                     <input 
                                         type="hidden"
@@ -779,7 +1167,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                         type="text"
                                         id="jet_lastname" 
                                         autocomplete="off"
-                                        value="{{ jet_lastname|e('html') }}"
+                                        value="{{ jet_lastname }}" 
                                     />
                                 </div>
                             </div>
@@ -807,7 +1195,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                         type="text"
                                         id="jet_phone" 
                                         autocomplete="off"
-                                        value="{{ jet_phone|e('html') }}"
+                                        value="{{ jet_phone }}" 
                                     />
                                 </div>
                             </div>
@@ -821,7 +1209,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                         type="text"
                                         id="jet_email" 
                                         autocomplete="off"
-                                        value="{{ jet_email|e('html') }}"
+                                        value="{{ jet_email }}" 
                                     />
                                 </div>
                             </div>
@@ -872,6 +1260,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                     type="button" 
                                     class="jet_btn" 
                                     id="buy2_jetcredit" 
+                                    style="opacity: 0.5;" 
                                     disabled
                                 >Изпрати</button>
                             </div>
@@ -888,45 +1277,4 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
         </operation>
     </file>
   
-<file path="catalog/controller/mail/order.php"><operation error="abort"><ignoreif><![CDATA[JETCREDIT:NATIVE-CAPABILITY:v1]]></ignoreif><search><![CDATA[class ControllerMailOrder extends Controller {]]></search><add position="after"><![CDATA[public const JETCREDIT_GUARD_REVISION = 1; // JETCREDIT:NATIVE-CAPABILITY:v1]]></add></operation><operation error="abort"><ignoreif><![CDATA[JETCREDIT:NATIVE-INDEX:v1]]></ignoreif><search><![CDATA[public function index(&$route, &$args) {]]></search><add position="after"><![CDATA[// JETCREDIT:NATIVE-INDEX:v1
-        $jet_scope = $this->registry->get('jetcredit_native_mail_scope');
-        if ($jet_scope instanceof JetCreditNativeMailScope && $jet_scope->owns($args[0] ?? 0)) {
-            $jet_order = $this->model_checkout_order->getOrder($args[0]);
-            if ($jet_order && $jet_scope->suppresses($args[0], $jet_order['payment_code'])) { return; }
-        }]]></add></operation><operation error="abort"><ignoreif><![CDATA[JETCREDIT:NATIVE-ALERT:v1]]></ignoreif><search><![CDATA[public function alert(&$route, &$args) {]]></search><add position="after"><![CDATA[// JETCREDIT:NATIVE-ALERT:v1
-        $jet_scope = $this->registry->get('jetcredit_native_mail_scope');
-        if ($jet_scope instanceof JetCreditNativeMailScope && $jet_scope->owns($args[0] ?? 0)) {
-            $jet_order = $this->model_checkout_order->getOrder($args[0]);
-            if ($jet_order && $jet_scope->suppresses($args[0], $jet_order['payment_code'])) { return; }
-        }]]></add></operation></file><file path="catalog/controller/checkout/confirm.php"><operation error="abort"><ignoreif><![CDATA[JETCREDIT:CHECKOUT-CAPABILITY:v1]]></ignoreif><search><![CDATA[class ControllerCheckoutConfirm extends Controller {]]></search><add position="after"><![CDATA[public const JETCREDIT_CHECKOUT_REVISION = 1; // JETCREDIT:CHECKOUT-CAPABILITY:v1]]></add></operation><operation error="abort"><ignoreif><![CDATA[JETCREDIT:CHECKOUT-ORDER:v1]]></ignoreif><search><![CDATA[$this->session->data['order_id'] = $this->model_checkout_order->addOrder($order_data);]]></search><add position="replace"><![CDATA[// JETCREDIT:CHECKOUT-ORDER:v1
-            if (in_array($order_data['payment_code'], array('jet','jet_card'), true)) {
-                $jet_diagnostics = null;
-                try {
-                    require_once DIR_SYSTEM . 'library/jetcredit/diagnostics.php';
-                    $jet_diagnostics = new JetCreditDiagnostics($this->config, $this->log, 'checkout_confirm');
-                    $this->registry->set('jetcredit_diagnostics', $jet_diagnostics);
-                    $jet_diagnostics->stage('model_loading');
-                    $this->load->model('extension/mt_jet_credit/checkout');
-                    $this->session->data['order_id'] = $this->model_extension_mt_jet_credit_checkout->orderForIntent($order_data);
-                } catch (Throwable $e) {
-                    if ($jet_diagnostics instanceof JetCreditDiagnostics) {
-                        $jet_diagnostics->capture($e);
-                        $jet_diagnostic_result = $jet_diagnostics->response(array());
-                        if (isset($jet_diagnostic_result['correlation_id'])) {
-                            $this->response->addHeader('X-Jet-Correlation-ID: ' . $jet_diagnostic_result['correlation_id']);
-                        }
-                    }
-                    $this->response->addHeader('HTTP/1.1 503 Service Unavailable');
-                    $this->response->setOutput('Финансирането временно не е достъпно.');
-                    return;
-                }
-            } else {
-                $this->session->data['order_id'] = $this->model_checkout_order->addOrder($order_data);
-            }]]></add></operation></file><file path="admin/controller/extension/extension/module.php"><operation error="abort"><ignoreif><![CDATA[JETCREDIT:ADMIN-INSTALL:v1]]></ignoreif><search><![CDATA[$this->load->controller('extension/module/' . $this->request->get['extension'] . '/install');]]></search><add position="replace"><![CDATA[// JETCREDIT:ADMIN-INSTALL:v1
-                $jet_install_result = $this->load->controller('extension/module/' . $this->request->get['extension'] . '/install');
-                if ($this->request->get['extension'] === 'mt_jet_credit' && (!is_array($jet_install_result) || empty($jet_install_result['jetcredit_installed']))) {
-                    $this->error['warning'] = is_array($jet_install_result) && isset($jet_install_result['message']) ? $jet_install_result['message'] : 'Jet: installation status unavailable; open module settings for diagnostics.';
-                    unset($this->session->data['success']);
-                    $this->getList();
-                    return;
-                }]]></add></operation></file></modification>
+</modification>

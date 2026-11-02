@@ -1,11 +1,10 @@
 {{ header }}{{ column_left }}
 <div id="content">
-	{% if jet_finance_diagnostic %}<div class="alert alert-warning">{{ jet_finance_diagnostic|e('html') }}</div>{% endif %}
 
 	{% if error_warning %}
 		<div class="alert alert-danger">
 			<i class="fa fa-exclamation-circle"></i>
-			{{ error_warning|e('html') }}
+			{{ error_warning }}
 			<button type="button" class="close" data-dismiss="alert">&times;</button>
 		</div>
 	{% endif %}
@@ -13,7 +12,7 @@
 	{% if success %}
 		<div class="alert alert-success alert-dismissible">
 			<button type="button" class="close" data-dismiss="alert">&times;</button>
-			{{ success|e('html') }}
+			{{ success }}
 		</div>
 	{% endif %}
 
@@ -23,7 +22,7 @@
 				<button type="submit" form="form-html" data-toggle="tooltip" title="Запиши" class="btn btn-primary">
 					<i class="fa fa-save"></i>
 				</button>
-				<a href="{{ cancel|replace({'&amp;': '&'})|e('html') }}" data-toggle="tooltip" title="Откажи" class="btn btn-default">
+				<a href="{{ cancel }}" data-toggle="tooltip" title="Откажи" class="btn btn-default">
 					<i class="fa fa-reply"></i>
 				</a>
 			</div>
@@ -31,7 +30,7 @@
 			<ul class="breadcrumb">
 				{% for breadcrumb in breadcrumbs %}
 					<li>
-						<a href="{{ breadcrumb.href|replace({'&amp;': '&'})|e('html') }}">{{ breadcrumb.text|e('html') }}</a>
+						<a href="{{ breadcrumb.href }}">{{ breadcrumb.text }}</a>
 					</li>
 				{% endfor %}
 			</ul>
@@ -41,6 +40,12 @@
 	<div class="container-fluid">
 		<div class="panel panel-default" id="mt-jet-credit-module-settings">
 			<style>
+				#mt-jet-credit-module-settings .tab-content > form > .tab-pane {
+					display: none;
+				}
+				#mt-jet-credit-module-settings .tab-content > form > .tab-pane.active {
+					display: block;
+				}
 				#mt-jet-credit-module-settings #mt-jet-credit-settings-tabs {
 					margin-top: 6px;
 				}
@@ -271,8 +276,8 @@
 					<a href="#mt-jet-tab-filtri" data-toggle="tab">Форма за въвеждане на лихвени филтри</a>
 				</li>
 			</ul>
-			<form action="{{ form_action|replace({'&amp;': '&'})|e('html') }}" method="post" enctype="multipart/form-data" id="form-html" class="form-horizontal" data-jet-promotion-create-url="{{ jet_promotion_create_url|e('html') }}" data-jet-promotion-delete-url="{{ jet_promotion_delete_url|e('html') }}">
-				<div class="tab-content" style="padding: 0;">
+			<div class="tab-content" style="padding: 0;">
+				<form action="{{ form_action }}" method="post" enctype="multipart/form-data" id="form-html" class="form-horizontal">
 					<div id="mt-jet-tab-upravlenie" class="tab-pane active" role="tabpanel">
 						<div class="panel-body">
 							<div class="form-group">
@@ -322,6 +327,19 @@
 									<div class="text-small">Дали да се показва текст, в дясно от бутона указващ месечната вноска за избрания период на лизинг?</div>
 								</div>
 							</div>
+
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_eur">Избор на режим на работа с валути</label>
+								<div class="col-sm-8">
+									<select name="module_mt_jet_credit_eur" id="module_mt_jet_credit_eur" class="form-control">
+										<option value="0" {% if module_mt_jet_credit_eur == 0 %} selected {% endif %}>Единична визуализация в лева и изпращания на исканията в лева</option>
+										<option value="1" {% if module_mt_jet_credit_eur == 1 %} selected {% endif %}>Двойна визуализация в лева/евро и изпращания на исканията в лева</option>
+										<option value="2" {% if module_mt_jet_credit_eur == 2 %} selected {% endif %}>Двойна визуализация в евро/лева и изпращания на исканията в евро</option>
+										<option value="3" {% if module_mt_jet_credit_eur == 3 %} selected {% endif %}>Единична визуализация в евро и изпращания на исканията в евро</option>
+									</select>
+									<div class="text-small">Избор на режим на работа с валути. Възможност за показване в евро или лева. Изпращане на исканията в евро или лева с превалутиране ако е необходимо</div>
+								</div>
+							</div>
 						</div>
 					</div>
 
@@ -330,15 +348,15 @@
 							<div class="form-group">
 								<label class="col-sm-4 control-label" for="module_mt_jet_credit_mail">Избери email за изпращане</label>
 								<div class="col-sm-8">
-									<input type="text" name="module_mt_jet_credit_mail" value="{{ module_mt_jet_credit_mail|e('html') }}" placeholder="Избери email за изпращане" id="module_mt_jet_credit_mail" class="form-control"/>
-									<div class="small">Избери email адрес на който ще се изпращат заявките от клиента. Използвайте "pf-online.shop@postbank.bg" за изпращане на заявките към ПБ Лични Финанси. Можете да въведете повече от един мейл адрес, като ги разделите помежду си със запетая. Празен записан email избира ръчна регистрация: заявката не се изпраща до банката. Липсваща или невалидна настройка блокира изпращането; няма fallback към системния email.</div>
+									<input type="text" name="module_mt_jet_credit_mail" value="{{ module_mt_jet_credit_mail }}" placeholder="Избери email за изпращане" id="module_mt_jet_credit_mail" class="form-control"/>
+									<div class="small">Избери email адрес на който ще се изпращат заявките от клиента. Използвайте "pf-online.shop@postbank.bg" за изпращане на заявките към ПБ Лични Финанси. Можете да въведете повече от един мейл адрес, като ги разделите помежду си със запетая. (Ако оставите празно ще се използва email-а по-подразбиране за системата. Препоръчва се използването на email извън Вашия домейн за да се избегне ауто спан защитата.)</div>
 								</div>
 							</div>
 
 							<div class="form-group">
 								<label class="col-sm-4 control-label" for="module_mt_jet_credit_id">Избери идентификатор на магазина за изпращане</label>
 								<div class="col-sm-8">
-									<input type="text" name="module_mt_jet_credit_id" value="{{ module_mt_jet_credit_id|e('html') }}" placeholder="Избери идентификатор на магазина за изпращане" id="module_mt_jet_credit_id" class="form-control" required maxlength="128"/>
+									<input type="text" name="module_mt_jet_credit_id" value="{{ module_mt_jet_credit_id }}" placeholder="Избери идентификатор на магазина за изпращане" id="module_mt_jet_credit_id" class="form-control"/>
 									<div class="small">Избери идентификатор на магзина, който да се изпраща към Банката заедно със заявката за лизинг. По този идентификатор Банката ще разпознава Вашите заявки</div>
 								</div>
 							</div>
@@ -394,13 +412,19 @@
 								</div>
 							</div>
 
-
+							<div class="form-group">
+								<label class="col-sm-4 control-label" for="module_mt_jet_credit_count">№ Поръчка</label>
+								<div class="col-sm-8">
+									<input type="text" readonly name="module_mt_jet_credit_count" value="{{ module_mt_jet_credit_count }}" placeholder="Номер на текущата поръчка за лизинг." id="module_mt_jet_credit_count" class="form-control"/>
+									<div class="small">Номер на текущата поръчка за лизинг</div>
+								</div>
+							</div>
 
 							<div class="form-group">
 								<label class="col-sm-4 control-label" for="module_mt_jet_credit_price">Минимална сума</label>
 								<div class="col-sm-8">
-									<input type="number" min="0" max="999999" step="1" name="module_mt_jet_credit_price" value="{{ module_mt_jet_credit_price|e('html') }}" placeholder="Минимална главница (EUR)" id="module_mt_jet_credit_price" class="form-control"/>
-									<div class="small">Минимална главница в EUR; ефективният минимум не може да е под 75 EUR</div>
+									<input type="number" min="0" max="999999" step="1" name="module_mt_jet_credit_price" value="{{ module_mt_jet_credit_price }}" placeholder="Минимална сума (лв.)" id="module_mt_jet_credit_price" class="form-control"/>
+									<div class="small">Минимално възможната сума на стоките за закупуване на кредит през ПБ Лични Финанси</div>
 								</div>
 							</div>
 
@@ -412,7 +436,7 @@
 							<div class="form-group">
 								<label class="col-sm-4 control-label" for="module_mt_jet_credit_gap">Празно място над бутона</label>
 								<div class="col-sm-8">
-									<input type="number" min="0" max="999999" step="1" name="module_mt_jet_credit_gap" value="{{ module_mt_jet_credit_gap|e('html') }}" id="module_mt_jet_credit_gap" class="form-control"/>
+									<input type="number" min="0" max="999999" step="1" name="module_mt_jet_credit_gap" value="{{ module_mt_jet_credit_gap }}" id="module_mt_jet_credit_gap" class="form-control"/>
 									<div class="small">Празно място над бутона в px. Използва се за подредба на бутоните, когато са повече от един. Можете да въведете 0 ако не желаете да има празно място</div>
 								</div>
 							</div>
@@ -431,7 +455,7 @@
 													<tbody>
 														<tr>
 															<td class="mt-jet-preview-cell">
-																<img src="{{ mt_jet_preview_jet|e('html') }}" alt="Кредитен модул ПБ Лични Финанси" title="Кредитен модул ПБ Лични Финанси"/>
+																<img src="{{ mt_jet_preview_jet }}" alt="Кредитен модул ПБ Лични Финанси" title="Кредитен модул ПБ Лични Финанси"/>
 															</td>
 														</tr>
 													</tbody>
@@ -443,20 +467,22 @@
 												<div id="mt-jet-wide-preview-wrap" class="mt-jet-wide-button-wrap" style="{{ mt_jet_wide_button_wrap_style|e('html') }}">
 													<div class="mt-jet-wide-button" role="img" aria-label="Преглед — основен бутон">
 														<div class="mt-jet-wide-button-head">
-															<span id="mt-jet-btn-text-preview">{{ module_mt_jet_credit_btn_text|e('html') }}</span>
-															<img id="mt-jet-wide-preview-logo-main" src="{{ mt_jet_preview_jet_logo|e('html') }}" alt="ПБ Лични Финанси" class="mt-jet-wide-button-logo"{% if module_mt_jet_credit_btn_logo != 1 %} style="display:none"{% endif %}/>
+															<span id="mt-jet-btn-text-preview">{{ module_mt_jet_credit_btn_text }}</span>
+															<img id="mt-jet-wide-preview-logo-main" src="{{ mt_jet_preview_jet_logo }}" alt="ПБ Лични Финанси" class="mt-jet-wide-button-logo"{% if module_mt_jet_credit_btn_logo != 1 %} style="display:none"{% endif %}/>
 														</div>
 														<div class="mt-jet-wide-button-text">12 x 97.33 евро
+															<span class="mt-jet-wide-button-text-second">(190.37 лв.)</span>
 														</div>
 													</div>
 												</div>
 												<div id="mt-jet-wide-preview-wrap-card" class="mt-jet-wide-button-wrap" style="{{ mt_jet_wide_button_wrap_style|e('html') }}">
 													<div class="mt-jet-wide-button" role="img" aria-label="Преглед — картов бутон">
 														<div class="mt-jet-wide-button-head">
-															<span id="mt-jet-btn-text-card-preview">{{ module_mt_jet_credit_btn_text_card|e('html') }}</span>
-															<img id="mt-jet-wide-preview-logo-card" src="{{ mt_jet_preview_jet_logo|e('html') }}" alt="ПБ Лични Финанси" class="mt-jet-wide-button-logo"{% if module_mt_jet_credit_btn_logo != 1 %} style="display:none"{% endif %}/>
+															<span id="mt-jet-btn-text-card-preview">{{ module_mt_jet_credit_btn_text_card }}</span>
+															<img id="mt-jet-wide-preview-logo-card" src="{{ mt_jet_preview_jet_logo }}" alt="ПБ Лични Финанси" class="mt-jet-wide-button-logo"{% if module_mt_jet_credit_btn_logo != 1 %} style="display:none"{% endif %}/>
 														</div>
 														<div class="mt-jet-wide-button-text">12 x 97.33 евро
+															<span class="mt-jet-wide-button-text-second">(190.37 лв.)</span>
 														</div>
 													</div>
 												</div>
@@ -473,29 +499,29 @@
 											<div class="jet_scheme_grid">
 												{% for sch in mt_jet_button_schemes %}
 													<label class="jet_scheme_card">
-														<input type="radio" name="module_mt_jet_credit_button_scheme" value="{{ loop.index0|e('html') }}" class="jet_scheme_radio" data-scheme-idx="{{ loop.index0|e('html') }}" {% if module_mt_jet_credit_button_scheme|default(0) == loop.index0 %} checked="checked" {% endif %}/>
-														<span class="jet_scheme_preview" style="background: {{ sch.background|e('html') }}; border: 2px solid {{ sch.border|e('html') }}; border-radius: 16px;">
-															<span class="jet_scheme_preview_text" style="color: {{ sch.color|e('html') }};">{{ sch.short|e('html') }}</span>
+														<input type="radio" name="module_mt_jet_credit_button_scheme" value="{{ loop.index0 }}" class="jet_scheme_radio" data-scheme-idx="{{ loop.index0 }}" {% if module_mt_jet_credit_button_scheme|default(0) == loop.index0 %} checked="checked" {% endif %}/>
+														<span class="jet_scheme_preview" style="background: {{ sch.background }}; border: 2px solid {{ sch.border }}; border-radius: 16px;">
+															<span class="jet_scheme_preview_text" style="color: {{ sch.color }};">{{ sch.short }}</span>
 														</span>
 													</label>
 												{% endfor %}
 											</div>
 										</div>
 										<p id="mt_jet_scheme_selected_summary" class="jet_scheme_summary">Избрана визуална схема:
-											{{ mt_jet_button_scheme_label|e('html') }}</p>
+											{{ mt_jet_button_scheme_label }}</p>
 									</div>
 								</div>
 								<div class="form-group">
 									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_text">Текст на основния бутон</label>
 									<div class="col-sm-8">
-										<input type="text" name="module_mt_jet_credit_btn_text" id="module_mt_jet_credit_btn_text" value="{{ module_mt_jet_credit_btn_text|e('html') }}" class="form-control" maxlength="160" placeholder="Купи на изплащане с"/>
+										<input type="text" name="module_mt_jet_credit_btn_text" id="module_mt_jet_credit_btn_text" value="{{ module_mt_jet_credit_btn_text }}" class="form-control" maxlength="160" placeholder="Купи на изплащане с"/>
 										<div class="small">Текстът в първия ред на персонализирания бутон.</div>
 									</div>
 								</div>
 								<div class="form-group">
 									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_text_card">Текст на картовия бутон</label>
 									<div class="col-sm-8">
-										<input type="text" name="module_mt_jet_credit_btn_text_card" id="module_mt_jet_credit_btn_text_card" value="{{ module_mt_jet_credit_btn_text_card|e('html') }}" class="form-control" maxlength="160" placeholder="На вноски с твоята кредитна карта"/>
+										<input type="text" name="module_mt_jet_credit_btn_text_card" id="module_mt_jet_credit_btn_text_card" value="{{ module_mt_jet_credit_btn_text_card }}" class="form-control" maxlength="160" placeholder="На вноски с твоята кредитна карта"/>
 										<div class="small">Текстът в първия ред на бутона за кредитна карта.</div>
 									</div>
 								</div>
@@ -513,24 +539,24 @@
 								<div class="form-group">
 									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_max_width">Максимална ширина на бутона</label>
 									<div class="col-sm-8">
-										<input type="number" name="module_mt_jet_credit_btn_max_width" id="module_mt_jet_credit_btn_max_width" min="30" max="1200" step="1" value="{{ module_mt_jet_credit_btn_max_width|e('html') }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
-										<input type="range" id="module_mt_jet_credit_btn_max_width_range" class="form-control" min="30" max="1200" step="1" value="{{ module_mt_jet_credit_btn_max_width|e('html') }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
+										<input type="number" name="module_mt_jet_credit_btn_max_width" id="module_mt_jet_credit_btn_max_width" min="30" max="1200" step="1" value="{{ module_mt_jet_credit_btn_max_width }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
+										<input type="range" id="module_mt_jet_credit_btn_max_width_range" class="form-control" min="30" max="1200" step="1" value="{{ module_mt_jet_credit_btn_max_width }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
 										<div class="small">Ширина в px. Може да зададете стойност ръчно или с плъзгача (30–1200).</div>
 									</div>
 								</div>
 								<div class="form-group">
 									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_round">Радиус на закръгление</label>
 									<div class="col-sm-8">
-										<input type="number" name="module_mt_jet_credit_btn_round" id="module_mt_jet_credit_btn_round" min="0" max="25" step="1" value="{{ module_mt_jet_credit_btn_round|e('html') }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
-										<input type="range" id="module_mt_jet_credit_btn_round_range" class="form-control" min="0" max="25" step="1" value="{{ module_mt_jet_credit_btn_round|e('html') }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
+										<input type="number" name="module_mt_jet_credit_btn_round" id="module_mt_jet_credit_btn_round" min="0" max="25" step="1" value="{{ module_mt_jet_credit_btn_round }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
+										<input type="range" id="module_mt_jet_credit_btn_round_range" class="form-control" min="0" max="25" step="1" value="{{ module_mt_jet_credit_btn_round }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
 										<div class="small">Радиус в px. 0 означава бутони без закръгление. Стойност ръчно или плъзгач (0–25).</div>
 									</div>
 								</div>
 								<div class="form-group">
 									<label class="col-sm-4 control-label" for="module_mt_jet_credit_btn_font">Размер на шрифт в бутона</label>
 									<div class="col-sm-8">
-										<input type="number" name="module_mt_jet_credit_btn_font" id="module_mt_jet_credit_btn_font" min="6" max="36" step="1" value="{{ module_mt_jet_credit_btn_font|e('html') }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
-										<input type="range" id="module_mt_jet_credit_btn_font_range" class="form-control" min="6" max="36" step="1" value="{{ module_mt_jet_credit_btn_font|e('html') }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
+										<input type="number" name="module_mt_jet_credit_btn_font" id="module_mt_jet_credit_btn_font" min="6" max="36" step="1" value="{{ module_mt_jet_credit_btn_font }}" class="form-control" inputmode="numeric" style="max-width: 140px;"/>
+										<input type="range" id="module_mt_jet_credit_btn_font_range" class="form-control" min="6" max="36" step="1" value="{{ module_mt_jet_credit_btn_font }}" style="max-width: 100%; margin-top: 10px; height: 28px;"/>
 										<div class="small">Размер в px за текстовете в персонализирания бутон (6–36). Стойност ръчно или плъзгач.</div>
 									</div>
 								</div>
@@ -609,29 +635,29 @@
 								{% for schemes in module_mt_jet_schemes %}
 									<div>
 										<div class="col-md-1 col-sm-12">
-											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_id|e('html') }}"/>
+											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_id }}"/>
 										</div>
 										<div class="col-md-2 col-sm-12">
 											{% if schemes.jet_product_percent == -1 %}
 												<input type="text" readonly class="form-control" value="Не показвай бутона"/>
 											{% else %}
-												<input type="text" readonly class="form-control" value="{{ schemes.jet_product_percent|e('html') }}"/>
+												<input type="text" readonly class="form-control" value="{{ schemes.jet_product_percent }}"/>
 											{% endif %}
 										</div>
 										<div class="col-md-2 col-sm-12">
-											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_meseci|e('html') }}"/>
+											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_meseci }}"/>
 										</div>
 										<div class="col-md-2 col-sm-12">
-											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_price|e('html') }}"/>
+											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_price }}"/>
 										</div>
 										<div class="col-md-2 col-sm-12">
-											<input type="date" readonly class="form-control" value="{{ schemes.jet_product_start|e('html') }}"/>
+											<input type="date" readonly class="form-control" value="{{ schemes.jet_product_start }}"/>
 										</div>
 										<div class="col-md-2 col-sm-12">
-											<input type="date" readonly class="form-control" value="{{ schemes.jet_product_end|e('html') }}"/>
+											<input type="date" readonly class="form-control" value="{{ schemes.jet_product_end }}"/>
 										</div>
 										<div class="col-md-1 col-sm-12">
-											<button type="button" data-promotion-id="{{ schemes.id|e('html') }}" data-toggle="tooltip" title="Изтрий филтъра." class="btn btn-danger jet-delete-promotion">
+											<button type="button" onclick="deleteSchema('{{ schemes.jet_product_id }}');" data-toggle="tooltip" title="Изтрий филтъра." class="btn btn-danger">
 												<i class="fa fa-trash"></i>&nbsp;Изтрий</button>
 										</div>
 									</div>
@@ -639,28 +665,24 @@
 							</div>
 						</div>
 					</div>
-				</div>
-			</form>
+				</form>
+			</div>
 		</div>
 	</div>
 </div>
 
 <script>
 	$(function () {
-		$('#module_mt_jet_credit_id').on('invalid', function () {
-			$('#mt-jet-credit-settings-tabs a[href="#mt-jet-tab-funkcionalni"]').tab('show');
-		});
 		var tabStorageKey = 'mt_jet_credit_active_tab';
 		var $tabs = $('#mt-jet-credit-settings-tabs a[data-toggle="tab"]');
-		var savedTab = null;
-		try { savedTab = sessionStorage.getItem(tabStorageKey); } catch (e) { /* Optional tab memory. */ }
+		var savedTab = sessionStorage.getItem(tabStorageKey);
 
 		if (savedTab && $tabs.filter('[href="' + savedTab + '"]').length) {
 			$tabs.filter('[href="' + savedTab + '"]').tab('show');
 		}
 
 		$tabs.on('shown.bs.tab', function (e) {
-			try { sessionStorage.setItem(tabStorageKey, $(e.target).attr('href')); } catch (err) { /* Optional tab memory. */ }
+			sessionStorage.setItem(tabStorageKey, $(e.target).attr('href'));
 		});
 
 		function syncJetButtonTypePreview() {
@@ -746,7 +768,7 @@
 		$(document).on('change', '.jet_scheme_radio', function () {
 			applyJetSchemePreview(parseInt($(this).val(), 10) || 0);
 		});
-		applyJetSchemePreview(parseInt($('.jet_scheme_radio:checked').val(), 10) || 0);
+		applyJetSchemePreview({{ module_mt_jet_credit_button_scheme|default(0) }});
 
 		$('#module_mt_jet_credit_btn_max_width, #module_mt_jet_credit_btn_max_width_range').on('input change', function (e) {
 			var $n = $('#module_mt_jet_credit_btn_max_width');
@@ -814,7 +836,7 @@
 		e.preventDefault();
 		if ($("#module_mt_jet_credit_product_id").val() !== '' && $("#module_mt_jet_credit_product_meseci").val() !== '' && $("#module_mt_jet_credit_product_price").val() !== '' && $("#module_mt_jet_credit_product_start").val() !== '' && $("#module_mt_jet_credit_product_end").val() !== '') {
 			$.ajax({
-				url: $('#form-html').attr('data-jet-promotion-create-url'),
+				url: '../index.php?route=extension/mt_jet_credit/jetcredit/createSchema',
 				type: 'post',
 				dataType: 'json',
 				data: {
@@ -833,12 +855,7 @@
 							alert("Успешно записахте филтъра.");
 						}
 						window.location.reload();
-					} else {
-						alert('Неуспешно добавяне на филтъра.');
 					}
-				},
-				error: function () {
-					alert('Операцията не е изпълнена. Проверете правата и данните на филтъра.');
 				}
 			});
 		} else {
@@ -846,28 +863,21 @@
 		}
 	});
 
-	$(document).on('click', '.jet-delete-promotion', function (event) {
-		event.preventDefault();
-		const id = $(this).attr('data-promotion-id');
+	const deleteSchema = (id) => {
 		$.ajax({
-			url: $('#form-html').attr('data-jet-promotion-delete-url'),
+			url: '../index.php?route=extension/mt_jet_credit/jetcredit/deleteSchema',
 			type: 'post',
 			dataType: 'json',
 			data: {
-				promotion_id: id
+				mt_jet_credit_product_id: id
 			},
 			success: function (json) {
 				if (json['success'] == 'success') {
 					alert("Успешно изтрихте филтъра.");
 					window.location.reload();
-				} else {
-					alert('Неуспешно изтриване на филтъра.');
 				}
-			},
-			error: function () {
-				alert('Операцията не е изпълнена. Проверете правата и данните на филтъра.');
 			}
 		});
-	});
+	}
 </script>
 {{ footer }}

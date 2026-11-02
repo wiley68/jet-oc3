@@ -218,7 +218,7 @@
 		flex-wrap: wrap !important;
 		gap: 5px !important;
 	}
-	/* първи ред (първоначална вноска): равни колони като останалите; дясната колона с височина по съдържание */
+	/* първи ред (вноска + преизчисли): равни колони като останалите; дясната колона с височина по съдържание */
 	#jet-product-popup-container #jet_step_1 > .jet_row:first-child {
 		align-items: flex-start !important;
 	}
@@ -240,12 +240,15 @@
 		flex-direction: column !important;
 		justify-content: flex-start !important;
 	}
-	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right .jet_input_text_active {
+	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right .jet_input_text_active,
+	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right .jet_button_preizcisli {
 		width: 100% !important;
 		max-width: 100% !important;
 		flex: 0 0 auto !important;
 	}
-
+	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right .jet_button_preizcisli {
+		margin-left: 0 !important;
+	}
 }
 input[type="text"].jet_input_text_active, input[type="number"].jet_input_text_active{
 	flex: 1 !important;
@@ -287,8 +290,31 @@ input[type="text"].jet_input_text_active.error, input[type="number"].jet_input_t
 	border: 1px solid #ED1C24;
 	color: #ED1C24;
 }
-
-
+.jet_button_preizcisli {
+	height: 48px !important;
+	background-color: #166534 !important;
+	border-radius: 3px !important;
+	border: 0px none white !important;
+	text-align: center !important;
+	font-weight: 500 !important;
+	font-size: 16px !important;
+	line-height: 22px !important;
+	padding: 0px 20px !important;
+	margin-left: 5px !important;
+	color: #f0fdf4 !important;
+	cursor: pointer !important;
+	-webkit-box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.4) !important;
+	box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.4) !important;
+	user-select: none !important;
+	-moz-user-select: none !important;
+	-khtml-user-select: none !important;
+	-webkit-user-select: none !important;
+	-o-user-select: none !important;
+}
+.jet_button_preizcisli:hover {
+	background-color: #14532d !important;
+	color: #f0fdf4 !important;
+}
 .jet_input_text {
 	display: flex !important;
 	-webkit-box-sizing: border-box !important;
@@ -472,233 +498,4 @@ input[type="checkbox"].jet_uslovia{
 }
 .jet_alert_overlay.show {
 	display: block;
-}
-/* FIX-04: scoped Jet-Woo 2.0.0 parity; native OC3 form/quote contracts stay intact. */
-#jet-product-button-container {
-	width: 100% !important;
-	max-width: 100% !important;
-	min-width: 0 !important;
-	box-sizing: border-box !important;
-}
-#jet-product-button-container .jet_button_table p {
-	font-size: 14pt !important;
-	font-weight: 600 !important;
-	line-height: 20px !important;
-	margin: 0 !important;
-}
-#jet-product-button-container .jet_wide_button_text {
-	font-size: var(--jet-wide-font-size, 14px) !important;
-	font-weight: 600 !important;
-	line-height: 1.2 !important;
-	text-align: center !important;
-}
-#jet-product-button-container .jet_wide_button:focus-visible,
-#jet-product-popup-container .jet_btn:focus-visible {
-	outline: 2px solid #166534 !important;
-	outline-offset: 2px !important;
-}
-#jet-product-popup-container,
-#jet-product-popup-container *,
-#jet-product-popup-container *::before,
-#jet-product-popup-container *::after {
-	box-sizing: border-box !important;
-}
-#jet-product-popup-container .modalpayment-content_jet,
-#jet-product-popup-container .jet_PopUp_Detailed_v1 {
-	width: 100% !important;
-	max-width: 1100px !important;
-}
-#jet-product-popup-container .jet_column_left {
-	font-size: 16pt !important;
-	font-weight: 500 !important;
-	line-height: 20px !important;
-}
-#jet-product-popup-container #jet_step_1 .jet_input_text_active,
-#jet-product-popup-container #jet_step_1 .jet_input_text_active.jet_left {
-	width: 100% !important;
-	min-width: 0 !important;
-	font-size: 20px !important;
-	font-weight: 600 !important;
-	line-height: 24px !important;
-	text-align: right !important;
-	height: 48px !important;
-	border: 1px solid #15803d;
-	border-radius: 3px !important;
-}
-/* Keep the installment/scheme select's native left alignment and existing type. */
-#jet-product-popup-container select.jet_input_text {
-	text-align: left !important;
-	min-width: 0 !important;
-}
-#jet-product-popup-container .jet_input_text_active.error {
-	border-color: #ED1C24 !important;
-	color: #ED1C24 !important;
-}
-#jet-product-popup-container .jet_btn:disabled {
-	opacity: 0.5 !important;
-	cursor: not-allowed !important;
-}
-#jet-product-popup-container .jet_btn:not(:disabled) {
-	opacity: 1 !important;
-}
-#jet-product-popup-container .jet_offer_loader {
-	display: none !important;
-	position: absolute !important;
-	inset: 0 !important;
-	z-index: 2 !important;
-	align-items: center !important;
-	justify-content: center !important;
-	background: rgba(255, 255, 255, 0.72) !important;
-	border-radius: inherit !important;
-	pointer-events: none !important;
-}
-#jet-product-popup-container.jet_offer_loading .jet_offer_loader {
-	display: flex !important;
-}
-#jet-product-popup-container.jet_offer_loading #jet_body {
-	opacity: 0.45;
-}
-#jet-product-popup-container .jet_offer_loader::after {
-	content: "";
-	width: 48px;
-	height: 48px;
-	border: 4px solid #d1fae5;
-	border-top-color: #166534;
-	border-radius: 50%;
-	animation: jet-offer-spin 0.8s linear infinite;
-}
-#jet-product-popup-container .jet_offer_loader > span {
-	position: absolute !important;
-	width: 1px !important;
-	height: 1px !important;
-	padding: 0 !important;
-	overflow: hidden !important;
-	clip-path: inset(50%) !important;
-	white-space: nowrap !important;
-}
-@keyframes jet-offer-spin {
-	to { transform: rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce) {
-	#jet-product-popup-container .jet_offer_loader::after { animation: none; }
-}
-@media screen and (max-width: 767px) {
-	#jet-product-popup-container .jet_row {
-		flex-direction: column !important;
-		align-items: stretch !important;
-	}
-	#jet-product-popup-container .jet_column_left,
-	#jet-product-popup-container .jet_column_right,
-	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_left,
-	#jet-product-popup-container #jet_step_1 > .jet_row:first-child .jet_column_right {
-		flex: none !important;
-		width: 100% !important;
-		max-width: 100% !important;
-		height: auto !important;
-		min-height: 0 !important;
-	}
-	#jet-product-popup-container .jet_column_left {
-		font-size: 12pt !important;
-		line-height: 14px !important;
-		padding: 4px 0 2px !important;
-	}
-	#jet-product-popup-container .jet_row_bottom {
-		flex-direction: column !important;
-		gap: 8px !important;
-	}
-	#jet-product-popup-container .jet_row_bottom .jet_btn {
-		width: 100% !important;
-		margin-left: 0 !important;
-	}
-}
-
-/* FIX-05: Step 2 personal data is left aligned; Step 1 retains its financial hierarchy. */
-#jet-product-popup-container #jet_step_2 input,
-#jet-product-popup-container #jet_step_2 select,
-#jet-product-popup-container #jet_step_2 textarea {
-	text-align: left !important;
-}
-#jet-product-popup-container #jet_step_2 input::placeholder,
-#jet-product-popup-container #jet_step_2 textarea::placeholder {
-	text-align: left !important;
-}
-#jet-product-popup-container #jet_step_1 .jet_input_text > div:first-child {
-	font-size: 20px !important;
-	font-weight: 600 !important;
-	line-height: 24px !important;
-	text-align: right !important;
-	justify-content: flex-end !important;
-}
-/* The native term/scheme select deliberately keeps its separate left alignment. */
-#jet-product-popup-container #jet_step_1 select.jet_input_text {
-	text-align: left !important;
-	font-size: 20px !important;
-	font-weight: 600 !important;
-	line-height: 24px !important;
-	height: 48px !important;
-}
-
-#jet-product-popup-container #jet_step_1 .jet_column_left {
-	font-size: 16pt !important;
-	font-weight: 500 !important;
-	line-height: 20px !important;
-}
-@media screen and (max-width: 767px) {
-	#jet-product-popup-container #jet_step_1 .jet_column_left {
-		font-size: 12pt !important;
-		line-height: 14px !important;
-	}
-}
-
-/* Option notice matches jet-woo's custom alert. */
-#jet_alert_box {
-	position: fixed !important;
-	top: 50% !important;
-	left: 50% !important;
-	transform: translate(-50%, -50%) !important;
-	background: #fff !important;
-	padding: 20px !important;
-	border-radius: 5px !important;
-	box-shadow: 0 0 10px rgba(0, 0, 0, 0.1) !important;
-	z-index: 2147483647 !important;
-	width: 300px !important;
-	max-width: calc(100vw - 32px) !important;
-	box-sizing: border-box !important;
-	text-align: center !important;
-	font-family: "Roboto Condensed", sans-serif !important;
-}
-#jet_alert_message {
-	font-family: inherit !important;
-	color: #14532d !important;
-}
-#jet_alert_ok {
-	font-family: inherit !important;
-	font-weight: 500 !important;
-	margin-top: 20px !important;
-	padding: 10px 20px !important;
-	border: none !important;
-	background: #166534 !important;
-	color: #fff !important;
-	border-radius: 3px !important;
-	cursor: pointer !important;
-}
-#jet_alert_ok:focus-visible {
-	outline: 2px solid #166534 !important;
-	outline-offset: 2px !important;
-}
-#jet_alert_overlay {
-	z-index: 2147483646 !important;
-}
-
-/* Keep the field's existing border without an additional focus outline. */
-#jet-product-popup-container input:focus,
-#jet-product-popup-container input:active,
-#jet-product-popup-container input:focus-visible,
-#jet-product-popup-container textarea:focus,
-#jet-product-popup-container textarea:active,
-#jet-product-popup-container textarea:focus-visible,
-#jet-product-popup-container select:focus,
-#jet-product-popup-container select:active,
-#jet-product-popup-container select:focus-visible {
-	outline: none !important;
 }
