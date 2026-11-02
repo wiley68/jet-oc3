@@ -5,7 +5,7 @@
 	const messages = {
 		non_eur_currency: 'Кредитното финансиране е достъпно само в евро.',
 		invalid_eur_base: 'Кредитното финансиране временно не е достъпно.',
-		required_options: 'Моля, изберете задължителните опции на продукта.',
+		required_options: 'Моля, изберете първо опция от възможните за продукта!',
 		invalid_options: 'Проверете избраните опции на продукта.',
 		invalid_quantity: 'Проверете количеството на продукта.',
 		out_of_stock: 'Избраното количество не е налично.',
@@ -36,7 +36,7 @@
 		let alive = true, quoteLoading = false, editing = false, debounce = null;
 		let lastQuoteKey = null, inFlightKey = null, quoteUsable = false;
 		let application = field.attr('data-intent') || '', transition = '', completedIntent = '';
-		let submissionRevision = 0;
+		let submissionRevision = 0, alertTrigger = null;
 		let sequence = 0, request = null, expiry = null, state = {offer: '', intent: '', eligible: false, enabled: false}, busy = false, pending = null;
 		function loading(value) {
 			quoteLoading = value;
@@ -89,6 +89,37 @@
 				else options[match[1]] = node.value;
 			});
 			return options;
+		}
+		function missingOptions() {
+			if (context !== 'product') return false;
+			const groups = {};
+			document.querySelectorAll('#product [name^="option["]').forEach(function (node) {
+				if (node.disabled) return;
+				const group = groups[node.name] || (groups[node.name] = {required: false, selected: false});
+				group.required = group.required || !!node.required || !!(node.closest && node.closest('.form-group.required'));
+				group.selected = group.selected || ((node.type === 'checkbox' || node.type === 'radio') ? node.checked : String(node.value || '').trim() !== '');
+			});
+			const values = Object.keys(groups).map(key => groups[key]);
+			return values.length > 0 && (!values.some(group => group.selected) || values.some(group => group.required && !group.selected));
+		}
+		function closeOptionAlert() {
+			$('#jet_alert_box').hide().attr('aria-hidden', 'true');
+			$('#jet_alert_overlay').removeClass('show');
+			if (alertTrigger) $(alertTrigger).trigger('focus');
+			alertTrigger = null;
+		}
+		function showOptionAlert(trigger) {
+			alertTrigger = trigger;
+			$('#jet_alert_message').text(messages.required_options);
+			$('#jet_alert_overlay').addClass('show');
+			$('#jet_alert_box').show().attr('aria-hidden', 'false');
+			$('#jet_alert_ok').trigger('focus');
+		}
+		function emptyButtons() {
+			invalidate(false);
+			$('#jet-product-button-container').show();
+			status('');
+			field.attr('data-quote-state', 'awaiting-options');
 		}
 		function show(calculation) {
 			const fields = {priceall: 'amount', total_credit_price: 'principal', vnoska: 'monthly', vnoska_popup: 'monthly', gpr: 'gpr', glp: 'glp', obshto: 'total', vnoski_text: 'term'};
@@ -154,11 +185,15 @@
 			editing = false;
 			const current = ++sequence;
 			if (request && request.abort) request.abort();
+			if (missingOptions()) {
+				request = null; inFlightKey = null; loading(false); emptyButtons();
+				return;
+			}
 			invalidate(preserveVisual);
 			loading(true);
 			field.attr('data-quote-state', 'loading');
 			unavailable();
-			const data = quoteData(initial);
+			const data = quoteData(initial || !lastQuoteKey);
 			inFlightKey = quoteKey(data);
 			status('Изчисляване на офертата…');
 			request = $.ajax({
@@ -204,11 +239,16 @@
 					else status('Офертата е готова.');
 					unavailable();
 				},
-				error: function (xhr) { if (alive && current === sequence) { loading(false); request = null; inFlightKey = null; editing = false; invalidate(preserveVisual); notice(xhr && xhr.responseJSON && xhr.responseJSON.code); if (preserveVisual) status($('#jet_finance_notice').text() + ' Показаните стойности са от последната оферта и не могат да бъдат изпратени.'); } }
+				error: function (xhr) { if (alive && current === sequence) { loading(false); request = null; inFlightKey = null; editing = false; if (context === 'product' && xhr && xhr.responseJSON && xhr.responseJSON.code === 'required_options') { emptyButtons(); return; } invalidate(preserveVisual); notice(xhr && xhr.responseJSON && xhr.responseJSON.code); if (preserveVisual) status($('#jet_finance_notice').text() + ' Показаните стойности са от последната оферта и не могат да бъдат изпратени.'); } }
 			});
 		}
 		$(document).off('.jetcredit');
-		$(document).on('change.jetcredit input.jetcredit', '#product [name^="option["], #product input[name="quantity"]', function () { refresh(false, true); });
+		$(document).on('click.jetcredit', '#jet_alert_ok', closeOptionAlert);
+		$(document).on('keydown.jetcredit', '#jet_alert_box', function (event) {
+			if (event.key === 'Escape') { event.preventDefault(); closeOptionAlert(); }
+			if (event.key === 'Tab') { event.preventDefault(); $('#jet_alert_ok').trigger('focus'); }
+		});
+		$(document).on('change.jetcredit input.jetcredit', '#product [name^="option["], #product input[name="quantity"]', function () { refresh(false, false); });
 		$(document).on('change.jetcredit input.jetcredit', prefix + 'parva', scheduleDownPayment);
 		$(document).on('blur.jetcredit', prefix + 'parva', flushDownPayment);
 		$(document).on('keydown.jetcredit', prefix + 'parva', function (event) {
@@ -217,6 +257,7 @@
 		$(document).on('change.jetcredit', prefix + 'vnoski', function () { refresh(false, true); });
 		$(document).on('click.jetcredit', '#btn_jet, #btn_jet_card', function () {
 			if (busy || pending) return;
+			if (missingOptions() || field.attr('data-quote-state') === 'awaiting-options') { showOptionAlert(this); return; }
 			scheme = this.id === 'btn_jet_card' ? 'jet_card' : 'jet';
 			$('#jet_step_2').hide(); $('#jet_step_1').show(); $('#jet-product-popup-container').show(); refresh(false, true);
 		});
@@ -306,7 +347,7 @@
 			});
 		});
 		$(document).on('click.jetcredit', '#buy2_jetcredit, #button-confirm', function (event) { event.preventDefault(); submit(); });
-		active = {refresh: refresh, getState: function () { return {offer: ready() ? state.offer : '', eligible: ready() && state.eligible}; }, destroy: function () { alive=false; cancelEditTimer(); editing=false; $('#jet_new_purchase').remove(); $('#jet_previous_result').remove(); ++sequence; if (request && request.abort) request.abort(); busy=false; loading(false); invalidate(); $(document).off('.jetcredit'); }};
+		active = {refresh: refresh, getState: function () { return {offer: ready() ? state.offer : '', eligible: ready() && state.eligible}; }, destroy: function () { alive=false; closeOptionAlert(); cancelEditTimer(); editing=false; $('#jet_new_purchase').remove(); $('#jet_previous_result').remove(); ++sequence; if (request && request.abort) request.abort(); busy=false; loading(false); invalidate(); $(document).off('.jetcredit'); }};
 		unavailable(); refresh(true);
 		return active;
 	}

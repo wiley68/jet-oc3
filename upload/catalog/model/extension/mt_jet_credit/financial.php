@@ -126,7 +126,10 @@ class ModelExtensionMtJetCreditFinancial extends Model {
 		$this->load->model('catalog/product');
 		$product = $this->model_catalog_product->getProduct($id);
 		if (!$product || (int)$product['status'] !== 1) { throw new JetCreditFinancialException('invalid_product'); }
-		if ($quantity < JetCreditFinancial::positiveInteger($product['minimum'])) { throw new JetCreditFinancialException('invalid_quantity'); }
+		// OC3 permits a zero product minimum; it imposes no extra minimum on a
+		// purchase, whose quantity has already been validated as strictly positive.
+		$minimum = $product['minimum'] === 0 || $product['minimum'] === '0' ? 1 : JetCreditFinancial::positiveInteger($product['minimum']);
+		if ($quantity < $minimum) { throw new JetCreditFinancialException('invalid_quantity'); }
 		if ((int)$product['quantity'] < $quantity && !$this->config->get('config_stock_checkout')) { throw new JetCreditFinancialException('out_of_stock'); }
 		if ($this->model_catalog_product->getProfiles($id)) { throw new JetCreditFinancialException('unsupported_pricing'); }
 		$specs = $this->model_catalog_product->getProductOptions($id);

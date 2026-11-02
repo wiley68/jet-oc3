@@ -474,3 +474,15 @@ input[type="checkbox"].jet_uslovia{
 .jet_alert_overlay.show {
 	display: block;
 }
+/* Keep the field's existing border without an additional focus outline. */
+#jet-product-popup-container input:focus,
+#jet-product-popup-container input:active,
+#jet-product-popup-container input:focus-visible,
+#jet-product-popup-container textarea:focus,
+#jet-product-popup-container textarea:active,
+#jet-product-popup-container textarea:focus-visible,
+#jet-product-popup-container select:focus,
+#jet-product-popup-container select:active,
+#jet-product-popup-container select:focus-visible {
+	outline: none !important;
+}

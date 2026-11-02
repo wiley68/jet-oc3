@@ -493,9 +493,7 @@ input[type="checkbox"].jet_uslovia{
 	text-align: center !important;
 }
 #jet-product-button-container .jet_wide_button:focus-visible,
-#jet-product-popup-container .jet_btn:focus-visible,
-#jet-product-popup-container input:focus-visible,
-#jet-product-popup-container select:focus-visible {
+#jet-product-popup-container .jet_btn:focus-visible {
 	outline: 2px solid #166534 !important;
 	outline-offset: 2px !important;
 }
@@ -650,4 +648,57 @@ input[type="checkbox"].jet_uslovia{
 		font-size: 12pt !important;
 		line-height: 14px !important;
 	}
+}
+
+/* Option notice matches jet-woo's custom alert. */
+#jet_alert_box {
+	position: fixed !important;
+	top: 50% !important;
+	left: 50% !important;
+	transform: translate(-50%, -50%) !important;
+	background: #fff !important;
+	padding: 20px !important;
+	border-radius: 5px !important;
+	box-shadow: 0 0 10px rgba(0, 0, 0, 0.1) !important;
+	z-index: 2147483647 !important;
+	width: 300px !important;
+	max-width: calc(100vw - 32px) !important;
+	box-sizing: border-box !important;
+	text-align: center !important;
+	font-family: "Roboto Condensed", sans-serif !important;
+}
+#jet_alert_message {
+	font-family: inherit !important;
+	color: #14532d !important;
+}
+#jet_alert_ok {
+	font-family: inherit !important;
+	font-weight: 500 !important;
+	margin-top: 20px !important;
+	padding: 10px 20px !important;
+	border: none !important;
+	background: #166534 !important;
+	color: #fff !important;
+	border-radius: 3px !important;
+	cursor: pointer !important;
+}
+#jet_alert_ok:focus-visible {
+	outline: 2px solid #166534 !important;
+	outline-offset: 2px !important;
+}
+#jet_alert_overlay {
+	z-index: 2147483646 !important;
+}
+
+/* Keep the field's existing border without an additional focus outline. */
+#jet-product-popup-container input:focus,
+#jet-product-popup-container input:active,
+#jet-product-popup-container input:focus-visible,
+#jet-product-popup-container textarea:focus,
+#jet-product-popup-container textarea:active,
+#jet-product-popup-container textarea:focus-visible,
+#jet-product-popup-container select:focus,
+#jet-product-popup-container select:active,
+#jet-product-popup-container select:focus-visible {
+	outline: none !important;
 }

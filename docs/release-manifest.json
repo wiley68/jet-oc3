@@ -23,8 +23,8 @@
   "files": [
     {
       "path": "install.xml",
-      "sha256": "7850708b96b13a6b84c071afcbc634bd2470f3501dc96ad3eed78046700d450c",
-      "bytes": 49716
+      "sha256": "e3555dbef729516cbe4c058d110c46518205ff26579c692e982c6b1cdfd8c397",
+      "bytes": 49954
     },
     {
       "path": "upload/admin/controller/extension/module/mt_jet_credit.php",
@@ -293,8 +293,8 @@
     },
     {
       "path": "upload/catalog/model/extension/mt_jet_credit/financial.php",
-      "sha256": "23ba8435b2892218232af6d29a0656ad18efaa74ce92d99772280e7fee77c4a3",
-      "bytes": 29843
+      "sha256": "850191f46f5f74d36bd50e95b61521c6aa7dcff7554e97b67df2615885d6700a",
+      "bytes": 30082
     },
     {
       "path": "upload/catalog/model/extension/mt_jet_credit/jetcredit.php",
@@ -338,8 +338,8 @@
     },
     {
       "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_cart.css",
-      "sha256": "14c0710562e268df4c561b21dd3eae4f10990661896d8d66256404016de03ab4",
-      "bytes": 13602
+      "sha256": "2668be4eef26527b269f7a88dde0ea51d01ddffdf935f8d912a0596b8ebc50ab",
+      "bytes": 14126
     },
     {
       "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_cart.js",
@@ -348,13 +348,13 @@
     },
     {
       "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_offers.js",
-      "sha256": "c177865b999c65670e7bc15903a7aa2e8ddcf387855bb7d7ba561235171f76ae",
-      "bytes": 21914
+      "sha256": "13a2abf2078dab71462669080639eb3ce1b642f2b870215d2a7bdc6e77c84977",
+      "bytes": 24115
     },
     {
       "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_products.css",
-      "sha256": "157cfb5425e5ff58bea082f3f7cd5aacb5abba6984355200241296d9b8f140de",
-      "bytes": 19471
+      "sha256": "6370c8658c6ecbd0a5f3eea9e8c98aa4f878754a3de92976400d05c599a27e13",
+      "bytes": 20990
     },
     {
       "path": "upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_products.js",

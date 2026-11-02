@@ -38,7 +38,10 @@ $data['products'] = array();
     <input type="hidden" id="jet_product_id" value="{{ jet_product_id|e('html') }}" />
     <div id="jet-product-button-container" style="display:none;padding-top:{{ jet_gap|e('html') }}px;">
         <div id="jet_alert_overlay" class="jet_alert_overlay"></div>
-        <div id="jet_alert_box"></div>
+        <div id="jet_alert_box" role="alertdialog" aria-modal="true" aria-describedby="jet_alert_message" aria-hidden="true" style="display:none">
+            <p id="jet_alert_message"></p>
+            <button type="button" id="jet_alert_ok">Добре</button>
+        </div>
         {% if jet_button_type == 'wide' %}
         <div class="jet_wide_button_wrap" style="{{ jet_button_scheme_style|e('html') }}">
             <button type="button" id="btn_jet" class="jet_wide_button">

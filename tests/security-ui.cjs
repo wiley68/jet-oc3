@@ -405,3 +405,34 @@ submitEdit.fire('document','click.jetcredit','#buy2_jetcredit, #button-confirm')
 check(submitEdit.requests.length===submitEditCount+1 && submitEdit.requests.at(-1).url.endsWith('/jet_calculate'),'submit attempt flushes stale input only to quote, never submission');
 check(submitEdit.$('#jet_finance_context').val()==='' && submitEdit.$('#buy2_jetcredit').prop('disabled')===true,'stale signed offer cannot be submitted while flush is pending');
 console.log(`T-ESCAPE / JS PASS: ${checks} checks; actual admin/quote/submit/replay/error callbacks, no network.`);
+
+// Product variations: empty buttons, first quote after selection, and reset.
+{
+    const {h} = mount('product', 'jet');
+    h.requests[0].abort();
+    h.optionNodes.forEach(node => { node.value = ''; node.checked = false; });
+    h.$('#jet_vnoski').val('');
+    const change = () => h.fire('document', 'change.jetcredit input.jetcredit', '#product [name^="option["], #product input[name="quantity"]');
+    change();
+    check(h.$('#jet-product-button-container').visible && !h.$('#jet-product-button-container .jet_button_installment').visible, 'unselected variations show buttons without installments');
+    check(h.$('#jet_finance_notice').value === '', 'unselected variations do not display calculation failure');
+    for (const id of ['btn_jet', 'btn_jet_card']) {
+        h.fire('document', 'click.jetcredit', '#btn_jet, #btn_jet_card', {id});
+        check(h.alerts.length === 0 && h.$('#jet_alert_message').value === 'Моля, изберете първо опция от възможните за продукта!', 'both buttons use custom option notice');
+        check(h.$('#jet_alert_box').visible && h.$('#jet_alert_overlay').classes.has('show'), 'custom notice and overlay open');
+        h.fire('document', 'click.jetcredit', '#jet_alert_ok');
+        check(!h.$('#jet_alert_box').visible && !h.$('#jet_alert_overlay').classes.has('show'), 'OK closes custom notice and overlay');
+    }
+    h.optionNodes[0].value = '100';
+    change();
+    check(h.requests.at(-1).data.jet_vnoski === '', 'first valid selection asks server for initial term');
+    h.requests.at(-1).success(reply('product', 'jet'));
+    check(h.$('#jet_vnoska').value === '23.36' && h.$('#jet-product-button-container [data-jet-installment="jet"]').visible, 'selection displays current calculation');
+    h.fire('document', 'click.jetcredit', '#btn_jet, #btn_jet_card', {id: 'btn_jet'});
+    check(h.$('#jet-product-popup-container').visible, 'selected variation opens calculator');
+    h.optionNodes[0].value = '';
+    change();
+    check(h.$('#jet_finance_context').value === '' && !h.$('#jet-product-button-container .jet_button_installment').visible, 'removing options clears quote and installment text');
+    h.requests.at(-1).success(reply('product', 'jet'));
+    check(h.$('#jet_finance_context').value === '', 'late quote cannot restore removed variation');
+}

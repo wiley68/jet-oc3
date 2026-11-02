@@ -196,6 +196,26 @@ foreach (array('jet', 'jet_card') as $scheme) {
 	fcheck($model->getMethod(array('country_id' => 33, 'zone_id' => 0), '235') === array(), 'non-EUR payment excluded');
 	fcheck($r->get('model_extension_mt_jet_credit_financial')->frontendData('checkout', $scheme)['is_active_jet'] === false, 'non-EUR frontend closed');
 }
+// Native OC3 allows a stored minimum of zero; positive purchase quantities remain valid.
+$r = ffixture();
+$r->get('model_catalog_product')->products[42]['minimum'] = '0';
+$r->get('model_catalog_product')->options[42] = array(array('product_option_id' => '232', 'required' => '1', 'type' => 'checkbox', 'product_option_value' => array(array('product_option_value_id' => '26', 'name' => 'Checkbox 1', 'quantity' => '990', 'subtract' => '1', 'price' => '0.0000', 'price_prefix' => '+'))));
+$r->get('request')->post = finput(array('jet_quantity' => '1', 'jet_vnoski' => '', 'option' => array()));
+(new ControllerExtensionMtJetCreditJetCredit($r))->jet_calculate();
+fcheck(json_decode($r->get('response')->output, true)['code'] === 'required_options', 'zero native minimum reaches required option validation');
+$r->get('request')->post['option'] = array('232' => array('26'));
+(new ControllerExtensionMtJetCreditJetCredit($r))->jet_calculate();
+$selectedQuote = json_decode($r->get('response')->output, true);
+fcheck($selectedQuote['success'] === 'success' && $selectedQuote['calculation']['amount'] === '120.00' && $selectedQuote['calculation']['term'] === 9, 'zero native minimum calculates selected checkbox and initial term');
+freject(function () use ($r) { $r->get('model_extension_mt_jet_credit_financial')->product('42', '0', array('232' => array('26'))); }, 'invalid_integer');
+$r->get('model_catalog_product')->products[42]['minimum'] = 0;
+$r->get('request')->post['jet_vnoski'] = '12';
+(new ControllerExtensionMtJetCreditJetCredit($r))->jet_calculate();
+fcheck(json_decode($r->get('response')->output, true)['calculation']['term'] === 12, 'integer zero minimum also allows explicitly selected installment term');
+$r->get('model_catalog_product')->products[42]['minimum'] = '2';
+freject(function () use ($r) { $r->get('model_extension_mt_jet_credit_financial')->product('42', '1', array('232' => array('26'))); }, 'invalid_quantity');
+
+
 $r = ffixture(); $r->get('request')->post = finput();
 (new ControllerExtensionMtJetCreditJetCredit($r))->jet_calculate();
 fcheck(json_decode($r->get('response')->output, true)['calculation']['amount'] === '240.00', 'actual controller quote');
