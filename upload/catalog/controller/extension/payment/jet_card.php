@@ -244,7 +244,7 @@ class ControllerExtensionPaymentJetCard extends Controller
 			$jet_count = (int)$this->config->get('module_mt_jet_credit_count');
 			$this->editSettingValue('module_mt_jet_credit', 'module_mt_jet_credit_count', $jet_count + 1);
 			$subject = $jet_id . ", онлайн заявка по поръчка $jet_count";
-			$ccAddresses = explode(",", str_replace(' ', '', $toEmail_other));
+			$ccAddresses = trim($toEmail_other) === '' ? [] : explode(",", str_replace(' ', '', $toEmail_other));
 			$mail_engine = $this->config->get('config_mail_engine');
 			$mail_protocol = $this->config->get('config_mail_protocol');
 			$mail = new PHPMailer(true);
