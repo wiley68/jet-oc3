@@ -14,7 +14,7 @@ class ControllerExtensionPaymentJet extends Controller
 	public function index()
 	{
 		$this->load->language('extension/payment/jet');
-		$data['JET_VERSION'] = '1.9.1';
+		$data['JET_VERSION'] = '2.0.1';
 		$this->load->model('checkout/order');
 		$order_info = $this->model_checkout_order->getOrder($this->session->data['order_id']);
 		$products = $this->cart->getProducts();
