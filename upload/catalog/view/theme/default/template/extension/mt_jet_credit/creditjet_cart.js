@@ -5,16 +5,21 @@ jQuery(document).ready(function($) {
 
 	const jetSubmission = { locked: false, needsReview: false, alert: null };
 	const jetSubmissionUncertain = 'Резултатът от изпращането не е потвърден. Моля, свържете се с магазина за проверка.';
+	const jetSubmissionLoading = (loading) => {
+		jetPopupLoading(loading);
+		$('#jet-product-popup-container .jet_offer_loader > span').text(loading ? 'Изпращане на заявката. Моля, изчакайте…' : 'Преизчисляване…');
+	};
 	const jetLockSubmission = () => {
 		jetSubmission.locked = true;
 		clearTimeout(jetDownpaymentTimer);
 		++jetCalculationRevision;
-		jetPopupLoading(false);
+		jetSubmissionLoading(true);
 		$('#buy2_jetcredit').prop('disabled', true).attr('aria-busy', 'true');
-		$('#jet_alert_overlay').appendTo('body').addClass('show').attr('role', 'status')
+		$('#jet_alert_overlay').appendTo('body').removeClass('show').attr('role', 'status')
 			.text('Изпращане на заявката. Моля, изчакайте…');
 	};
 	const jetUnlockSubmission = () => {
+		jetSubmissionLoading(false);
 		jetSubmission.locked = false;
 		jetSubmission.alert = null;
 		$('#jet_alert_overlay').text('').removeAttr('role').removeClass('show');
@@ -281,7 +286,8 @@ jQuery(document).ready(function($) {
 		$('body').append(jetAlertBox);
 		if (jetSubmission.locked) {
 			jetSubmission.alert = jetAlertBox[0];
-			$('#jet_alert_overlay').text('').removeAttr('role');
+			jetSubmissionLoading(false);
+			$('#jet_alert_overlay').text('').removeAttr('role').addClass('show');
 			jetAlertBox.attr({ role: 'alertdialog', 'aria-modal': 'true' });
 			jetCloseButton[0].focus();
 		}
@@ -292,7 +298,6 @@ jQuery(document).ready(function($) {
 		jetLockSubmission();
 		let requestStarted = false;
 		try {
-		$("#jet_alert_overlay").addClass("show");
 		const jetFormSendData = new FormData();
 		jetFormSendData.append('jet_priceall', $('#jet_priceall').text());
 		jetFormSendData.append('jet_vnoski', $('#jet_vnoski').val());

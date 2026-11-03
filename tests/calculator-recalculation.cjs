@@ -4,10 +4,10 @@
 module.exports = function runCalculatorRegression(sources) {
  let checks = 0;
  const check = (condition, message) => { checks++; if (!condition) throw new Error(message); };
- function environment(source, options = false) {
+ function environment(source, options = false, css = '') {
   let now = 0, timerId = 0, loaderCount = 0;
   const timers = new Map(), elements = new Map(), requests = [], documentEvents = {}, optionEvents = {}, captureEvents = {};
-  const faults = {}, alerts = [];
+  const faults = {}, alerts = [], loaderNodes = [];
   const document = {
    querySelectorAll: (selector) => !options ? [] : selector.includes('id*=') ? [{}] : selector.includes('id^=') ? [{ addEventListener: (name, fn) => { optionEvents[name] = fn; } }] : [],
    addEventListener: (name, fn) => (documentEvents[name] ||= []).push(fn),
@@ -22,12 +22,12 @@ module.exports = function runCalculatorRegression(sources) {
    find(selector) {
     if (selector === '.jet_offer_loader') return { length: loaderCount };
     if (selector === 'option') return { each() {} };
-    return get(selector);
+    const element = get(selector); element.parentNode = this; return element;
    }
    on(names, fn) { for (const name of names.split(' ')) (this.events[name] ||= []).push(fn); return this; }
    off(namespace) { for (const name of Object.keys(this.events)) if (name.includes(namespace)) delete this.events[name]; return this; }
    append(child) { if (child instanceof Element) { this.children.push(child); if (child.attributes.id) elements.set('#' + child.attributes.id, child); } return this; }
-   appendTo() { if (this.attributes.class === 'jet_offer_loader') loaderCount++; return this; }
+   appendTo(parent) { this.parentNode = typeof parent === 'string' ? get(parent) : parent; if (this.attributes.class === 'jet_offer_loader') { loaderCount++; loaderNodes.push(this); } return this; }
    prependTo() { return this; } remove() { this.length = 0; return this; } parent() { return this; } after(markup) { (this.afterMarkup ||= []).push(markup); return this; }
    toggleClass(name, enabled) { enabled ? this.classes.add(name) : this.classes.delete(name); return this; }
    addClass(name) { this.classes.add(name); return this; }
@@ -44,6 +44,7 @@ module.exports = function runCalculatorRegression(sources) {
   }
   const get = (key) => { if (!elements.has(key)) elements.set(key, new Element(key)); return elements.get(key); };
   function $(key, attrs) {
+   if (key === '#jet-product-popup-container .jet_offer_loader > span' && loaderNodes.length) return loaderNodes[0].children[0];
    if (key === '#jet_alert_box:empty') { const alert = get('#jet_alert_box'); return !alert.children.length && !alert.content ? alert : { remove() {} }; }
    return typeof key === 'string' && key.startsWith('<') ? new Element(key, attrs) : key instanceof Element ? key : get(key); }
   const schedule = (fn, delay) => { const id = ++timerId; timers.set(id, { at: now + delay, fn }); return id; };
@@ -79,8 +80,25 @@ module.exports = function runCalculatorRegression(sources) {
    }
    now = end;
   }
+  const cssProperty = (selector, property) => {
+   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+   const rule = css.match(new RegExp(escaped + '\\s*\\{([^}]+)\\}'))?.[1] || '';
+   return rule.split(';').map((entry) => entry.split(':').map((part) => part.trim())).find((entry) => entry[0] === property)?.[1]?.replace(/\s*!important$/, '') || '';
+  };
+  const loaderLayout = () => {
+   const popup = get('#jet-product-popup-container'), loader = loaderNodes[0];
+   const parentCorrect = !!loader && loader.parentNode === get('.modalpayment-content_jet') && loader.parentNode.parentNode === popup;
+   const display = popup.classes.has('jet_offer_loading') ? cssProperty('#jet-product-popup-container.jet_offer_loading .jet_offer_loader', 'display') : cssProperty('#jet-product-popup-container .jet_offer_loader', 'display');
+   const covered = get('#jet_alert_overlay').classes.has('show') && Number.parseInt(cssProperty('.jet_alert_overlay', 'z-index')) > Number.parseInt(cssProperty('.modalpayment_jet', 'z-index'));
+   return { visible: popup.visible && parentCorrect && display === 'flex' && !covered, parentCorrect,
+    relativeParent: cssProperty('.modalpayment-content_jet', 'position') === 'relative',
+    loaderZ: cssProperty('#jet-product-popup-container .jet_offer_loader', 'z-index'),
+    width: cssProperty('#jet-product-popup-container .jet_offer_loader::after', 'width'),
+    animation: cssProperty('#jet-product-popup-container .jet_offer_loader::after', 'animation'),
+    text: loader?.children[0]?.text() };
+  };
   new Function('jQuery', 'document', 'FormData', 'setTimeout', 'clearTimeout', 'console', 'window', 'alert', 'location', source)($, document, Data, schedule, clear, { error() {}, log() {} }, { addEventListener: (name, fn) => (captureEvents[name] ||= []).push(fn), location: { origin: 'http://test.invalid', href: '' } }, (message) => alerts.push(message), {});
-  return { requests, trigger, tick, get, faults, alerts, changeOption: () => optionEvents.change?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
+  return { requests, trigger, tick, get, faults, alerts, loaderLayout, changeOption: () => optionEvents.change?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
  }
  const quote = (value = '50.00') => ({ success: 'success', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
  for (const page of ['products', 'cart']) {
@@ -245,21 +263,27 @@ module.exports = function runCalculatorRegression(sources) {
  // Step 2: one pending request, captured interaction lock and existing information result.
  for (const page of ['products', 'cart']) {
   const prepare = () => {
-   const e = environment(sources[page]); e.requests[0].resolve(quote());
+   const e = environment(sources[page], false, sources['css_' + page]); e.requests[0].resolve(quote());
+   e.get('#jet-product-popup-container').show(); e.get('#jet_step_1').hide(); e.get('#jet_step_2').show();
    for (const [key, value] of Object.entries({ jet_name: 'Test', jet_lastname: 'User', jet_egn: '9001010000', jet_phone: '+359888888888', jet_email: 'test@example.invalid' })) e.get('#' + key).val(value);
    return e;
   };
   let e = prepare();
   e.trigger('#buy2_jetcredit', 'click');
   check(e.requests.length === 2 && e.requests[1].config.url.endsWith('/jet_send' + (page === 'cart' ? '_cart' : '')), 'Step 2 starts existing endpoint');
-  check(e.get('#jet_alert_overlay').text() === 'Изпращане на заявката. Моля, изчакайте…' && e.get('#jet_alert_overlay').classes.has('show'), 'exact Woo pending loader');
+  check(e.loaderLayout().visible && e.loaderLayout().text === 'Изпращане на заявката. Моля, изчакайте…', 'Step 2 pending loader is CSS-visible, with existing text');
+  check(e.loaderLayout().parentCorrect && e.loaderLayout().relativeParent && e.loaderLayout().loaderZ === '2', 'loader covers relative popup content above its children');
+  check(e.loaderLayout().width === '48px' && e.loaderLayout().animation === 'jet-offer-spin 0.8s linear infinite', 'existing spinner dimensions/animation retained');
+  check(e.requests[1].config.async !== false, 'submission uses asynchronous AJAX');
+  e.tick(16); check(e.loaderLayout().visible && !e.requests[1].finished, 'pending AJAX yields a frame with visible loader');
+  e.tick(500); check(e.loaderLayout().visible, 'loader remains visible while submission pending');
   check(e.get('#buy2_jetcredit').prop('disabled') && e.get('#buy2_jetcredit').attr('aria-busy') === 'true', 'submit marked pending');
   check(e.trigger('#buy2_jetcredit', 'click').stopped && e.requests.length === 2, 'repeated clicks blocked');
   check(e.trigger('#close_jetcredit', 'click').stopped && e.trigger('#jet_parva', 'input').stopped && e.trigger('#btn_preizcisli', 'click').stopped, 'popup cannot close/change/recalculate while pending');
   e.requests[1].resolve({ success: 'success', code: 'bank_sent', order_id: 99 });
   let alert = e.get('#jet_alert_box');
   check(alert.children[0].text().startsWith('Успешно изпратихте Вашата заявка'), 'existing success message unchanged');
-  check(!e.get('#jet_alert_overlay').text() && e.trigger('#buy2_jetcredit', 'click').stopped, 'lock held until result popup handled');
+  check(!e.loaderLayout().visible && e.get('#jet_alert_overlay').classes.has('show') && !e.get('#jet_alert_overlay').text() && e.trigger('#buy2_jetcredit', 'click').stopped, 'lock held until result popup handled');
   alert.children[1].click();
   check(!e.get('#jet_alert_overlay').classes.has('show') && !e.get('#buy2_jetcredit').attr('aria-busy'), 'confirmation dismissal releases interaction/loader');
   for (const kind of ['failure', 'bank_failed', 'bank_uncertain', 'network', 'timeout', 'malformed', 'sync_data', 'sync_ajax']) {
@@ -273,7 +297,7 @@ module.exports = function runCalculatorRegression(sources) {
    if (kind === 'timeout') e.tick(30000);
    if (kind === 'malformed') request.resolve({});
    alert = e.get('#jet_alert_box');
-   check(alert.children.length === 2, 'error/uncertainty always resolves to existing information popup: ' + kind);
+   check(!e.loaderLayout().visible && e.get('#jet_alert_overlay').classes.has('show') && alert.children.length === 2, 'error/uncertainty always resolves to existing information popup: ' + kind);
    if (!['failure', 'bank_failed', 'sync_data'].includes(kind)) check(alert.children[0].text().startsWith('Резултатът от изпращането не е потвърден.'), 'uncertain result never claimed as definite failure');
    alert.children[1].click();
    const requests = e.requests.length; e.tick(60000);
@@ -282,6 +306,13 @@ module.exports = function runCalculatorRegression(sources) {
    check(e.requests.length === requests + (['failure', 'sync_data'].includes(kind) ? 1 : 0), 'only confirmed pre-order failure permits manual new attempt');
    check(!e.trigger('#close_jetcredit', 'click')?.stopped || ['failure', 'sync_data'].includes(kind), 'review state blocks resend, not whole popup');
   }
+ }
+ for (const page of ['products', 'cart']) {
+  const old = environment(sources['visibility_baseline_' + page] || sources['baseline_' + page], false, sources['css_' + page]);
+  old.requests[0].resolve(quote()); old.get('#jet-product-popup-container').show();
+  for (const [key, value] of Object.entries({ jet_name: 'Test', jet_lastname: 'User', jet_egn: '9001010000', jet_phone: '+359888888888', jet_email: 'test@example.invalid' })) old.get('#' + key).val(value);
+  old.trigger('#buy2_jetcredit', 'click');
+  check(!old.loaderLayout().visible, 'committed baseline reproduces absent Step 2 spinner');
  }
  // Native Checkout has no Step 2 popup; its existing confirm request stays isolated.
  for (const mode of ['jet', 'jet_card']) {
@@ -339,6 +370,8 @@ if (require.main === module) {
  for (const page of ['products', 'cart']) {
   const path = `upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_${page}.js`;
   sources[page] = fs.readFileSync(path, 'utf8');
+  sources['visibility_baseline_' + page] = childProcess.execFileSync('git', ['show', 'ad392b78dfa8f764fca50e43b0ab827d6f0486a5:' + path], { encoding: 'utf8' });
+  sources['css_' + page] = fs.readFileSync(`upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_${page}.css`, 'utf8');
   sources['baseline_' + page] = childProcess.execFileSync('git', ['show', 'HEAD:' + path], { encoding: 'utf8' });
  }
  for (const mode of ['jet', 'jet_card']) sources['checkout_' + mode] = fs.readFileSync(`upload/catalog/view/theme/default/template/extension/payment/${mode}.twig`, 'utf8');
