@@ -16,7 +16,7 @@ class Tax {function calculate($v,...$rest){return $v*1.2;}function getTax($v,...
 class DB {public $queries=[],$geoMatches=1;function query($s){$this->queries[]=$s;return (object)['num_rows'=>strpos($s,'zone_to_geo_zone')!==false?$this->geoMatches:1];}function escape($s){return $s;}}
 class Customer {function isLogged(){return false;}}
 class Cart {public $cleared=false;public $price;public $failure='';function getProducts(){return [['product_id'=>1,'quantity'=>2,'price'=>$this->price,'tax_class_id'=>1,'option'=>[['value'=>'red']]]];}function clear(){if($this->failure==='cart')throw new RuntimeException('mock cart clear failure');$this->cleared=true;}}
-class Products {public $price;function getProduct($id){return ['name'=>'Product','price'=>$this->price,'special'=>0,'quantity'=>10,'tax_class_id'=>1,'model'=>'P','subtract'=>1,'reward'=>0];}function getCategories($id){return [['category_id'=>1]];}function getProductOptions($id){return [['required'=>true,'product_option_id'=>1,'type'=>'select','product_option_value'=>[['price'=>$this->price/10,'name'=>'red','product_option_value_id'=>1,'option_value_id'=>1]]]];}}
+class Products {public $price,$options=null,$special=0,$stock=10,$overrides=[];function getProduct($id){return array_merge(['name'=>'Product','price'=>$this->price,'special'=>$this->special,'quantity'=>$this->stock,'tax_class_id'=>1,'model'=>'P','subtract'=>1,'reward'=>0],$this->overrides);}function getCategories($id){return [['category_id'=>1]];}function getProductOptions($id){return $this->options??[['required'=>false,'product_option_id'=>1,'option_id'=>1,'name'=>'Option','type'=>'select','product_option_value'=>[['price'=>$this->price/10,'price_prefix'=>'+','name'=>'red','product_option_value_id'=>1,'option_value_id'=>1]]]];}}
 class Category {function getCategory($id){return ['name'=>'Category'];}}
 class Promo extends ModelExtensionMtJetCreditJetcredit {public $normal=1.2,$card=0.8,$show=true;function getPromo(...$args){return ['jet_show_button'=>$this->show,'jet_purcent'=>$this->normal,'jet_purcent_card'=>$this->card];}function getJetWideButtonInlineStyle($v){return '';}}
 class Trace {public static $events=[];}
@@ -32,7 +32,7 @@ class Url {function link($s,...$r){return $s;}}
 
 $count=0;function check($b,$msg){global $count;$count++;if(!$b)throw new Exception($msg);}
 function setup($class,$base='EUR',$selected='EUR'){
- $c=new $class;$c->config=new Config;$c->config->values=['config_currency'=>$base,'module_mt_jet_credit_status'=>1,'module_mt_jet_credit_cart_show'=>1,'module_mt_jet_credit_vnoski'=>12,'module_mt_jet_credit_price'=>75,'module_mt_jet_credit_eur'=>3,'payment_jet_status'=>1,'payment_jet_card_status'=>1,'module_mt_jet_credit_count'=>1,'config_tax'=>1,'config_email'=>'admin@example.invalid','module_mt_jet_credit_mail'=>'bank@example.invalid','module_mt_jet_credit_id'=>'Test','payment_jet_order_status_id'=>1,'payment_jet_card_order_status_id'=>1];
+ $c=new $class;$c->config=new Config;$c->config->values=['config_currency'=>$base,'module_mt_jet_credit_status'=>1,'module_mt_jet_credit_status_card'=>1,'module_mt_jet_credit_cart_show'=>1,'module_mt_jet_credit_vnoski'=>12,'module_mt_jet_credit_price'=>75,'module_mt_jet_credit_eur'=>3,'payment_jet_status'=>1,'payment_jet_card_status'=>1,'module_mt_jet_credit_count'=>1,'config_tax'=>1,'config_email'=>'admin@example.invalid','module_mt_jet_credit_mail'=>'bank@example.invalid','module_mt_jet_credit_id'=>'Test','payment_jet_order_status_id'=>1,'payment_jet_card_order_status_id'=>1];
  $c->session=(object)['data'=>['currency'=>$selected,'order_id'=>1,'payment_method'=>['code'=>'jet']]];
  $c->request=(object)['post'=>['jet_priceall'=>'600','jet_parva'=>'100','jet_vnoski'=>12,'jet_product_id'=>1,'jet_products'=>'1','jet_products_qt'=>'2','jet_products_pr'=>'300','jet_products_vr'=>'[[]]','jet_variation_id'=>'[]','jet_quantity'=>2,'jet_vnoska'=>'50','jet_obshto'=>'600','jet_total_credit_price'=>'500','jet_gpr'=>'10','jet_lname'=>'','jet_egn'=>'1234567890','jet_name'=>'Test','jet_lastname'=>'User','jet_phone'=>'123','jet_email'=>'test@example.invalid','jet_card'=>0,'product_id'=>1,'option'=>[1=>1]],'get'=>['product_id'=>1],'server'=>['HTTPS'=>true,'REMOTE_ADDR'=>'127.0.0.1'],'cookie'=>[]];
  $c->response=new Response;$c->currency=new Currency($base);$c->tax=new Tax;$c->db=new DB;$c->customer=new Customer;$c->cart=new Cart;$c->cart->price=$base==='EUR'?250:500;$c->load=new Loader;$c->url=new Url;
@@ -42,7 +42,7 @@ function setup($class,$base='EUR',$selected='EUR'){
   $payment=new $modelClass;foreach(['config','db','currency','session'] as $property)$payment->$property=$c->$property;
   $c->{'model_extension_payment_'.$key}=$payment;
  }
- foreach(['config','customer','session','load','model_checkout_order','model_extension_payment_jet','model_extension_payment_jet_card'] as $property)$c->model_extension_mt_jet_credit_jetcredit->$property=$c->$property;
+ foreach(['tax','currency','model_catalog_product','config','customer','session','load','model_checkout_order','model_extension_payment_jet','model_extension_payment_jet_card'] as $property)$c->model_extension_mt_jet_credit_jetcredit->$property=$c->$property;
  $c->model_extension_mt_jet_credit_jetcredit->model_extension_mt_jet_credit_jetcredit=$c->model_extension_mt_jet_credit_jetcredit;
  return $c;
 }
@@ -78,6 +78,17 @@ try {
   $c=setup($prefix.(str_starts_with($kind,'Product')||str_starts_with($kind,'Cart')?'Calc':$kind),'EUR',$currency);
   $c->model_checkout_order->failure=$orderFailure;$c->cart->failure=$orderFailure;$c->config->values['module_mt_jet_credit_mail']=$bank;
   if($smtp){$c->config->values['config_mail_engine']='smtp';$c->config->values['config_mail_smtp_password']='mock';}
+  if(str_starts_with($kind,'Product') && $currency==='EUR') {
+   $calculator=setup('NewCalc');
+   foreach(['config','session','currency','tax','customer','model_catalog_product','model_extension_mt_jet_credit_jetcredit'] as $property)$calculator->$property=$c->$property;
+   $calculator->request->post=$c->request->post;
+   $calculator->request->post['jet_options']='[]';
+   $calculator->jet_calculate();$quote=json_decode($calculator->response->output,true);
+   if(($quote['success']??'')!=='success')throw new RuntimeException('Invalid legitimate Product fixture');
+   $c->request->post['jet_options']='[]';$c->request->post['jet_quote_ref']=$quote['jet_quote_ref'];
+   $c->request->post['jet_priceall']=$quote['jet_priceall'];$c->request->post['jet_parva']=$quote['jet_parva'];
+   foreach(['vnoska','total_credit_price','obshto','gpr','glp'] as $field)$c->request->post['jet_'.$field]=$quote['jet_'.$field.(str_ends_with($kind,'Card')&&$field!=='total_credit_price'?'_card':'')];
+  }
   if($kind==='Jet'||$kind==='Card'){
    $key=$kind==='Jet'?'jet':'jet_card';$c->session->data['payment_method']['code']=$key;
    $c->session->data['guest']=['email'=>'test@example.invalid'];$c->model_checkout_order->code=$key;
@@ -144,6 +155,7 @@ try {
   check(!$r['attempts']&&!$r['orders']&&!$r['history'],'EUR restriction unchanged');
  }
  if (isset($checkoutFinancialTests)) $checkoutFinancialTests();
+ if (isset($productFinancialTests)) $productFinancialTests();
  echo "PASS $count submission/email checks; real recipient validation; mocked transport/orders/database\n";
 } finally {
  foreach(glob($temp.'/*.php') as $file)unlink($file);

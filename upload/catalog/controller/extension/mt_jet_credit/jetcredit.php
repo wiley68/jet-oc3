@@ -12,106 +12,59 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	private const JET_MIN_250_EUR = 125;
 
 	public function jet_check() {
-		if (($this->session->data['currency'] ?? '') !== 'EUR') {
-			$this->response->addHeader('Content-Type: application/json');
-			$this->response->setOutput(json_encode(['success' => false]));
-			return;
-		}
-		$json = array();
-		$this->load->model('catalog/product');
-		$product_info = $this->model_catalog_product->getProduct($this->request->post['product_id']);
-		if ($product_info) {
-			if (isset($this->request->post['option'])) {
-				$option = array_filter($this->request->post['option']);
-			} else {
-				$option = array();
-			}
-			$product_options = $this->model_catalog_product->getProductOptions($this->request->post['product_id']);
-			$optionn = 0;
-			foreach ($product_options as $product_option) {
-				if ($product_option['required'] && empty($option[$product_option['product_option_id']])) {
-					$json['error']['option'][$product_option['product_option_id']] = sprintf('%s задължително!', $product_option['name']);
-				}else{
-					$json['success'] = 1;
-					foreach ($product_option['product_option_value'] as $key => $value) {
-						$product_option['product_option_value'][$key]['price'] = $this->currency->convert($this->tax->calculate($product_option['product_option_value'][$key]['price'], $product_info['tax_class_id'], $this->config->get('config_tax')), $this->config->get('config_currency'), 'EUR');
-					}
-					$json['optionresult'][$optionn] = $product_option;
-					$json['optionresult'][$optionn]['product_option_id_check'] = $option[$product_option['product_option_id']];
-					$optionn++;
-				}
-			}
-		}
+		$json = ['success' => 'unsuccess'];
+		try {
+			$this->load->model('extension/mt_jet_credit/jetcredit');
+			$context = $this->model_extension_mt_jet_credit_jetcredit->getProductContext($this->request->post['product_id'] ?? null,
+				$this->request->post['quantity'] ?? 1, $this->request->post['option'] ?? []);
+			if ($context) $json = isset($context['error']) ? $context : ['success' => 1, 'optionresult' => $context['optionresult']];
+		} catch (\Throwable $error) {}
 		$this->response->addHeader('Content-Type: application/json');
 		$this->response->setOutput(json_encode($json));
 	}
 
 	public function jet_calculate() {
-		if (($this->session->data['currency'] ?? '') !== 'EUR') {
-			$this->response->addHeader('Content-Type: application/json');
-			$this->response->setOutput(json_encode(['success' => false]));
-			return;
-		}
+		$json = ['success' => 'unsuccess'];
+		try {
+			$this->load->model('extension/mt_jet_credit/jetcredit');
+			$context = $this->productRequestContext($this->request->post);
+			$quote = $context ? $this->productCalculate($context, $this->request->post) : false;
+			if ($quote) {
+				$json = $quote;
+				if ($quote['jet_show_button']) {
+					$reference = $this->model_extension_mt_jet_credit_jetcredit->storeProductQuote($context, $quote, $this->request->post['jet_previous_quote'] ?? null);
+					$json = $reference ? $quote + ['jet_quote_ref' => $reference] : ['success' => 'unsuccess'];
+				}
+			}
+		} catch (\Throwable $error) {}
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->setOutput(json_encode($json));
+	}
+
+	private function productRequestContext($post) {
+		$model = $this->model_extension_mt_jet_credit_jetcredit;
+		$options = $model->productSelections($post['jet_options'] ?? null);
+		if ($options === false) return false;
+		$context = $model->getProductContext($post['jet_product_id'] ?? null, $post['jet_quantity'] ?? null, $options);
+		return $context && !isset($context['error']) ? $context : false;
+	}
+
+	private function productCalculate($context, $post) {
+		$model = $this->model_extension_mt_jet_credit_jetcredit;
+		$submitted = $model->productNumber($post['jet_priceall'] ?? null);
+		$down = $model->normalizeProductDownpayment(array_key_exists('jet_downpayment_raw', $post) ? $post['jet_downpayment_raw'] : ($post['jet_parva'] ?? null));
+		$term = $model->productNumber($post['jet_vnoski'] ?? null);
+		$displayed_down = $model->productNumber($post['jet_parva'] ?? null, true);
+		if ($submitted === null || $submitted !== (float)$context['amount'] || $down === false || $displayed_down !== (float)$down
+			|| !in_array($term, [3.0, 6.0, 9.0, 10.0, 12.0, 15.0, 18.0, 24.0, 30.0, 36.0], true)
+			|| ($context['raw_amount'] < 401 && in_array($term, [15.0, 18.0, 24.0], true))
+			|| ($context['raw_amount'] < 601 && in_array($term, [30.0, 36.0], true))
+			|| (float)$down >= (float)$context['amount']) return false;
+		$jet_priceall = (float)$context['amount'];
+		$jet_parva = (float)$down;
+		$jet_vnoski = (int)$term;
+		$jet_product_id = $context['product_id'];
 		$json = [];
-		if (isset($this->request->post['jet_priceall'])) {
-			$jet_priceall = (float) filter_var($this->request->post['jet_priceall'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_priceall = (float) 0.00;
-		}
-		if (isset($this->request->post['jet_parva'])) {
-			$jet_parva = (float) filter_var($this->request->post['jet_parva'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_parva = (float) 0.00;
-		}
-		if (isset($this->request->post['jet_vnoski'])) {
-			$jet_vnoski = (int) filter_var($this->request->post['jet_vnoski'], FILTER_SANITIZE_NUMBER_INT);
-		} else {
-			$jet_vnoski = (int) $this->config->get('module_mt_jet_credit_vnoski');
-		}
-		if (isset($this->request->post['jet_product_id'])) {
-			$jet_product_id = (int) filter_var($this->request->post['jet_product_id'], FILTER_SANITIZE_NUMBER_INT);
-		} else {
-			$jet_product_id = (int) 0;
-		}
-		if (isset($this->request->post['jet_uslovia'])) {
-			$jet_uslovia = (int) filter_var($this->request->post['jet_uslovia'], FILTER_SANITIZE_NUMBER_INT);
-		} else {
-			$jet_uslovia = (int) 0;
-		}
-		if (isset($this->request->post['jet_uslovia1'])) {
-			$jet_uslovia1 = (int) filter_var($this->request->post['jet_uslovia1'], FILTER_SANITIZE_NUMBER_INT);
-		} else {
-			$jet_uslovia1 = (int) 0;
-		}
-		if (isset($this->request->post['jet_egn'])) {
-			$jet_egn = filter_var($this->request->post['jet_egn'], FILTER_SANITIZE_STRING);
-		} else {
-			$jet_egn = "";
-		}
-		if (isset($this->request->post['jet_products'])) {
-			$jet_products = filter_var($this->request->post['jet_products'], FILTER_SANITIZE_STRING);
-		} else {
-			$jet_products = "";
-		}
-		if (isset($this->request->post['jet_products_qt'])) {
-			$jet_products_qt = filter_var($this->request->post['jet_products_qt'], FILTER_SANITIZE_STRING);
-		} else {
-			$jet_products_qt = "";
-		}
-		if (isset($this->request->post['jet_products_pr'])) {
-			$jet_products_pr = filter_var($this->request->post['jet_products_pr'], FILTER_SANITIZE_STRING);
-		} else {
-			$jet_products_pr = "";
-		}
-		if (isset($this->request->post['jet_products_vr'])) {
-			$jet_products_vr = filter_var($this->request->post['jet_products_vr'], FILTER_SANITIZE_STRING);
-		} else {
-			$jet_products_vr = "";
-		}
-
-		$jet_min_250 = self::JET_MIN_250_EUR;
-		
-
 		$_minprice = (float)$this->config->get('module_mt_jet_credit_price');
 		$jet_total_credit_price = $jet_priceall - $jet_parva;
 		$this->load->model('extension/mt_jet_credit/jetcredit');
@@ -142,6 +95,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		$jet_obshto_second = $jet_obshto;
 		$jet_obshto_card_second = $jet_obshto_card;
 
+		foreach ([$jet_vnoska, $jet_vnoska_card, $jet_gpr, $jet_glp, $jet_obshto, $jet_gpr_card, $jet_glp_card, $jet_obshto_card] as $number) if (!is_finite($number)) return false;
 		$json['success'] = 'success';
 		$json['jet_show_button'] = $jet_show_button;
 		$json['jet_vnoska'] = number_format($jet_vnoska, 2, ".", "");
@@ -160,8 +114,28 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		$json['jet_glp_card'] = number_format($jet_glp_card, 2, ".", "");
 		$json['jet_obshto_card'] = number_format($jet_obshto_card, 2, ".", "");
 		$json['jet_obshto_card_second'] = number_format($jet_obshto_card_second, 2, ".", "");
-		$this->response->addHeader('Content-Type: application/json');
-		$this->response->setOutput(json_encode($json));
+		$json['jet_parva'] = $down;
+		$json['jet_vnoski'] = $jet_vnoski;
+		return $json;
+	}
+
+	private function validateProductSubmission($post) {
+		$context = $this->productRequestContext($post);
+		if (!$context) return false;
+		$model = $this->model_extension_mt_jet_credit_jetcredit;
+		$saved = $model->findProductQuote($post['jet_quote_ref'] ?? null);
+		if (!$saved || !hash_equals($saved['fingerprint'], $context['fingerprint'])) return false;
+		$quote = $this->productCalculate($context, $post);
+		if (!$quote || !$quote['jet_show_button'] || $quote !== $saved['quote']) return false;
+		$card = $post['jet_card'] ?? null;
+		if (!in_array($card, [0, 1, '0', '1'], true) || ((int)$card === 1 && !$this->config->get('module_mt_jet_credit_status_card'))) return false;
+		$suffix = (int)$card === 1 ? '_card' : '';
+		foreach (['vnoska', 'total_credit_price', 'obshto', 'gpr', 'glp'] as $field) {
+			$value = $model->productNumber($post['jet_' . $field] ?? null);
+			if ($value === null || $value !== (float)$quote['jet_' . $field . ($field === 'total_credit_price' ? '' : $suffix)]) return false;
+		}
+		if ((float)$quote['jet_vnoska' . $suffix] < 20) return false;
+		return ['context' => $context, 'quote' => $quote, 'card' => (int)$card, 'suffix' => $suffix];
 	}
 
 	public function jet_send() {
@@ -170,48 +144,27 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 			$this->response->setOutput(json_encode(['success' => false]));
 			return;
 		}
-		if(!empty((string)$this->request->post['jet_lname'])) die();
+		if(!empty((string)($this->request->post['jet_lname'] ?? ''))) die();
+		$this->load->model('extension/mt_jet_credit/jetcredit');
+		try { $verified = $this->validateProductSubmission($this->request->post); }
+		catch (\Throwable $error) { $verified = false; }
+		if (!$verified) {
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode(['success' => 'unsuccess', 'jet_quote_invalid' => true]));
+			return;
+		}
+
 		$json = [];
-		if (isset($this->request->post['jet_priceall'])) {
-			$jet_priceall = filter_var($this->request->post['jet_priceall'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_priceall = 0.00;
-		}
-		if (isset($this->request->post['jet_vnoski'])) {
-			$jet_vnoski = filter_var($this->request->post['jet_vnoski'], FILTER_SANITIZE_NUMBER_INT);
-		} else {
-			$jet_vnoski = (int)$this->config->get('module_mt_jet_credit_vnoski');
-		}
-		if (isset($this->request->post['jet_vnoska'])) {
-			$jet_vnoska = filter_var($this->request->post['jet_vnoska'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_vnoska = 0.00;
-		}
-		if (isset($this->request->post['jet_parva'])) {
-			$jet_parva = filter_var($this->request->post['jet_parva'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_parva = 0.00;
-		}
-		if (isset($this->request->post['jet_total_credit_price'])) {
-			$jet_total_credit_price = filter_var($this->request->post['jet_total_credit_price'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_total_credit_price = 0.00;
-		}
-		if (isset($this->request->post['jet_obshto'])) {
-			$jet_obshto = filter_var($this->request->post['jet_obshto'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_obshto = 0.00;
-		}
-		if (isset($this->request->post['jet_gpr'])) {
-			$jet_gpr = filter_var($this->request->post['jet_gpr'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_gpr = 0.00;
-		}
-		if (isset($this->request->post['jet_glp'])) {
-			$jet_glp = filter_var($this->request->post['jet_glp'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-		} else {
-			$jet_glp = 0.00;
-		}
+		$quote = $verified['quote'];
+		$suffix = $verified['suffix'];
+		$jet_priceall = $quote['jet_priceall'];
+		$jet_vnoski = $quote['jet_vnoski'];
+		$jet_vnoska = $quote['jet_vnoska' . $suffix];
+		$jet_parva = $quote['jet_parva'];
+		$jet_total_credit_price = $quote['jet_total_credit_price'];
+		$jet_obshto = $quote['jet_obshto' . $suffix];
+		$jet_gpr = $quote['jet_gpr' . $suffix];
+		$jet_glp = $quote['jet_glp' . $suffix];
 		if (isset($this->request->post['jet_name'])) {
 			$jet_name = filter_var($this->request->post['jet_name'], FILTER_SANITIZE_STRING);
 		} else {
@@ -237,27 +190,10 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		} else {
 			$jet_phone = " - ";
 		}
-		if (isset($this->request->post['jet_card'])) {
-			$jet_card = filter_var($this->request->post['jet_card'], FILTER_SANITIZE_NUMBER_INT);
-		} else {
-			$jet_card = 0;
-		}
-		if (isset($this->request->post['jet_product_id'])) {
-			$jet_product_id = filter_var($this->request->post['jet_product_id'], FILTER_SANITIZE_NUMBER_INT);
-		} else {
-			$jet_product_id = 0;
-		}
-		if (isset($this->request->post['jet_variation_id'])) {
-			$jet_variation_id = filter_var($this->request->post['jet_variation_id'], FILTER_SANITIZE_STRING);
-		} else {
-			$jet_variation_id = '';
-		}
-		if (isset($this->request->post['jet_quantity'])) {
-			$jet_quantity = filter_var($this->request->post['jet_quantity'], FILTER_SANITIZE_NUMBER_INT);
-		} else {
-			$jet_quantity = 1;
-		}
-		$jet_variations = json_decode(html_entity_decode($jet_variation_id), true);
+		$jet_card = $verified['card'];
+		$jet_product_id = (string)$verified['context']['product_id'];
+		$jet_quantity = (string)$verified['context']['quantity'];
+		$jet_variations = $verified['context']['order_options'];
 		$toEmail_admin = (string)$this->config->get('config_email');
 		$toEmail_other = (string)$this->config->get('module_mt_jet_credit_mail');
 		$jet_id = (string)$this->config->get('module_mt_jet_credit_id');
@@ -270,7 +206,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		}
 		$this->load->model('catalog/category');
 		$this->load->model('catalog/product');
-		$product = $this->model_catalog_product->getProduct((int)$jet_product_id);
+		$product = $verified['context']['product'];
 		$categories = $this->model_catalog_product->getCategories($jet_product_id);
 		$product_c_txt = " - ";
 		foreach ($categories as $category) {
@@ -447,7 +383,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 				}
 				$order_data['products'] = [];
 				$this->load->model('catalog/product');
-				$product_info = $this->model_catalog_product->getProduct($jet_product_id);
+				$product_info = $verified['context']['product'];
 				if ($product_info) {
 					$jet_product_name = $product_info['name'];
 					$jet_product_model = $product_info['model'];
@@ -504,6 +440,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		} catch (\Throwable $error) {
 			$json['success'] = 'unsuccess';
 		}
+		if (!empty($json['order_id'])) unset($this->session->data['jet_product_quotes'][$this->request->post['jet_quote_ref']]);
 		$this->response->addHeader('Content-Type: application/json');
 		$this->response->setOutput(json_encode($json));
 	}

@@ -1,6 +1,7 @@
 <?php
 // JSON bridge to the real Product endpoints; all services are local doubles.
 error_reporting(E_ALL & ~E_DEPRECATED);
+require_once __DIR__ . '/opencart-request.php';
 define('DIR_APPLICATION', dirname(__DIR__) . '/upload/catalog/');
 define('DB_PREFIX', 'oc_');
 #[AllowDynamicProperties] class Controller {}
@@ -12,12 +13,13 @@ class F02Config {
     public $values;
     function __construct($input) {
         $this->values = ['config_currency' => $input['base_currency'] ?? 'EUR', 'config_tax' => $input['tax'] ?? false,
-            'module_mt_jet_credit_price' => $input['minimum'] ?? 75, 'module_mt_jet_credit_vnoski' => 12,
+            'module_mt_jet_credit_status' => 1, 'module_mt_jet_credit_status_card' => 1, 'module_mt_jet_credit_price' => $input['minimum'] ?? 75, 'module_mt_jet_credit_vnoski' => 12,
             'module_mt_jet_credit_purcent' => 1.4, 'module_mt_jet_credit_purcent_card' => 1.0];
     }
     function get($key) { return $this->values[$key] ?? null; }
 }
 class F02Currency {
+    function getValue($code) { return ['EUR'=>1,'USD'=>2][$code]; }
     function convert($value, $from, $to) {
         $rates = ['EUR' => 1, 'USD' => 2];
         return $value * $rates[$to] / $rates[$from];
@@ -29,7 +31,7 @@ class F02Tax {
 class F02Products {
     public $input;
     function __construct($input) { $this->input = $input; }
-    function getProduct($id) { return ['price' => $this->input['base_price'], 'special' => 0, 'tax_class_id' => 1]; }
+    function getProduct($id) { return ['price' => $this->input['base_price'], 'special' => 0, 'quantity' => 10, 'tax_class_id' => 1]; }
     function getProductOptions($id) { return $this->input['options']; }
 }
 class F02DB {
@@ -61,19 +63,26 @@ $controller->tax = new F02Tax();
 $controller->session = (object)['data' => ['currency' => 'EUR']];
 $controller->load = new F02Loader();
 $controller->response = new F02Response();
+$controller->customer = new class { function isLogged() { return false; } };
+$model = new ModelExtensionMtJetCreditJetcredit();
+foreach (['config','currency','tax','session','load','customer'] as $property) $model->$property=$controller->$property;
+$controller->model_extension_mt_jet_credit_jetcredit=$model;
+
 if ($input['mode'] === 'options') {
     $controller->model_catalog_product = new F02Products($input);
-    $controller->request = (object)['post' => ['product_id' => 1, 'option' => $input['selected']]];
+    $model->model_catalog_product=$controller->model_catalog_product;
+    $controller->request = new OpenCartProductRequestDouble(['product_id' => 1, 'option' => $input['selected']]);
     $controller->jet_check();
     $base = $controller->tax->calculate($input['base_price'], 1, $controller->config->get('config_tax'));
     echo json_encode(['base_eur' => $controller->currency->convert($base, $input['base_currency'], 'EUR'),
         'options' => json_decode($controller->response->output, true)], JSON_THROW_ON_ERROR);
 } elseif ($input['mode'] === 'quote') {
-    $model = new ModelExtensionMtJetCreditJetcredit();
-    $model->config = $controller->config;
+    $controller->model_catalog_product = new F02Products($input);
+    $model->model_catalog_product=$controller->model_catalog_product;
+
     $model->db = new F02DB($input);
     $controller->model_extension_mt_jet_credit_jetcredit = $model;
-    $controller->request = (object)['post' => $input['post']];
+    $controller->request = new OpenCartProductRequestDouble($input['post']);
     $controller->jet_calculate();
     echo json_encode(['quote' => json_decode($controller->response->output, true), 'promo_sql' => $model->db->queries], JSON_THROW_ON_ERROR);
 } else {

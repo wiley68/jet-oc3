@@ -3,6 +3,169 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 	private const JETCREDIT_FINANCIAL_MAX_ITERATIONS = 128;
 	private const JETCREDIT_FINANCIAL_PRECISION = 1.0e-08;
 
+	// Product quotes are short-lived session data, independent of Cart and Checkout orders.
+	private const PRODUCT_QUOTE_TTL = 1800;
+	private const PRODUCT_QUOTE_LIMIT = 64;
+
+	public function productNumber($value, $blank_zero = false) {
+		if ($blank_zero && is_string($value) && trim($value) === '') return 0.0;
+		if (!is_int($value) && !is_float($value) && !is_string($value)) return null;
+		if (is_string($value) && !preg_match('/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/D', trim($value))) return null;
+		return is_finite((float)$value) ? (float)$value : null;
+	}
+
+	private function productId($value) {
+		if ((!is_int($value) && !is_string($value)) || !ctype_digit((string)$value)) return false;
+		$number = (float)$value;
+		return $number > 0 && $number <= 2147483647 ? (int)$value : false;
+	}
+
+	public function productSelections($encoded) {
+		if (!is_string($encoded)) return false;
+		// Undo exactly the single ENT_COMPAT layer added by native Request::clean().
+		$entries = json_decode(htmlspecialchars_decode($encoded, ENT_COMPAT), true);
+		if (!is_array($entries) || ($entries && array_keys($entries) !== range(0, count($entries) - 1))) return false;
+		$options = [];
+		foreach ($entries as $entry) {
+			if (!is_array($entry) || !is_string($entry['name'] ?? null) || !is_string($entry['value'] ?? null)
+				|| !preg_match('/^option\[([1-9]\d*)\](\[\])?$/D', $entry['name'], $match)) return false;
+			$id = $this->productId($match[1]);
+			if (!$id) return false;
+			if (!empty($match[2])) {
+				if (isset($options[$id]) && !is_array($options[$id])) return false;
+				$options[$id][] = $entry['value'];
+			} else {
+				if (array_key_exists($id, $options)) return false;
+				$options[$id] = $entry['value'];
+			}
+		}
+		return $options;
+	}
+
+	public function getProductContext($product_id, $quantity, $selections) {
+		$id = $this->productId($product_id);
+		$quantity = $this->productId($quantity);
+		if (!$id || !$quantity || !is_array($selections) || !$this->config->get('module_mt_jet_credit_status')
+			|| ($this->session->data['currency'] ?? '') !== 'EUR'
+			|| ($this->config->get('config_customer_price') && !$this->customer->isLogged())) return false;
+		$this->load->model('catalog/product');
+		$product = $this->model_catalog_product->getProduct($id);
+		if (!$product || $product['quantity'] <= 0) return false;
+		$base_currency = $this->config->get('config_currency');
+		foreach ([$base_currency, 'EUR'] as $code) {
+			$rate = $this->productNumber($this->currency->getValue($code));
+			if ($rate === null || $rate <= 0) return false;
+		}
+		$eur = function ($price) use ($product, $base_currency) {
+			$number = $this->productNumber($price);
+			if ($number === null) throw new \RuntimeException('Invalid Product price');
+			$number = $this->currency->convert($this->tax->calculate($number, $product['tax_class_id'], $this->config->get('config_tax')), $base_currency, 'EUR');
+			if (!is_finite($number)) throw new \RuntimeException('Invalid Product conversion');
+			return $number;
+		};
+		// The base enters JS through Twig/PHP string conversion; option components enter through JSON.
+		$base = $eur((float)$product['special'] ? $product['special'] : $product['price']);
+		$browser_base = (float)(string)$base;
+		$definitions = $this->model_catalog_product->getProductOptions($id);
+		$known = [];
+		foreach ($definitions as $definition) $known[(string)$definition['product_option_id']] = true;
+		foreach ($selections as $key => $value) if (!isset($known[(string)$key])) return false;
+		$options = $errors = $order_options = [];
+		$adjustment = 0.0;
+		foreach ($definitions as $definition) {
+			$option_id = $definition['product_option_id'];
+			$type = $definition['type'];
+			$value = $selections[$option_id] ?? null;
+			if (!in_array($type, ['select', 'radio', 'checkbox', 'text', 'textarea', 'file', 'date', 'datetime', 'time'], true)) return false;
+			if ($value !== null && (($type === 'checkbox' && !is_array($value)) || ($type !== 'checkbox' && !is_string($value)))) return false;
+			if ($definition['required'] && empty($value)) $errors[$option_id] = sprintf('%s задължително!', $definition['name']);
+			$converted = $definition;
+			foreach ($converted['product_option_value'] as &$component) $component['price'] = $eur($component['price']);
+			unset($component);
+			$converted['product_option_id_check'] = empty($value) ? null : $value;
+			$options[] = $converted;
+			// Native array_filter/empty semantics, including optional "0", are retained.
+			if (empty($value)) continue;
+			if (in_array($type, ['select', 'radio', 'checkbox'], true)) {
+				$chosen = $type === 'checkbox' ? $value : [$value];
+				$seen = [];
+				foreach ($chosen as $index => $choice) {
+					$choice_id = $this->productId($choice);
+					if (!$choice_id || isset($seen[$choice_id])) return false;
+					$seen[$choice_id] = true;
+					$found = false;
+					foreach ($converted['product_option_value'] as $component) {
+						if ((int)$component['product_option_value_id'] !== $choice_id) continue;
+						if (!empty($component['subtract']) && $component['quantity'] <= 0) return false;
+						$found = true;
+						// Match the JSON number consumed by the existing browser option calculation.
+						$browser_component = (float)json_decode(json_encode($component['price']));
+						$adjustment += (($component['price_prefix'] ?? '') === '-' ? -1 : 1) * $browser_component;
+						// Preserve the existing priced-option output shape; free option output repair is excluded.
+						$order_options[] = ['product_option_id' => $option_id, 'product_option_value_id' => $component['product_option_value_id'],
+							'option_id' => $type === 'checkbox' ? $index : 0, 'option_value_id' => $component['option_value_id'],
+							'name' => $definition['name'], 'value' => $component['name'], 'type' => $type];
+						break;
+					}
+					if (!$found) return false;
+				}
+			} elseif ($type === 'file') {
+				$this->load->model('tool/upload');
+				if (!$this->model_tool_upload->getUploadByCode($value)) return false;
+			}
+		}
+		if ($errors) return ['error' => ['option' => $errors]];
+		$raw_amount = ($browser_base + $adjustment) * $quantity;
+		if (!is_finite($raw_amount) || $raw_amount <= 0 || $raw_amount >= 1e21) return false;
+		$amount = $this->checkoutFixed($raw_amount);
+		$customer = $this->customer->isLogged() ? (int)$this->customer->getId() : 0;
+		$settings = [];
+		foreach (['config_store_id', 'config_language_id', 'config_customer_group_id', 'config_customer_price', 'config_currency', 'config_tax',
+			'config_country_id', 'config_zone_id', 'module_mt_jet_credit_status', 'module_mt_jet_credit_status_card', 'module_mt_jet_credit_price'] as $key) $settings[$key] = $this->config->get($key);
+		$addresses = [];
+		foreach (['payment_address', 'shipping_address'] as $key) {
+			foreach (['country_id', 'zone_id', 'postcode'] as $field) $addresses[$key][$field] = $this->session->data[$key][$field] ?? null;
+		}
+		$source_product = [];
+		foreach (['price', 'special', 'quantity', 'tax_class_id', 'name', 'model', 'subtract', 'reward'] as $key) $source_product[$key] = $product[$key] ?? null;
+		$fingerprint = hash('sha256', serialize([$id, $quantity, $selections, $source_product, $definitions, $options, $base, $settings, $addresses, $customer,
+			$this->currency->getValue($base_currency), $this->currency->getValue('EUR')]));
+		$order_options = json_decode(html_entity_decode(filter_var(json_encode($order_options), FILTER_SANITIZE_STRING)), true);
+		if (!is_array($order_options)) return false;
+		return ['product_id' => $id, 'quantity' => $quantity, 'product' => $product, 'selections' => $selections,
+			'optionresult' => $options, 'order_options' => $order_options, 'raw_amount' => $raw_amount, 'amount' => $amount, 'fingerprint' => $fingerprint];
+	}
+
+	public function normalizeProductDownpayment($raw) {
+		$number = $this->productNumber($raw, true);
+		if ($number === null || $number < 0 || $number >= 1e21) return false;
+		return $this->checkoutFixed($number);
+	}
+
+	private function pruneProductQuotes() {
+		$quotes = $this->session->data['jet_product_quotes'] ?? [];
+		if (!is_array($quotes)) $quotes = [];
+		foreach ($quotes as $reference => $quote) if (!is_array($quote) || ($quote['expires'] ?? 0) <= time()) unset($quotes[$reference]);
+		$this->session->data['jet_product_quotes'] = $quotes;
+	}
+
+	public function storeProductQuote($context, $quote, $previous = null) {
+		$this->pruneProductQuotes();
+		$quotes =& $this->session->data['jet_product_quotes'];
+		$replace = is_string($previous) && isset($quotes[$previous]);
+		if (count($quotes) - ($replace ? 1 : 0) >= self::PRODUCT_QUOTE_LIMIT) return false;
+		$reference = bin2hex(random_bytes(24));
+		$quotes[$reference] = ['expires' => time() + self::PRODUCT_QUOTE_TTL, 'fingerprint' => $context['fingerprint'], 'quote' => $quote];
+		if ($replace) unset($quotes[$previous]);
+		return $reference;
+	}
+
+	public function findProductQuote($reference) {
+		$this->pruneProductQuotes();
+		if (!is_string($reference) || !preg_match('/^[a-f0-9]{48}$/D', $reference)) return false;
+		return $this->session->data['jet_product_quotes'][$reference] ?? false;
+	}
+
 	public function getCheckoutSnapshot($code) {
 		if (!in_array($code, ['jet', 'jet_card'], true) || ($this->session->data['currency'] ?? '') !== 'EUR'
 			|| ($this->session->data['payment_method']['code'] ?? '') !== $code) {

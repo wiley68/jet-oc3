@@ -1,7 +1,7 @@
 'use strict';
 
 // Dependency-free DOM, clock and AJAX doubles; no store, mail or order access.
-module.exports = function runCalculatorRegression(sources) {
+module.exports = function runCalculatorRegression(sources, productTests = null) {
  let checks = 0;
  const check = (condition, message) => { checks++; if (!condition) throw new Error(message); };
  function environment(source, options = false, css = '', initialValues = {}) {
@@ -16,6 +16,7 @@ module.exports = function runCalculatorRegression(sources) {
   class Element {
    constructor(key, attributes = {}) { this.key = key; this.length = 1; this.attributes = attributes; this.value = ''; this.content = attributes.text || ''; this.events = {}; this.classes = new Set(); this.children = []; this.visible = false; this[0] = this; this.props = {}; this.classList = { add: (name) => this.classes.add(name), contains: (name) => this.classes.has(name) }; }
    val(value) { if (value === undefined) return this.value; this.value = String(value); return this; }
+   serializeArray() { return JSON.parse(get('__option_entries').value || '[]'); }
    text(value) { if (value === undefined) return this.content; this.content = value; return this; }
    ready(fn) { fn($); return this; }
    first() { return this; } eq() { return this; }
@@ -58,7 +59,7 @@ module.exports = function runCalculatorRegression(sources) {
    if (faults.ajax) { faults.ajax = false; throw new Error('mock synchronous AJAX failure'); }
    const request = { config, finished: false };
    let timeout;
-   request.resolve = (data) => { if (request.finished) return; request.finished = true; clear(timeout); config.success?.(data); config.complete?.(); };
+   request.resolve = (data) => { if (request.finished) return; request.finished = true; clear(timeout); if (data?.__mockQuote && config.url.endsWith('/jet_calculate')) data = { ...data, jet_parva: config.data.values.jet_parva }; config.success?.(data); config.complete?.(); };
    request.reject = (reason = 'error') => { if (request.finished) return; request.finished = true; clear(timeout); config.error?.({ statusText: reason }); config.complete?.(); };
    if (config.timeout) timeout = schedule(() => request.reject('timeout'), config.timeout);
    requests.push(request); return request;
@@ -103,9 +104,10 @@ module.exports = function runCalculatorRegression(sources) {
     text: loader?.children[0]?.text() };
   };
   new Function('jQuery', 'document', 'FormData', 'setTimeout', 'clearTimeout', 'console', 'window', 'alert', 'location', source)($, document, Data, schedule, clear, { error() {}, log() {} }, { addEventListener: (name, fn) => (captureEvents[name] ||= []).push(fn), location: { origin: 'http://test.invalid', href: '' } }, (message) => alerts.push(message), {});
-  return { requests, trigger, tick, get, faults, alerts, loaderLayout, changeOption: () => optionEvents.change?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
+  return { requests, trigger, tick, get, faults, alerts, loaderLayout, changeOption: () => optionEvents.change?.(), inputOption: () => optionEvents.input?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
  }
- const quote = (value = '50.00') => ({ success: 'success', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
+ const quote = (value = '50.00') => ({ success: 'success', __mockQuote: true, jet_quote_ref: 'a'.repeat(48), jet_parva: '0.00', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
+ if (productTests) return productTests(environment, quote);
  // F02: execute the real option/quantity JavaScript and PHP calculator, never a submission transport.
  const { execFileSync } = require('child_process');
  const phpCache = new Map();
@@ -153,19 +155,21 @@ module.exports = function runCalculatorRegression(sources) {
   // An unselected priced value catches duplicate/all-values accumulation.
   values.push({ product_option_value_id: '99', option_value_id: '199', name: 'Unselected', price: 99 * factor, price_prefix: '+' });
   const selected = scenario.type === 'checkbox' ? scenario.adjustments.map((_, index) => String(index + 11)) : '11';
-  const fixture = productEndpoint({ mode: 'options', base_currency, base_price: (scenario.base ?? 600) * factor, tax: scenario.tax ?? false,
-   options: hasOptions ? [{ product_option_id: '1', option_id: '1', name: 'Option', type: scenario.type, required: true, product_option_value: values }] : [], selected: hasOptions ? { 1: selected } : {} });
+  const nativeFixture = { mode: 'options', base_currency, base_price: (scenario.base ?? 600) * factor, tax: scenario.tax ?? false,
+   options: hasOptions ? [{ product_option_id: '1', option_id: '1', name: 'Option', type: scenario.type, required: true, product_option_value: values }] : [], selected: hasOptions ? { 1: selected } : {} };
+  const fixture = productEndpoint(nativeFixture);
+  const optionEntries = hasOptions ? (Array.isArray(selected) ? selected : [selected]).map(value => ({ name: 'option[1]' + (Array.isArray(selected) ? '[]' : ''), value })) : [];
   if (hasOptions) check(fixture.options.optionresult[0].product_option_value[0].price === scenario.adjustments[0][1] * (scenario.tax ? 1.2 : 1), scenario.name + ': jet_check already returns EUR option price');
   const amount = scenario.unit * quantity, label = scenario.name + '/' + base_currency + '/q' + quantity + '/card' + card;
   const execute = (source) => {
-   const e = environment(source, hasOptions, sources.css_products, { '#jet_price': String(fixture.base_eur), 'input[name="quantity"]': String(quantity), '#jet_vnoski': String(term), '#jet_card_in': '1' });
+   const e = environment(source, hasOptions, sources.css_products, { '#jet_price': String(fixture.base_eur), 'input[name="quantity"]': String(quantity), '#jet_vnoski': String(term), '#jet_card_in': '1', '__option_entries': JSON.stringify(optionEntries) });
    const settle = () => {
     if (hasOptions) e.requests.at(-1).resolve(fixture.options);
     const calculation = e.requests.at(-1);
     check(calculation.config.url.endsWith('/jet_calculate'), label + ': existing Product calculator');
     check(calculation.config.data.values.jet_priceall === amount.toFixed(2), label + ': signed adjustment before quantity, no second conversion');
     check(calculation.config.data.values.jet_vnoski === String(term), label + ': selected term retained');
-    const response = productEndpoint({ mode: 'quote', post: calculation.config.data.values, minimum: scenario.minimum ?? 75, promo_min: 600, promo_term: 12, promo_percent: scenario.promo_percent ?? 0.5 });
+    const response = productEndpoint({ ...nativeFixture, mode: 'quote', post: { ...calculation.config.data.values, jet_quantity: String(quantity), jet_options: JSON.stringify(optionEntries) }, minimum: scenario.minimum ?? 75, promo_min: 600, promo_term: 12, promo_percent: scenario.promo_percent ?? 0.5 });
     check(response.promo_sql.length === 1 && response.promo_sql[0].includes('AND ' + amount + ' >= jet_product_price'), label + ': real getPromo receives corrected principal');
     calculation.resolve(response.quote);
     return response.quote;
@@ -182,6 +186,7 @@ module.exports = function runCalculatorRegression(sources) {
    check(e.get('#jet-product-popup-container').visible && e.get('#jet_priceall').text() === amount.toFixed(2), label + ': popup displays corrected amount');
    check(e.get('#jet_vnoska_popup').text() === popup['jet_vnoska' + suffix], label + ': selected installment displayed');
    check(e.requests.filter((request) => request.config.url.endsWith('/jet_calculate')).length === 2, label + ': one calculation per preview/open');
+   if (!preview.jet_show_button) return { preview, popup };
    e.trigger('#buy_jetcredit', 'click');
    check(e.get('#jet_step_2').visible, label + ': existing Step 2 transition');
    for (const [key, value] of Object.entries({ jet_name: 'Test', jet_lastname: 'User', jet_egn: '9001010000', jet_phone: '+359888888888', jet_email: 'test@example.invalid' })) e.get('#' + key).val(value);
@@ -191,12 +196,13 @@ module.exports = function runCalculatorRegression(sources) {
    const payload = submission.config.data.values;
    check(payload.jet_priceall === amount.toFixed(2) && payload.jet_quantity === String(quantity) && payload.jet_vnoski === String(term) && payload.jet_card === String(card), label + ': displayed amount/quantity/term/card sent unchanged');
    for (const field of ['vnoska', 'obshto', 'gpr', 'glp']) check(payload['jet_' + field] === popup['jet_' + field + suffix], label + ': submitted displayed ' + field);
-   check(payload.jet_total_credit_price === popup.jet_total_credit_price && payload.jet_parva === '0', label + ': existing principal/downpayment payload');
+   check(payload.jet_total_credit_price === popup.jet_total_credit_price && Number(payload.jet_parva) === 0, label + ': existing principal/downpayment payload');
    check(JSON.parse(payload.jet_variation_id).length === scenario.adjustments.length, label + ': selections not duplicated');
    return { preview, popup, payload };
   };
   const current = execute(sources.products);
-  if (scenario.unchanged) check(JSON.stringify(current) === JSON.stringify(execute(sources.baseline_products)), label + ': positive/zero/no-option/fallback golden unchanged');
+  const financialOnly = value => JSON.stringify(value, (key, item) => ['jet_quote_ref','jet_options','jet_quantity','jet_downpayment_raw','jet_previous_quote','jet_parva'].includes(key) ? undefined : item);
+  if (scenario.unchanged) check(financialOnly(current) === financialOnly(execute(sources.baseline_products)), label + ': positive/zero/no-option/fallback golden unchanged');
  }
  console.log(`PASS ${checks - f02Start} F02 prefix/quantity/currency/preview/popup/submission checks`);
  for (const page of ['products', 'cart']) {
@@ -247,6 +253,7 @@ module.exports = function runCalculatorRegression(sources) {
    const current = environment(source), baseline = environment(sources['baseline_' + page]);
    current.requests[0].resolve(quote()); baseline.requests[0].resolve(quote());
    for (const env of [current, baseline]) { env.get('#jet_parva').val(value); env.trigger('#btn_preizcisli', 'click'); }
+   if (page === 'products') { check(current.requests.length === (value.trim() === '' ? 2 : 1), 'Product blank normalization/invalid negative rejection'); continue; }
    check(current.requests.length === baseline.requests.length, page + ': original validation request count for ' + value);
    check(JSON.stringify(current.requests.at(-1).config.data.values) === JSON.stringify(baseline.requests.at(-1).config.data.values), 'original invalid/empty/negative payload preserved');
    if (current.requests.length === 1) check(!current.loading(), 'validation rejection hides loader');

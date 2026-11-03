@@ -46,6 +46,26 @@ jQuery(document).ready(function($) {
 		else document.getElementById('buy2_jetcredit').blur();
 	}, true);
 
+	let jetActiveQuote = null;
+	let jetPreviousQuote = '';
+	const jetNativeOptions = () => $('#product').find('input, select, textarea').serializeArray()
+		.filter((entry) => /^option\[/.test(entry.name));
+	const jetQuantity = () => $('input[name="quantity"]').length ? String($('input[name="quantity"]').first().val()) : '1';
+	const jetNormalizedDownpayment = () => {
+		const raw = String($('#jet_parva').val() || '').trim();
+		if (raw === '') return '0.00';
+		if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw)) return null;
+		const value = Number(raw);
+		return Number.isFinite(value) && value >= 0 && value < 1e21 ? value.toFixed(2) : null;
+	};
+	const jetProductState = () => JSON.stringify([String($('#jet_product_id').val()), jetQuantity(), jetNativeOptions(),
+		String($('#jet_vnoski').val()), jetNormalizedDownpayment()]);
+	const jetInvalidateQuote = () => {
+		jetActiveQuote = null;
+		$('#buy2_jetcredit').prop('disabled', true);
+	};
+	const jetQuoteCurrent = () => jetActiveQuote && jetActiveQuote.state === jetProductState();
+
 	let jetCalculationRevision = 0;
 	let jetDownpaymentTimer;
 	const jetDownpaymentValue = () => {
@@ -65,6 +85,7 @@ jQuery(document).ready(function($) {
 		popup.toggleClass('jet_offer_loading', loading).attr('aria-busy', loading ? 'true' : 'false');
 	};
 	const jetBeginCalculation = (loading = true) => {
+		jetInvalidateQuote();
 		clearTimeout(jetDownpaymentTimer);
 		jetLastDownpayment = jetDownpaymentValue();
 		const revision = ++jetCalculationRevision;
@@ -78,6 +99,7 @@ jQuery(document).ready(function($) {
 		const value = jetDownpaymentValue();
 		if (value === jetLastDownpayment) return;
 		jetLastDownpayment = value;
+		jetInvalidateQuote();
 		++jetCalculationRevision;
 		clearTimeout(jetDownpaymentTimer);
 		jetDownpaymentTimer = setTimeout(() => jetCalculate(false), 400);
@@ -87,7 +109,7 @@ jQuery(document).ready(function($) {
 		$('#jet-product-button-container').toggleClass('jet_options_pending', !visible);
 	};
 
-	const jetChange = (jetPriceall, revision) => {
+	const jetChange = (jetPriceall, revision, state) => {
 		if (revision !== jetCalculationRevision) return;
 		jetHideOptions401();
 		jetHideOptions601();
@@ -97,12 +119,17 @@ jQuery(document).ready(function($) {
 		if (jetPriceall >= 601) {
 			jetShowOptions601();
 		}
-		if ($('#jet_parva').length && $('#jet_parva').val().trim() == '' || parseFloat($('#jet_parva').val()) < jetPriceall) {
+		const normalizedDown = jetNormalizedDownpayment();
+		if (normalizedDown !== null && Number(normalizedDown) < jetPriceall) {
 			const jetFormData = new FormData();
 			jetFormData.append('jet_priceall', jetPriceall.toFixed(2));
-			jetFormData.append('jet_parva', parseFloat($('#jet_parva').val()).toFixed(2));
+			jetFormData.append('jet_parva', normalizedDown);
+			jetFormData.append('jet_downpayment_raw', String($('#jet_parva').val() || ''));
+			jetFormData.append('jet_quantity', jetQuantity());
+			jetFormData.append('jet_options', JSON.stringify(jetNativeOptions()));
+			jetFormData.append('jet_previous_quote', jetPreviousQuote);
 			jetFormData.append('jet_vnoski', parseInt($('#jet_vnoski').val()));
-			jetFormData.append('jet_product_id', parseInt($('#jet_product_id').val()));
+			jetFormData.append('jet_product_id', $('#jet_product_id').val());
 			$.ajax({
 				url: 'index.php?route=extension/mt_jet_credit/jetcredit/jet_calculate',
 				method: 'POST',
@@ -112,7 +139,13 @@ jQuery(document).ready(function($) {
 				timeout: 30000,
 				success: function(json) {
 					if (revision !== jetCalculationRevision) return;
+					if (state !== jetProductState()) { jetInvalidateQuote(); jetButtonInstallments(false); return; }
 					if (json.success === 'success') {
+						if (typeof json.jet_quote_ref === 'string' && /^[a-f0-9]{48}$/.test(json.jet_quote_ref) && json.jet_parva === normalizedDown) {
+							jetPreviousQuote = json.jet_quote_ref;
+							jetActiveQuote = { reference: json.jet_quote_ref, state, downpayment: normalizedDown };
+							changeBtnJetcreditBuy();
+						}
 						jetButtonInstallments(true);
 						if (json.jet_show_button) {
 							$('#jet-product-button-container').show('slow');
@@ -167,6 +200,7 @@ jQuery(document).ready(function($) {
 		if (jetSubmission.locked) return;
 		const hasOptions = document.querySelectorAll("[id*='input-option']").length > 0;
 		const revision = jetBeginCalculation(!test || !hasOptions);
+		const state = jetProductState();
 		if (hasOptions) jetButtonInstallments(false);
 		let jet_price1 = $('#jet_price').val();
 		let jet_quantity = 1;
@@ -186,6 +220,7 @@ jQuery(document).ready(function($) {
 				timeout: 30000,
 				success: function(json) {
 					if (revision !== jetCalculationRevision) return;
+					if (state !== jetProductState()) { jetInvalidateQuote(); return; }
 					$('.alert, .text-danger').remove();
 					if (json['error']) {
 						$('#jet-product-button-container').show();
@@ -260,7 +295,7 @@ jQuery(document).ready(function($) {
 								$('#jet-product-popup-container').show();
 							}
 							calculationStarted = true;
-							jetChange(jetPriceall, revision);
+							jetChange(jetPriceall, revision, state);
 							$('#jet_variation_id').val(JSON.stringify(jet_variation_id));
 						}
 					}
@@ -274,7 +309,7 @@ jQuery(document).ready(function($) {
 			});
 		} else {
 			if (test) $('#jet-product-popup-container').show();
-			jetChange(jetPriceall, revision);
+			jetChange(jetPriceall, revision, state);
 			$('#jet_variation_id').val(JSON.stringify(jet_variation_id));
 		}
 	}
@@ -350,7 +385,7 @@ jQuery(document).ready(function($) {
 	}
 
 	const changeBtnJetcreditBuy = () => {
-		if (jetSubmission.locked || jetSubmission.needsReview) {
+		if (jetSubmission.locked || jetSubmission.needsReview || !jetQuoteCurrent()) {
 			$('#buy2_jetcredit').prop('disabled', true);
 			return;
 		}
@@ -409,7 +444,11 @@ jQuery(document).ready(function($) {
 		});
 		jetCloseButton.on('click', function() {
 			jetAlertBox.remove();
-			if (jetSubmission.locked) jetUnlockSubmission();
+			if (jetSubmission.locked) {
+				const refreshQuote = !jetSubmission.needsReview && !jetQuoteCurrent();
+				jetUnlockSubmission();
+				if (refreshQuote && !exit) { $('#jet_step_1').show(); $('#jet_step_2').hide(); jetCalculate(false); }
+			}
 			if (exit) {
 				jetClose(recalculate);
 			}
@@ -463,6 +502,8 @@ jQuery(document).ready(function($) {
 
 	const jetSend = () => {
 		if (jetSubmission.locked || jetSubmission.needsReview) return;
+		if (!jetQuoteCurrent()) { $('#jet_step_1').show(); $('#jet_step_2').hide(); jetCalculate(false); return; }
+		const acceptedQuote = jetActiveQuote;
 		jetLockSubmission();
 		let requestStarted = false;
 		try {
@@ -474,7 +515,10 @@ jQuery(document).ready(function($) {
 		jetFormSendData.append('jet_priceall', $('#jet_priceall').text());
 		jetFormSendData.append('jet_vnoski', $('#jet_vnoski').val());
 		jetFormSendData.append('jet_vnoska', $('#jet_vnoska_popup').text());
-		jetFormSendData.append('jet_parva', $('#jet_parva').val());
+		jetFormSendData.append('jet_parva', acceptedQuote.downpayment);
+		jetFormSendData.append('jet_downpayment_raw', String($('#jet_parva').val() || ''));
+		jetFormSendData.append('jet_quote_ref', acceptedQuote.reference);
+		jetFormSendData.append('jet_options', JSON.stringify(jetNativeOptions()));
 		jetFormSendData.append('jet_total_credit_price', $('#jet_total_credit_price').text());
 		jetFormSendData.append('jet_obshto', $('#jet_obshto').text());
 		jetFormSendData.append('jet_gpr', $('#jet_gpr').text());
@@ -488,7 +532,7 @@ jQuery(document).ready(function($) {
 		jetFormSendData.append('jet_card', card);
 		jetFormSendData.append('jet_product_id', $('#jet_product_id').val());
 		jetFormSendData.append('jet_variation_id', $('#jet_variation_id').val());
-		jetFormSendData.append('jet_quantity', jet_quantity);
+		jetFormSendData.append('jet_quantity', jetQuantity());
 		requestStarted = true;
 		$.ajax({
 			url: 'index.php?route=extension/mt_jet_credit/jetcredit/jet_send',
@@ -504,6 +548,7 @@ jQuery(document).ready(function($) {
 					return;
 				}
 				if (json.success !== 'success' && json.order_id) jetSubmission.needsReview = true;
+				if (json.jet_quote_invalid === true) jetInvalidateQuote();
 				if (json.success === 'success') {
 					jetShowCustomAlert('Успешно изпратихте Вашата заявка за лизинг към ПБ Лични Финанси. Очаквайте контакт за потвърждаване на направената от Вас заявка.', true);
 				} else {
@@ -553,7 +598,10 @@ jQuery(document).ready(function($) {
 		jetClose();
 	});
 
-	$('#buy_jetcredit').on('click', event => {
+	$('#buy_jetcredit').on('click', event => {
+		if (!jetQuoteCurrent()) { jetCalculate(false); return; }
+		$('#jet_parva').val(jetActiveQuote.downpayment);
+		jetLastDownpayment = jetDownpaymentValue();
 		let _taxa = parseFloat($('#jet_vnoska_popup').text());
 		if (_taxa >= 20) {
 			$('#jet_step_1').hide('slow');
@@ -618,6 +666,7 @@ jQuery(document).ready(function($) {
 	});
 
 	if ($('[name="quantity"]').length) {
+		$('[name="quantity"]').eq(0).on('input.jetProductQuote', () => { jetInvalidateQuote(); ++jetCalculationRevision; jetPopupLoading(false); });
 		$('[name="quantity"]').eq(0).on('change', () => {
 			jetCalculate(false);
 		});
@@ -626,6 +675,7 @@ jQuery(document).ready(function($) {
 	const targetNodes = document.querySelectorAll('[id^="input-option"]');
 	if (targetNodes.length > 0) {
 		targetNodes.forEach((targetNode) => {
+			targetNode.addEventListener('input', function() { jetInvalidateQuote(); ++jetCalculationRevision; jetPopupLoading(false); });
 			targetNode.addEventListener('change', function() {
 				jetCalculate(false);
 			});
