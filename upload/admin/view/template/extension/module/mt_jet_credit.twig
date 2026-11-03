@@ -623,7 +623,7 @@
 								{% for schemes in module_mt_jet_schemes %}
 									<div>
 										<div class="col-md-1 col-sm-12">
-											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_id }}"/>
+											<input type="text" readonly class="form-control" value="{{ schemes.jet_product_id|e('html_attr') }}"/>
 										</div>
 										<div class="col-md-2 col-sm-12">
 											{% if schemes.jet_product_percent == -1 %}
@@ -645,7 +645,7 @@
 											<input type="date" readonly class="form-control" value="{{ schemes.jet_product_end }}"/>
 										</div>
 										<div class="col-md-1 col-sm-12">
-											<button type="button" onclick="deleteSchema('{{ schemes.jet_product_id }}');" data-toggle="tooltip" title="Изтрий филтъра." class="btn btn-danger">
+											<button type="button" data-jet-schema-delete data-jet-product-id="{{ schemes.jet_product_id|e('html_attr') }}" data-toggle="tooltip" title="Изтрий филтъра." class="btn btn-danger">
 												<i class="fa fa-trash"></i>&nbsp;Изтрий</button>
 										</div>
 									</div>
@@ -824,7 +824,7 @@
 		e.preventDefault();
 		if ($("#module_mt_jet_credit_product_id").val() !== '' && $("#module_mt_jet_credit_product_meseci").val() !== '' && $("#module_mt_jet_credit_product_price").val() !== '' && $("#module_mt_jet_credit_product_start").val() !== '' && $("#module_mt_jet_credit_product_end").val() !== '') {
 			$.ajax({
-				url: '../index.php?route=extension/mt_jet_credit/jetcredit/createSchema',
+				url: {{ createSchema_url_json|raw }},
 				type: 'post',
 				dataType: 'json',
 				data: {
@@ -851,9 +851,15 @@
 		}
 	});
 
+	$(document).off('click.jetSchemaDelete', '[data-jet-schema-delete]')
+		.on('click.jetSchemaDelete', '[data-jet-schema-delete]', function (e) {
+			e.preventDefault();
+			deleteSchema($(this).attr('data-jet-product-id'));
+		});
+
 	const deleteSchema = (id) => {
 		$.ajax({
-			url: '../index.php?route=extension/mt_jet_credit/jetcredit/deleteSchema',
+			url: {{ deleteSchema_url_json|raw }},
 			type: 'post',
 			dataType: 'json',
 			data: {

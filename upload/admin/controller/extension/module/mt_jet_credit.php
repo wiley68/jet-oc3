@@ -35,6 +35,10 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		);
 		$data['cancel'] = $this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'], true);
 		$data['form_action'] = $this->url->link('extension/module/mt_jet_credit', 'user_token=' . $this->session->data['user_token'], true);
+		foreach (array('createSchema', 'deleteSchema') as $schema_action) {
+			$schema_url = $this->url->link('extension/module/mt_jet_credit/' . $schema_action, 'user_token=' . $this->session->data['user_token'], true);
+			$data[$schema_action . '_url_json'] = json_encode(str_replace('&amp;', '&', $schema_url), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+		}
 		$data['success'] = isset($this->session->data['success']) ? $this->session->data['success'] : '';
 		if (isset($this->error['warning'])) {
 			$data['error_warning'] = $this->error['warning'];
@@ -187,6 +191,93 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		unset($this->session->data['success']);
 	}
 
+	public function createSchema() {
+		if (!$this->validateSchemaRequest()) {
+			return;
+		}
+		$json = array();
+		if (isset($this->request->post['mt_jet_credit_product_id'])) {
+			$mt_jet_credit_product_id = filter_var($this->request->post['mt_jet_credit_product_id'], FILTER_SANITIZE_STRING);
+		} else {
+			$mt_jet_credit_product_id = '';
+		}
+		if (isset($this->request->post['mt_jet_credit_product_percent'])) {
+			$mt_jet_credit_product_percent = filter_var($this->request->post['mt_jet_credit_product_percent'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+		} else {
+			$mt_jet_credit_product_percent = -1;
+		}
+		if (isset($this->request->post['mt_jet_credit_product_meseci'])) {
+			$mt_jet_credit_product_meseci = filter_var($this->request->post['mt_jet_credit_product_meseci'], FILTER_SANITIZE_STRING);
+		} else {
+			$mt_jet_credit_product_meseci = '';
+		}
+		if (isset($this->request->post['mt_jet_credit_product_price'])) {
+			$mt_jet_credit_product_price = filter_var($this->request->post['mt_jet_credit_product_price'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+		} else {
+			$mt_jet_credit_product_price = 0;
+		}
+		if (isset($this->request->post['mt_jet_credit_product_start'])) {
+			$mt_jet_credit_product_start = filter_var($this->request->post['mt_jet_credit_product_start'], FILTER_SANITIZE_STRING);
+		} else {
+			$mt_jet_credit_product_start = '';
+		}
+		if (isset($this->request->post['mt_jet_credit_product_end'])) {
+			$mt_jet_credit_product_end = filter_var($this->request->post['mt_jet_credit_product_end'], FILTER_SANITIZE_STRING);
+		} else {
+			$mt_jet_credit_product_end = '';
+		}
+		$mt_jet_categories_current = array(
+			'mt_jet_credit_product_id' => $mt_jet_credit_product_id,
+			'mt_jet_credit_product_percent' => $mt_jet_credit_product_percent,
+			'mt_jet_credit_product_meseci' => $mt_jet_credit_product_meseci,
+			'mt_jet_credit_product_price' => $mt_jet_credit_product_price,
+			'mt_jet_credit_product_start' => $mt_jet_credit_product_start,
+			'mt_jet_credit_product_end' => $mt_jet_credit_product_end
+		);
+		$this->load->model('extension/module/jetcredit');
+		$result = (int) $this->model_extension_module_jetcredit->addKop( $mt_jet_categories_current );
+		if ( $result === (int) -1 ) {
+			$json['success'] = 'success';
+			$json['exist'] = 'Вече имате такъв филтър!';
+		} else {
+			if ( $result > 0 ) {
+				$json['success'] = 'success';
+				$json['exist'] = '';
+			} else {
+				$json['success'] = 'unsuccess';
+				$json['exist'] = '';
+			}
+		}
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->setOutput(json_encode($json));
+	}
+
+	public function deleteSchema() {
+		if (!$this->validateSchemaRequest()) {
+			return;
+		}
+		$json = array();
+		if (isset($this->request->post['mt_jet_credit_product_id'])) {
+			$mt_jet_credit_product_id = $this->request->post['mt_jet_credit_product_id'];
+		} else {
+			$mt_jet_credit_product_id = '';
+		}
+		if (!is_string($mt_jet_credit_product_id) || $mt_jet_credit_product_id === '' || utf8_strlen($mt_jet_credit_product_id) > 20) {
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode(array('success' => 'unsuccess')));
+			return;
+		}
+		$this->load->model('extension/module/jetcredit');
+		$result = (int) $this->model_extension_module_jetcredit->deleteKop( $mt_jet_credit_product_id );
+		if ( $result > 0 ) {
+			$json['success'] = 'success';
+		} else {
+			$json['success'] = 'unsuccess';
+		}
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->setOutput(json_encode($json));
+	}
+
 	public function install() {
 		$this->load->model('setting/setting');
 		$this->model_setting_setting->editSetting('module_mt_jet_credit', $this->request->post);
@@ -210,6 +301,20 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		$table_kop_name = DB_PREFIX . 'jet_kop';
 		$this->db->query("DROP TABLE IF EXISTS `$table_kop_name`;");
 		$this->load->controller('extension/modification/refresh');
+	}
+
+	private function validateSchemaRequest() {
+		if (($this->request->server['REQUEST_METHOD'] ?? '') !== 'POST') {
+			$this->response->addHeader('HTTP/1.1 405 Method Not Allowed');
+			$this->response->addHeader('Allow: POST');
+		} elseif (!$this->user->hasPermission('modify', 'extension/module/mt_jet_credit')) {
+			$this->response->addHeader('HTTP/1.1 403 Forbidden');
+		} else {
+			return true;
+		}
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->setOutput(json_encode(array('success' => 'unsuccess')));
+		return false;
 	}
 
 	private function validate() {
