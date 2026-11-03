@@ -6,13 +6,15 @@ module.exports = function runCalculatorRegression(sources) {
  const check = (condition, message) => { checks++; if (!condition) throw new Error(message); };
  function environment(source, options = false) {
   let now = 0, timerId = 0, loaderCount = 0;
-  const timers = new Map(), elements = new Map(), requests = [], documentEvents = {}, optionEvents = {};
+  const timers = new Map(), elements = new Map(), requests = [], documentEvents = {}, optionEvents = {}, captureEvents = {};
+  const faults = {}, alerts = [];
   const document = {
    querySelectorAll: (selector) => !options ? [] : selector.includes('id*=') ? [{}] : selector.includes('id^=') ? [{ addEventListener: (name, fn) => { optionEvents[name] = fn; } }] : [],
-   addEventListener: (name, fn) => (documentEvents[name] ||= []).push(fn)
+   addEventListener: (name, fn) => (documentEvents[name] ||= []).push(fn),
+   getElementById: (id) => get('#' + id)
   };
   class Element {
-   constructor(key, attributes = {}) { this.key = key; this.length = 1; this.attributes = attributes; this.value = ''; this.content = attributes.text || ''; this.events = {}; this.classes = new Set(); this.children = []; this.visible = false; }
+   constructor(key, attributes = {}) { this.key = key; this.length = 1; this.attributes = attributes; this.value = ''; this.content = attributes.text || ''; this.events = {}; this.classes = new Set(); this.children = []; this.visible = false; this[0] = this; this.props = {}; this.classList = { add: (name) => this.classes.add(name), contains: (name) => this.classes.has(name) }; }
    val(value) { if (value === undefined) return this.value; this.value = String(value); return this; }
    text(value) { if (value === undefined) return this.content; this.content = value; return this; }
    ready(fn) { fn($); return this; }
@@ -32,8 +34,13 @@ module.exports = function runCalculatorRegression(sources) {
    removeClass(name) { this.classes.delete(name); return this; }
    hasClass(name) { return this.classes.has(name); }
    attr(name, value) { if (value === undefined) return this.attributes[name]; this.attributes[name] = value; return this; }
-   prop() { return this; } css() { return this; } show() { this.visible = true; return this; } hide() { this.visible = false; return this; }
-   is() { return false; } click() { trigger(this.key, 'click'); return this; }
+   button() { return this; }
+   removeAttr(name) { delete this.attributes[name]; return this; }
+   prop(name, value) { if (value === undefined) return this.props[name]; this.props[name] = value; return this; }
+   contains(target) { return this === target || this.children.some((child) => child.contains(target)); }
+   querySelector() { return this.children.find((child) => child.key.startsWith('<button')); }
+   focus() { this.focused = true; } blur() { this.focused = false; } css() { return this; } show() { this.visible = true; return this; } hide() { this.visible = false; return this; }
+   is() { return false; } click() { dispatch(this, 'click'); return this; }
   }
   const get = (key) => { if (!elements.has(key)) elements.set(key, new Element(key)); return elements.get(key); };
   function $(key, attrs) {
@@ -42,6 +49,7 @@ module.exports = function runCalculatorRegression(sources) {
   const schedule = (fn, delay) => { const id = ++timerId; timers.set(id, { at: now + delay, fn }); return id; };
   const clear = (id) => timers.delete(id);
   $.ajax = (config) => {
+   if (faults.ajax) { faults.ajax = false; throw new Error('mock synchronous AJAX failure'); }
    const request = { config, finished: false };
    let timeout;
    request.resolve = (data) => { if (request.finished) return; request.finished = true; clear(timeout); config.success?.(data); config.complete?.(); };
@@ -49,14 +57,18 @@ module.exports = function runCalculatorRegression(sources) {
    if (config.timeout) timeout = schedule(() => request.reject('timeout'), config.timeout);
    requests.push(request); return request;
   };
-  class Data { constructor() { this.values = {}; } append(name, value) { this.values[name] = String(value); } }
+  class Data { constructor() { if (faults.data) { faults.data = false; throw new Error('mock FormData failure'); } this.values = {}; } append(name, value) { this.values[name] = String(value); } }
   const initial = { '#jet_price': '600', '#jet_parva': '0', '#jet_vnoski': '12', '#jet_product_id': '1', '#jet_card_in': '0', 'input[name="quantity"]': '1', '#jet_products': '1', '#jet_products_qt': '1', '#jet_products_pr': '600' };
   for (const [key, value] of Object.entries(initial)) get(key).value = value;
   const placeholder = get('#jet_alert_box'); placeholder.attributes.id = 'jet_alert_box'; placeholder.length = 1;
-  function trigger(key, name) {
-   const element = get(key), event = { target: { id: key.slice(1), value: element.value } };
+  function trigger(key, name) { return dispatch(get(key), name); }
+  function dispatch(element, name) {
+   element.id = element.key.slice(1);
+   const event = { target: element, cancelable: true, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
+   for (const fn of captureEvents[name] || []) { fn(event); if (event.stopped) return event; }
    for (const [registered, handlers] of Object.entries(element.events)) if (registered.split('.')[0] === name) for (const fn of handlers) fn.call(element, event);
    for (const fn of documentEvents[name] || []) fn(event);
+   return event;
   }
   function tick(ms) {
    const end = now + ms;
@@ -67,8 +79,8 @@ module.exports = function runCalculatorRegression(sources) {
    }
    now = end;
   }
-  new Function('jQuery', 'document', 'FormData', 'setTimeout', 'clearTimeout', 'console', 'window', source)($, document, Data, schedule, clear, { error() {} }, {});
-  return { requests, trigger, tick, get, changeOption: () => optionEvents.change?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
+  new Function('jQuery', 'document', 'FormData', 'setTimeout', 'clearTimeout', 'console', 'window', 'alert', 'location', source)($, document, Data, schedule, clear, { error() {}, log() {} }, { addEventListener: (name, fn) => (captureEvents[name] ||= []).push(fn), location: { origin: 'http://test.invalid', href: '' } }, (message) => alerts.push(message), {});
+  return { requests, trigger, tick, get, faults, alerts, changeOption: () => optionEvents.change?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
  }
  const quote = (value = '50.00') => ({ success: 'success', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
  for (const page of ['products', 'cart']) {
@@ -230,6 +242,73 @@ module.exports = function runCalculatorRegression(sources) {
   cart.trigger('#jet_parva', 'blur'); cart.trigger('#jet_parva', 'change'); cart.tick(400);
   check(cart.requests.length === 3 && cart.requests.at(-1).config.data.values.jet_parva === '0.00', 'blur before debounce preserves one zero request');
  }
+ // Step 2: one pending request, captured interaction lock and existing information result.
+ for (const page of ['products', 'cart']) {
+  const prepare = () => {
+   const e = environment(sources[page]); e.requests[0].resolve(quote());
+   for (const [key, value] of Object.entries({ jet_name: 'Test', jet_lastname: 'User', jet_egn: '9001010000', jet_phone: '+359888888888', jet_email: 'test@example.invalid' })) e.get('#' + key).val(value);
+   return e;
+  };
+  let e = prepare();
+  e.trigger('#buy2_jetcredit', 'click');
+  check(e.requests.length === 2 && e.requests[1].config.url.endsWith('/jet_send' + (page === 'cart' ? '_cart' : '')), 'Step 2 starts existing endpoint');
+  check(e.get('#jet_alert_overlay').text() === 'Изпращане на заявката. Моля, изчакайте…' && e.get('#jet_alert_overlay').classes.has('show'), 'exact Woo pending loader');
+  check(e.get('#buy2_jetcredit').prop('disabled') && e.get('#buy2_jetcredit').attr('aria-busy') === 'true', 'submit marked pending');
+  check(e.trigger('#buy2_jetcredit', 'click').stopped && e.requests.length === 2, 'repeated clicks blocked');
+  check(e.trigger('#close_jetcredit', 'click').stopped && e.trigger('#jet_parva', 'input').stopped && e.trigger('#btn_preizcisli', 'click').stopped, 'popup cannot close/change/recalculate while pending');
+  e.requests[1].resolve({ success: 'success', code: 'bank_sent', order_id: 99 });
+  let alert = e.get('#jet_alert_box');
+  check(alert.children[0].text().startsWith('Успешно изпратихте Вашата заявка'), 'existing success message unchanged');
+  check(!e.get('#jet_alert_overlay').text() && e.trigger('#buy2_jetcredit', 'click').stopped, 'lock held until result popup handled');
+  alert.children[1].click();
+  check(!e.get('#jet_alert_overlay').classes.has('show') && !e.get('#buy2_jetcredit').attr('aria-busy'), 'confirmation dismissal releases interaction/loader');
+  for (const kind of ['failure', 'bank_failed', 'bank_uncertain', 'network', 'timeout', 'malformed', 'sync_data', 'sync_ajax']) {
+   e = prepare(); if (kind === 'sync_data') e.faults.data = true; if (kind === 'sync_ajax') e.faults.ajax = true;
+   e.trigger('#buy2_jetcredit', 'click');
+   const request = e.requests[1];
+   if (kind === 'failure') request.resolve({ success: 'unsuccess' });
+   if (kind === 'bank_failed') request.resolve({ success: 'unsuccess', code: 'bank_failed', order_id: 99 });
+   if (kind === 'bank_uncertain') request.resolve({ success: 'unsuccess', code: 'bank_uncertain', order_id: 99 });
+   if (kind === 'network') request.reject();
+   if (kind === 'timeout') e.tick(30000);
+   if (kind === 'malformed') request.resolve({});
+   alert = e.get('#jet_alert_box');
+   check(alert.children.length === 2, 'error/uncertainty always resolves to existing information popup: ' + kind);
+   if (!['failure', 'bank_failed', 'sync_data'].includes(kind)) check(alert.children[0].text().startsWith('Резултатът от изпращането не е потвърден.'), 'uncertain result never claimed as definite failure');
+   alert.children[1].click();
+   const requests = e.requests.length; e.tick(60000);
+   check(e.requests.length === requests && !e.get('#jet_alert_overlay').classes.has('show'), 'no permanent overlay or automatic retry: ' + kind);
+   e.trigger('#buy2_jetcredit', 'click');
+   check(e.requests.length === requests + (['failure', 'sync_data'].includes(kind) ? 1 : 0), 'only confirmed pre-order failure permits manual new attempt');
+   check(!e.trigger('#close_jetcredit', 'click')?.stopped || ['failure', 'sync_data'].includes(kind), 'review state blocks resend, not whole popup');
+  }
+ }
+ // Native Checkout has no Step 2 popup; its existing confirm request stays isolated.
+ for (const mode of ['jet', 'jet_card']) {
+  if (!sources['checkout_' + mode]) continue;
+  const template = sources['checkout_' + mode];
+  const snippet = template.slice(template.indexOf('\tlet jetConfirmPending'), template.lastIndexOf('\n\tjetCalculate();'));
+  const source = 'jQuery(document).ready(function($) { const jetShowCustomAlert = (message) => alert(message);\n' + snippet + '\n});';
+  for (const kind of ['success', 'failure', 'bank_uncertain', 'network', 'timeout', 'malformed', 'sync_data', 'sync_ajax']) {
+   const e = environment(source);
+   if (kind === 'sync_data') e.faults.data = true; if (kind === 'sync_ajax') e.faults.ajax = true;
+   e.trigger('#button-confirm', 'click');
+   if (!kind.startsWith('sync_')) {
+    check(e.requests.length === 1 && e.requests[0].config.url.endsWith('/' + mode + '/confirm'), 'native confirm endpoint preserved');
+    e.trigger('#button-confirm', 'click'); check(e.requests.length === 1, 'native double confirm blocked');
+    if (kind === 'success') e.requests[0].resolve({ success: 'success', code: 'bank_sent', redirect: 'checkout/success' });
+    if (kind === 'failure') e.requests[0].resolve({ success: 'unsuccess' });
+    if (kind === 'bank_uncertain') e.requests[0].resolve({ success: 'unsuccess', code: 'bank_uncertain', order_id: 1 });
+    if (kind === 'network') e.requests[0].reject();
+    if (kind === 'timeout') e.tick(30000);
+    if (kind === 'malformed') e.requests[0].resolve({});
+   }
+   if (['bank_uncertain', 'network', 'timeout', 'malformed', 'sync_ajax'].includes(kind)) check(e.alerts.at(-1).startsWith('Резултатът от изпращането не е потвърден.'), 'native uncertainty reported without delivery claim');
+   const before = e.requests.length; e.tick(60000); check(e.requests.length === before, 'native no automatic retry');
+   e.trigger('#button-confirm', 'click');
+   check(e.requests.length === before + (['failure', 'sync_data'].includes(kind) ? 1 : 0), 'native confirmed failure retryable; accepted/uncertain result never resent');
+  }
+ }
  // Product options lookup and calculation form one loader lifecycle.
  let e = environment(sources.products, true);
  check(e.requests[0].config.url.endsWith('/jet_check') && e.loading(), 'loader covers initial options lookup');
@@ -262,5 +341,6 @@ if (require.main === module) {
   sources[page] = fs.readFileSync(path, 'utf8');
   sources['baseline_' + page] = childProcess.execFileSync('git', ['show', 'HEAD:' + path], { encoding: 'utf8' });
  }
+ for (const mode of ['jet', 'jet_card']) sources['checkout_' + mode] = fs.readFileSync(`upload/catalog/view/theme/default/template/extension/payment/${mode}.twig`, 'utf8');
  console.log(`PASS ${module.exports(sources)} calculator regression checks`);
 }

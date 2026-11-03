@@ -2,6 +2,41 @@ jQuery(document).ready(function($) {
 	let card;
 	card = 0;
 
+
+	const jetSubmission = { locked: false, needsReview: false, alert: null };
+	const jetSubmissionUncertain = 'Резултатът от изпращането не е потвърден. Моля, свържете се с магазина за проверка.';
+	const jetLockSubmission = () => {
+		jetSubmission.locked = true;
+		clearTimeout(jetDownpaymentTimer);
+		++jetCalculationRevision;
+		jetPopupLoading(false);
+		$('#buy2_jetcredit').prop('disabled', true).attr('aria-busy', 'true');
+		$('#jet_alert_overlay').appendTo('body').addClass('show').attr('role', 'status')
+			.text('Изпращане на заявката. Моля, изчакайте…');
+	};
+	const jetUnlockSubmission = () => {
+		jetSubmission.locked = false;
+		jetSubmission.alert = null;
+		$('#jet_alert_overlay').text('').removeAttr('role').removeClass('show');
+		$('#buy2_jetcredit').removeAttr('aria-busy');
+		changeBtnJetcreditBuy();
+	};
+	const jetBlockSubmissionInteraction = (event) => {
+		if (!jetSubmission.locked || (jetSubmission.alert && jetSubmission.alert.contains(event.target))) return;
+		if (event.cancelable) event.preventDefault();
+		event.stopImmediatePropagation();
+	};
+	['click', 'dblclick', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend',
+		'keydown', 'keyup', 'keypress', 'submit', 'input', 'change'].forEach((type) => {
+		window.addEventListener(type, jetBlockSubmissionInteraction, { capture: true, passive: false });
+	});
+	window.addEventListener('focusin', (event) => {
+		if (!jetSubmission.locked || (jetSubmission.alert && jetSubmission.alert.contains(event.target))) return;
+		jetBlockSubmissionInteraction(event);
+		if (jetSubmission.alert) jetSubmission.alert.querySelector('button').focus();
+		else document.getElementById('buy2_jetcredit').blur();
+	}, true);
+
 	let jetCalculationRevision = 0;
 	let jetDownpaymentTimer;
 	const jetDownpaymentValue = () => {
@@ -106,6 +141,7 @@ jQuery(document).ready(function($) {
 	}
 
 	const jetCalculate = () => {
+		if (jetSubmission.locked) return;
 		const revision = jetBeginCalculation();
 		const jetPriceall = parseFloat($('#jet_price').val());
 		const jetDownpayment = parseFloat(jetDownpaymentValue());
@@ -178,6 +214,7 @@ jQuery(document).ready(function($) {
 	}
 
 	const jetClose = () => {
+		if (jetSubmission.locked) return;
 		$('#jet-product-popup-container').css('display', 'none');
 		$('#jet_step_1').css('display', 'block');
 		$('#jet_step_2').css('display', 'none');
@@ -193,6 +230,7 @@ jQuery(document).ready(function($) {
 	}
 
 	const jetShowCustomAlert = (message, exit) => {
+		$('#jet_alert_box:empty').remove();
 		const jetAlertBox = $('<div></div>', {
 			id: 'jet_alert_box',
 			css: {
@@ -233,6 +271,7 @@ jQuery(document).ready(function($) {
 		});
 		jetCloseButton.on('click', function() {
 			jetAlertBox.remove();
+			if (jetSubmission.locked) jetUnlockSubmission();
 			if (exit) {
 				window.location.href = window.location.origin;
 			}
@@ -240,9 +279,19 @@ jQuery(document).ready(function($) {
 		});
 		jetAlertBox.append(jetCloseButton);
 		$('body').append(jetAlertBox);
+		if (jetSubmission.locked) {
+			jetSubmission.alert = jetAlertBox[0];
+			$('#jet_alert_overlay').text('').removeAttr('role');
+			jetAlertBox.attr({ role: 'alertdialog', 'aria-modal': 'true' });
+			jetCloseButton[0].focus();
+		}
 	}
 
 	const jetSend = () => {
+		if (jetSubmission.locked || jetSubmission.needsReview) return;
+		jetLockSubmission();
+		let requestStarted = false;
+		try {
 		$("#jet_alert_overlay").addClass("show");
 		const jetFormSendData = new FormData();
 		jetFormSendData.append('jet_priceall', $('#jet_priceall').text());
@@ -264,13 +313,21 @@ jQuery(document).ready(function($) {
 		jetFormSendData.append('jet_products_qt', $('#jet_products_qt').val());
 		jetFormSendData.append('jet_products_pr', $('#jet_products_pr').val());
 		jetFormSendData.append('jet_products_vr', $('#jet_products_vr').val());
+		requestStarted = true;
 		$.ajax({
 			url: 'index.php?route=extension/mt_jet_credit/jetcredit/jet_send_cart',
 			method: 'POST',
 			data: jetFormSendData,
 			processData: false,
 			contentType: false,
+			timeout: 30000,
 			success: function(json) {
+				if (!json || !['success', 'unsuccess'].includes(json.success) || json.code === 'bank_uncertain') {
+					jetSubmission.needsReview = true;
+					jetShowCustomAlert(jetSubmissionUncertain, false);
+					return;
+				}
+				if (json.success !== 'success' && json.order_id) jetSubmission.needsReview = true;
 				if (json.success === 'success') {
 					jetShowCustomAlert('Успешно изпратихте Вашата заявка за лизинг към ПБ Лични Финанси. Очаквайте контакт за потвърждаване на направената от Вас заявка.', true);
 				} else {
@@ -279,8 +336,14 @@ jQuery(document).ready(function($) {
 			},
 			error: function(error) {
 				console.error('Error:', error);
+				jetSubmission.needsReview = true;
+				jetShowCustomAlert(jetSubmissionUncertain, false);
 			}
 		});
+		} catch (error) {
+			jetSubmission.needsReview = requestStarted;
+			jetShowCustomAlert(requestStarted ? jetSubmissionUncertain : 'Не можете да изпратите Вашата заявка за лизинг към ПБ Лични Финанси. Моля опитайте по-късно.', false);
+		}
 	}
 
 	const jetHideOptions401 = () => {
@@ -381,6 +444,10 @@ jQuery(document).ready(function($) {
 	}
 
 	const changeBtnJetcreditBuy = () => {
+		if (jetSubmission.locked || jetSubmission.needsReview) {
+			$('#buy2_jetcredit').prop('disabled', true);
+			return;
+		}
 		if ($('#uslovia2').is(':checked')) {
 			$('#buy2_jetcredit').prop('disabled', false).css({
 				opacity: 1.00

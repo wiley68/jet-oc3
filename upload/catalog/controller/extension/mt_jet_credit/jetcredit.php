@@ -401,34 +401,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		$this->editSettingValue('module_mt_jet_credit', 'module_mt_jet_credit_count', $jet_count + 1);
 		$subject = $jet_id . ", онлайн заявка по поръчка $jet_count";
 		$ccAddresses = trim($toEmail_other) === '' ? [] : explode(",", str_replace(' ', '', $toEmail_other));
-		$mail_engine = $this->config->get('config_mail_engine');
-		$mail_protocol = $this->config->get('config_mail_protocol');
-		$mail = new PHPMailer(true);
 		try {
-			if ($mail_engine === 'smtp' || $mail_protocol === 'smtp') {
-				$mail->isSMTP();
-				$mail->Host = $this->config->get('config_mail_smtp_hostname');
-				$mail->SMTPAuth = true;
-				$mail->Username = $this->config->get('config_mail_smtp_username');
-				$mail->Password = html_entity_decode($this->config->get('config_mail_smtp_password'), ENT_QUOTES, 'UTF-8');
-				$mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-				$mail->Port = $this->config->get('config_mail_smtp_port');
-				$mail->Subject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
-			} else {
-				$mail->isMail();
-				$mail->Subject = $subject;
-			}
-			$mail->CharSet = 'UTF-8';
-			$mail->Encoding = 'base64';
-			$mail->setFrom($toEmail_admin, $jet_id);
-			$mail->addAddress($toEmail_admin);
-			foreach ($ccAddresses as $cc) {
-				$mail->addCC($cc);
-			}
-			$mail->addCC($jet_email);
-			$mail->Body = $body;
-			$mail->isHTML(false);
-			if ($mail->send()) {
 				$order_data['invoice_prefix'] = $this->config->get('config_invoice_prefix');
 				$order_data['store_id'] = $this->config->get('config_store_id');
 				$order_data['store_name'] = $this->config->get('config_name');
@@ -588,13 +561,24 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 				$order_data['totals'] = $totals;
 				$this->load->model('checkout/order');
 				$jet_order_id = $this->model_checkout_order->addOrder($order_data);
+				if (!$jet_order_id || !$this->model_checkout_order->getOrder($jet_order_id)) {
+					throw new \RuntimeException('Order persistence failed.');
+				}
+				$json['order_id'] = $jet_order_id;
 				$order_status_key = $jet_card == 1 ? 'payment_jet_card_order_status_id' : 'payment_jet_order_status_id';
-				$this->model_checkout_order->addOrderHistory($jet_order_id, $this->config->get($order_status_key));
-				$json['success'] = 'success';
-			} else {
-				$json['success'] = 'unsuccess';
+			require_once DIR_SYSTEM . 'library/jet_submission_mail.php';
+			$delivery = JetSubmissionMail::deliver($this->config, $ccAddresses, $toEmail_admin, $jet_email, $jet_id, $subject, $body, $jet_egn);
+			$json['code'] = $delivery['code'];
+			$json['notifications'] = $delivery['notifications'];
+			$json['success'] = in_array($delivery['code'], ['bank_sent', 'manual_registered'], true) ? 'success' : 'unsuccess';
+			if ($json['success'] === 'success') {
+				try {
+					$this->model_checkout_order->addOrderHistory($jet_order_id, $this->config->get($order_status_key));
+				} catch (\Throwable $error) {
+					$json['order_status_updated'] = false;
+				}
 			}
-		} catch (Exception $e) {
+		} catch (\Throwable $error) {
 			$json['success'] = 'unsuccess';
 		}
 		$this->response->addHeader('Content-Type: application/json');
@@ -889,35 +873,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		$this->editSettingValue('module_mt_jet_credit', 'module_mt_jet_credit_count', $jet_count + 1);
 		$subject = $jet_id . ", онлайн заявка по поръчка $jet_count";
 		$ccAddresses = trim($toEmail_other) === '' ? [] : explode(",", str_replace(' ', '', $toEmail_other));
-		$mail_engine = $this->config->get('config_mail_engine');
-		$mail_protocol = $this->config->get('config_mail_protocol');
-		$mail = new PHPMailer(true);
 		try {
-			if ($mail_engine === 'smtp' || $mail_protocol === 'smtp') {
-				$mail->isSMTP();
-				$mail->Host = $this->config->get('config_mail_smtp_hostname');
-				$mail->SMTPAuth = true;
-				$mail->Username = $this->config->get('config_mail_smtp_username');
-				$mail->Password = html_entity_decode($this->config->get('config_mail_smtp_password'), ENT_QUOTES, 'UTF-8');
-				$mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-				$mail->Port = $this->config->get('config_mail_smtp_port');
-				$mail->Subject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
-			} else {
-				$mail->isMail();
-				$mail->Subject = $subject;
-			}
-			$mail->CharSet = 'UTF-8';
-			$mail->Encoding = 'base64';
-			$mail->setFrom($toEmail_admin, $jet_id);
-			$mail->addAddress($toEmail_admin);
-			foreach ($ccAddresses as $cc) {
-				$mail->addCC($cc);
-			}
-			$mail->addCC($jet_email);
-			$mail->Body = $body;
-			$mail->isHTML(false);
-			
-			if ($mail->send()) {
 				$order_data['invoice_prefix'] = $this->config->get('config_invoice_prefix');
 				$order_data['store_id'] = $this->config->get('config_store_id');
 				$order_data['store_name'] = $this->config->get('config_name');
@@ -1090,14 +1046,31 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 				$order_data['totals'] = $totals;
 				$this->load->model('checkout/order');
 				$jet_order_id = $this->model_checkout_order->addOrder($order_data);
+				if (!$jet_order_id || !$this->model_checkout_order->getOrder($jet_order_id)) {
+					throw new \RuntimeException('Order persistence failed.');
+				}
+				$json['order_id'] = $jet_order_id;
 				$order_status_key = $jet_card == 1 ? 'payment_jet_card_order_status_id' : 'payment_jet_order_status_id';
-				$this->model_checkout_order->addOrderHistory($jet_order_id, $this->config->get($order_status_key));
-				$this->cart->clear();
-				$json['success'] = 'success';
-			}else{
-				$json['success'] = 'unsuccess';
+			require_once DIR_SYSTEM . 'library/jet_submission_mail.php';
+			$delivery = JetSubmissionMail::deliver($this->config, $ccAddresses, $toEmail_admin, $jet_email, $jet_id, $subject, $body, $jet_egn);
+			$json['code'] = $delivery['code'];
+			$json['notifications'] = $delivery['notifications'];
+			$json['success'] = in_array($delivery['code'], ['bank_sent', 'manual_registered'], true) ? 'success' : 'unsuccess';
+			if ($json['success'] === 'success') {
+				try {
+					$this->model_checkout_order->addOrderHistory($jet_order_id, $this->config->get($order_status_key));
+				} catch (\Throwable $error) {
+					$json['order_status_updated'] = false;
+				}
 			}
-		} catch (Exception $e) {
+			if ($json['success'] === 'success') {
+				try {
+					$this->cart->clear();
+				} catch (\Throwable $error) {
+					$json['cart_cleared'] = false;
+				}
+			}
+		} catch (\Throwable $error) {
 			$json['success'] = 'unsuccess';
 		}
 		$this->response->addHeader('Content-Type: application/json');

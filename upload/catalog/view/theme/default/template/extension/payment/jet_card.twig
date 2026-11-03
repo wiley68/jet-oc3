@@ -686,7 +686,13 @@ jQuery(document).ready(function($) {
 		}
 	});
 	
+	let jetConfirmPending = false;
+	let jetConfirmNeedsReview = false;
 	$('#button-confirm').on('click', function() {
+		if (jetConfirmPending || jetConfirmNeedsReview) return;
+		jetConfirmPending = true;
+		let requestStarted = false;
+		try {
 		$('#button-confirm').prop('disabled', true).button('loading');
 		const jetFormSendData = new FormData();
 		jetFormSendData.append('jet_card_priceall', $('#jet_card_priceall').text());
@@ -702,13 +708,21 @@ jQuery(document).ready(function($) {
 		jetFormSendData.append('jet_card_products_qt', $('#jet_card_products_qt').val());
 		jetFormSendData.append('jet_card_products_pr', $('#jet_card_products_pr').val());
 		jetFormSendData.append('jet_card_products_vr', $('#jet_card_products_vr').val());
+		requestStarted = true;
 		$.ajax({
 			url: 'index.php?route=extension/payment/jet_card/confirm',
 			method: 'POST',
 			data: jetFormSendData,
 			processData: false,
 			contentType: false,
+			timeout: 30000,
 			success: function(json) {
+				if (!json || !['success', 'unsuccess'].includes(json.success) || json.code === 'bank_uncertain') {
+					jetConfirmNeedsReview = true;
+					alert('Резултатът от изпращането не е потвърден. Моля, свържете се с магазина за проверка.');
+					return;
+				}
+				if (json.success === 'success' || json.order_id) jetConfirmNeedsReview = true;
 				console.log(json);
 				if (json['success'] == 'success') {
 					if (json['redirect']) {
@@ -720,10 +734,21 @@ jQuery(document).ready(function($) {
 				}
 			},
 			error: function(xhr, ajaxOptions, thrownError) {
-				$('#button-confirm').prop('disabled', false).button('reset');
-				alert(thrownError + "\r\n" + xhr.statusText + "\r\n" + xhr.responseText);
+				jetConfirmNeedsReview = true;
+				$('#button-confirm').button('reset').prop('disabled', true);
+				alert('Резултатът от изпращането не е потвърден. Моля, свържете се с магазина за проверка.');
+			},
+			complete: function() {
+				jetConfirmPending = false;
+				$('#button-confirm').button('reset').prop('disabled', jetConfirmNeedsReview);
 			}
 		});
+		} catch (error) {
+			jetConfirmPending = false;
+			jetConfirmNeedsReview = requestStarted;
+			$('#button-confirm').button('reset').prop('disabled', jetConfirmNeedsReview);
+			alert(requestStarted ? 'Резултатът от изпращането не е потвърден. Моля, свържете се с магазина за проверка.' : 'Заявката за лизинг не може да бъде изпратена в момента! Моля опитайте по-късно.');
+		}
 	});
 	
 	jetCalculate();
