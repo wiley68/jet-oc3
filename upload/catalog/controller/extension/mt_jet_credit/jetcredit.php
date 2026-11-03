@@ -9,7 +9,6 @@ use PHPMailer\PHPMailer\Exception;
 class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	private const JETCREDIT_FINANCIAL_MAX_ITERATIONS = 128;
 	private const JETCREDIT_FINANCIAL_PRECISION = 1.0e-08;
-	private const JET_MIN_250 = 250;
 	private const JET_MIN_250_EUR = 125;
 
 	public function createSchema() {
@@ -90,6 +89,11 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	}
 
 	public function jet_check() {
+		if (($this->session->data['currency'] ?? '') !== 'EUR') {
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode(['success' => false]));
+			return;
+		}
 		$json = array();
 		$this->load->model('catalog/product');
 		$product_info = $this->model_catalog_product->getProduct($this->request->post['product_id']);
@@ -107,7 +111,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 				}else{
 					$json['success'] = 1;
 					foreach ($product_option['product_option_value'] as $key => $value) {
-						$product_option['product_option_value'][$key]['price'] = $this->tax->calculate($product_option['product_option_value'][$key]['price'], $product_info['tax_class_id'], $this->config->get('config_tax'));
+						$product_option['product_option_value'][$key]['price'] = $this->currency->convert($this->tax->calculate($product_option['product_option_value'][$key]['price'], $product_info['tax_class_id'], $this->config->get('config_tax')), $this->config->get('config_currency'), 'EUR');
 					}
 					$json['optionresult'][$optionn] = $product_option;
 					$json['optionresult'][$optionn]['product_option_id_check'] = $option[$product_option['product_option_id']];
@@ -120,6 +124,11 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	}
 
 	public function jet_calculate() {
+		if (($this->session->data['currency'] ?? '') !== 'EUR') {
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode(['success' => false]));
+			return;
+		}
 		$json = [];
 		if (isset($this->request->post['jet_priceall'])) {
 			$jet_priceall = (float) filter_var($this->request->post['jet_priceall'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
@@ -176,26 +185,10 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		} else {
 			$jet_products_vr = "";
 		}
-		$jet_eur = (int) $this->config->get( 'module_mt_jet_credit_eur' );
-		$jet_min_250 = self::JET_MIN_250;
-		$jet_currency_code = $this->session->data['currency'];
+
+		$jet_min_250 = self::JET_MIN_250_EUR;
 		
-		switch ($jet_eur) {
-			case 0:
-				break;
-			case 1:
-				if ($jet_currency_code == "EUR") {
-					$jet_priceall = number_format($jet_priceall * 1.95583, 2, ".", "");
-				}
-				break;
-			case 2:
-			case 3:
-				if ($jet_currency_code == "BGN") {
-					$jet_priceall = number_format($jet_priceall / 1.95583, 2, ".", "");
-				}
-				$jet_min_250 = self::JET_MIN_250_EUR;
-				break;
-		}
+
 		$_minprice = (float)$this->config->get('module_mt_jet_credit_price');
 		$jet_total_credit_price = $jet_priceall - $jet_parva;
 		$this->load->model('extension/mt_jet_credit/jetcredit');
@@ -225,40 +218,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		$jet_total_credit_price_second = $jet_total_credit_price;
 		$jet_obshto_second = $jet_obshto;
 		$jet_obshto_card_second = $jet_obshto_card;
-		switch ($jet_eur) {
-			case 0:
-				$jet_vnoska_second = 0;
-				$jet_vnoska_card_second = 0;
-				$jet_priceall_second = $jet_priceall;
-				$jet_total_credit_price_second = $jet_total_credit_price;
-				$jet_obshto_second = $jet_obshto;
-				$jet_obshto_card_second = $jet_obshto_card;
-				break;
-			case 1:
-				$jet_vnoska_second = number_format($jet_vnoska / 1.95583, 2, ".", "");
-				$jet_vnoska_card_second = number_format($jet_vnoska_card / 1.95583, 2, ".", "");
-				$jet_priceall_second = number_format($jet_priceall / 1.95583, 2, ".", "");
-				$jet_total_credit_price_second = number_format($jet_total_credit_price_second / 1.95583, 2, ".", "");
-				$jet_obshto_second = number_format($jet_obshto_second / 1.95583, 2, ".", "");
-				$jet_obshto_card_second = number_format($jet_obshto_card_second / 1.95583, 2, ".", "");
-				break;
-			case 2:
-				$jet_vnoska_second = number_format($jet_vnoska * 1.95583, 2, ".", "");
-				$jet_vnoska_card_second = number_format($jet_vnoska_card * 1.95583, 2, ".", "");
-				$jet_priceall_second = number_format($jet_priceall * 1.95583, 2, ".", "");
-				$jet_total_credit_price_second = number_format($jet_total_credit_price_second * 1.95583, 2, ".", "");
-				$jet_obshto_second = number_format($jet_obshto_second * 1.95583, 2, ".", "");
-				$jet_obshto_card_second = number_format($jet_obshto_card_second * 1.95583, 2, ".", "");
-				break;
-			case 3:
-				$jet_vnoska_second = 0;
-				$jet_vnoska_card_second = 0;
-				$jet_priceall_second = $jet_priceall;
-				$jet_total_credit_price_second = $jet_total_credit_price;
-				$jet_obshto_second = $jet_obshto;
-				$jet_obshto_card_second = $jet_obshto_card;
-				break;
-		}
+
 		$json['success'] = 'success';
 		$json['jet_show_button'] = $jet_show_button;
 		$json['jet_vnoska'] = number_format($jet_vnoska, 2, ".", "");
@@ -282,6 +242,11 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	}
 
 	public function jet_send() {
+		if (($this->session->data['currency'] ?? '') !== 'EUR') {
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode(['success' => false]));
+			return;
+		}
 		if(!empty((string)$this->request->post['jet_lname'])) die();
 		$json = [];
 		if (isset($this->request->post['jet_priceall'])) {
@@ -403,22 +368,8 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 			$product_m_txt = " - ";
 		}
 		$product_p_txt = $jet_priceall / $jet_quantity;
-		$jet_eur = (int)$this->config->get('module_mt_jet_credit_eur');
-		$jet_sign = 'лева';
-		switch ($jet_eur) {
-			case 0:
-				$jet_sign = 'лева';
-				break;
-			case 1:
-				$jet_sign = 'лева';
-				break;
-			case 2:
-				$jet_sign = 'евро';
-				break;
-			case 3:
-				$jet_sign = 'евро';
-				break;
-		}
+
+		$jet_sign = 'евро';
 		$body = "Данни за потребителя:\r\n";
 		$body .= "Собствено име: $jet_name;\r\n";
 		$body .= "Фамилия: $jet_lastname;\r\n";
@@ -551,7 +502,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 				$order_data['shipping_method'] = '';
 				$order_data['shipping_code'] = '';
 				$order_data['comment'] = '';
-				$order_data['total'] = $jet_priceall;
+				$order_data['total'] = $this->currency->convert($jet_priceall, 'EUR', $this->config->get('config_currency'));
 				if (isset($this->request->cookie['tracking'])) {
 					$order_data['tracking'] = $this->request->cookie['tracking'];
 					$this->load->model('affiliate/affiliate');
@@ -607,7 +558,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 					$jet_product_subtract = $product_info['subtract'];
 					$jet_product_tax_class_id = $product_info['tax_class_id'];
 					$jet_product_reward = $product_info['reward'];
-					$jet_product_price_with_vat = $jet_priceall / $jet_quantity;
+					$jet_product_price_with_vat = $this->currency->convert($jet_priceall / $jet_quantity, 'EUR', $this->config->get('config_currency'));
 					$jet_product_tax = $this->tax->getTax($jet_product_price_with_vat, $jet_product_tax_class_id);
 					$jet_product_price = $jet_product_price_with_vat - $jet_product_tax;
 				} else {
@@ -651,6 +602,11 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	}
 
 	public function jet_calculate_cart() {
+		if (($this->session->data['currency'] ?? '') !== 'EUR') {
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode(['success' => false]));
+			return;
+		}
 		$json = [];
 		if (isset($this->request->post['jet_priceall'])) {
 			$jet_priceall = filter_var($this->request->post['jet_priceall'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
@@ -702,25 +658,9 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		} else {
 			$jet_egn = "";
 		}
-		$jet_eur = (int)$this->config->get('module_mt_jet_credit_eur');
-		$jet_min_250 = self::JET_MIN_250;
-		$jet_currency_code = $this->session->data['currency'];
-		switch ($jet_eur) {
-			case 0:
-				break;
-			case 1:
-				if ($jet_currency_code == "EUR") {
-					$jet_priceall = number_format($jet_priceall * 1.95583, 2, ".", "");
-				}
-				break;
-			case 2:
-			case 3:
-				if ($jet_currency_code == "BGN") {
-					$jet_priceall = number_format($jet_priceall / 1.95583, 2, ".", "");
-				}
-				$jet_min_250 = self::JET_MIN_250_EUR;
-				break;
-		}
+
+		$jet_min_250 = self::JET_MIN_250_EUR;
+
 		$jet_total_credit_price = $jet_priceall - $jet_parva;
 		$this->load->model('extension/mt_jet_credit/jetcredit');
 		$jet_purcent = (float) $this->config->get('module_mt_jet_credit_purcent');
@@ -746,40 +686,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		$jet_total_credit_price_second = $jet_total_credit_price;
 		$jet_obshto_second = $jet_obshto;
 		$jet_obshto_card_second = $jet_obshto_card;
-		switch ($jet_eur) {
-			case 0:
-				$jet_vnoska_second = 0;
-				$jet_vnoska_card_second = 0;
-				$jet_priceall_second = $jet_priceall;
-				$jet_total_credit_price_second = $jet_total_credit_price;
-				$jet_obshto_second = $jet_obshto;
-				$jet_obshto_card_second = $jet_obshto_card;
-				break;
-			case 1:
-				$jet_vnoska_second = number_format($jet_vnoska / 1.95583, 2, ".", "");
-				$jet_vnoska_card_second = number_format($jet_vnoska_card / 1.95583, 2, ".", "");
-				$jet_priceall_second = number_format($jet_priceall / 1.95583, 2, ".", "");
-				$jet_total_credit_price_second = number_format($jet_total_credit_price_second / 1.95583, 2, ".", "");
-				$jet_obshto_second = number_format($jet_obshto_second / 1.95583, 2, ".", "");
-				$jet_obshto_card_second = number_format($jet_obshto_card_second / 1.95583, 2, ".", "");
-				break;
-			case 2:
-				$jet_vnoska_second = number_format($jet_vnoska * 1.95583, 2, ".", "");
-				$jet_vnoska_card_second = number_format($jet_vnoska_card * 1.95583, 2, ".", "");
-				$jet_priceall_second = number_format($jet_priceall * 1.95583, 2, ".", "");
-				$jet_total_credit_price_second = number_format($jet_total_credit_price_second * 1.95583, 2, ".", "");
-				$jet_obshto_second = number_format($jet_obshto_second * 1.95583, 2, ".", "");
-				$jet_obshto_card_second = number_format($jet_obshto_card_second * 1.95583, 2, ".", "");
-				break;
-			case 3:
-				$jet_vnoska_second = 0;
-				$jet_vnoska_card_second = 0;
-				$jet_priceall_second = $jet_priceall;
-				$jet_total_credit_price_second = $jet_total_credit_price;
-				$jet_obshto_second = $jet_obshto;
-				$jet_obshto_card_second = $jet_obshto_card;
-				break;
-		}
+
 		$json['success'] = 'success';
 		$json['jet_vnoska'] = number_format($jet_vnoska, 2, ".", "");
 		$json['jet_vnoska_second'] = number_format($jet_vnoska_second, 2, ".", "");
@@ -802,6 +709,11 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	}
 
 	public function jet_send_cart() {
+		if (($this->session->data['currency'] ?? '') !== 'EUR') {
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode(['success' => false]));
+			return;
+		}
 		if(!empty((string)$this->request->post['jet_lname'])) die();
 		$json = [];
 		if (isset($this->request->post['jet_priceall'])) {
@@ -904,22 +816,8 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 			$payment_method = 'ПБ Лични Финанси';
 			$payment_code = 'jet';
 		}
-		$jet_eur = (int)$this->config->get('module_mt_jet_credit_eur');
-		$jet_sign = 'лева';
-		switch ($jet_eur) {
-			case 0:
-				$jet_sign = 'лева';
-				break;
-			case 1:
-				$jet_sign = 'лева';
-				break;
-			case 2:
-				$jet_sign = 'евро';
-				break;
-			case 3:
-				$jet_sign = 'евро';
-				break;
-		}
+
+		$jet_sign = 'евро';
 		$body = "Данни за потребителя:\r\n";
 		$body .= "Собствено име: $jet_name;\r\n";
 		$body .= "Фамилия: $jet_lastname;\r\n";
@@ -1093,7 +991,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 				$order_data['shipping_method'] = '';
 				$order_data['shipping_code'] = '';
 				$order_data['comment'] = '';
-				$order_data['total'] = $jet_priceall;
+				$order_data['total'] = $this->currency->convert($jet_priceall, 'EUR', $this->config->get('config_currency'));
 				if (isset($this->request->cookie['tracking'])) {
 					$order_data['tracking'] = $this->request->cookie['tracking'];
 					$this->load->model('affiliate/affiliate');
@@ -1161,7 +1059,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 						$jet_product_subtract = $product_info['subtract'];
 						$jet_product_tax_class_id = $product_info['tax_class_id'];
 						$jet_product_reward = $product_info['reward'];
-						$jet_product_price_with_vat = $jet_price;
+						$jet_product_price_with_vat = $this->currency->convert($jet_price, 'EUR', $this->config->get('config_currency'));
 						$jet_product_tax = $this->tax->getTax($jet_product_price_with_vat, $jet_product_tax_class_id);
 						$jet_product_price = $jet_product_price_with_vat - $jet_product_tax;
 					} else {

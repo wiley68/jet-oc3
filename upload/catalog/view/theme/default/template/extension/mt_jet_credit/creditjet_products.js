@@ -155,24 +155,6 @@ jQuery(document).ready(function($) {
 									}
 								}
 							}
-							const jet_eur = document.getElementById('jet_eur');
-							const jet_currency_code = document.getElementById('jet_currency_code');
-							if (jet_eur && jet_currency_code) {
-								switch (parseInt(jet_eur.value)) {
-									case 1:
-									if (jet_currency_code.value == "EUR") {
-										total_price = total_price * 1.95583;
-									}
-									break;
-									case 2:
-									case 3:
-									if (jet_currency_code.value == "BGN") {
-										total_price = total_price / 1.95583;
-									}
-									break;
-									default:
-								}
-							}
 							jet_price1 = parseFloat(jet_price1) + total_price;
 							jetPriceall = parseFloat(jet_price1) * jet_quantity;
 							jetChange(jetPriceall);
@@ -244,7 +226,7 @@ jQuery(document).ready(function($) {
 				});
 			} else {
 				$('#jet_alert_overlay').addClass('show');
-				jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 лв.!', false);
+				jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 евро!', false);
 				$('#uslovia').prop('checked', false);
 				$('#uslovia1').prop('checked', false);
 			}
@@ -439,7 +421,7 @@ jQuery(document).ready(function($) {
 			$('#jet_step_2').show('slow');
 		}else{
 			$('#jet_alert_overlay').addClass("show");
-			jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 лв.!', false);
+			jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 евро!', false);
 		}
 	});
 

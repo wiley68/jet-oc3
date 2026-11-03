@@ -38,40 +38,12 @@ $data['products'] = array();
             // Проверка дали продуктът е в наличност
             $product_in_stock = $product_info['quantity'] > 0;
             
-            if ($product_in_stock && ($jet_currency_code == 'EUR' || $jet_currency_code == 'BGN')) {
-                $data['jet_eur'] = (int) $this->config->get('module_mt_jet_credit_eur');
-                $data['jet_sign'] = 'лв.';
-                $data['jet_sign_second'] = 'евро';
-                $jet_min_250 = 250.00;
-                switch ($data['jet_eur']) {
-                    case 0:
-                        $data['jet_sign'] = 'лв.';
-                        $data['jet_sign_second'] = '';
-                        break;
-                    case 1:
-                        if ($jet_currency_code == "EUR") {
-                            $jet_price = number_format($jet_price * 1.95583, 2, ".", "");
-                        }
-                        $data['jet_sign'] = 'лв.';
-                        $data['jet_sign_second'] = 'евро';
-                        break;
-                    case 2:
-                        if ($jet_currency_code == "BGN") {
-                            $jet_price = number_format($jet_price / 1.95583, 2, ".", "");
-                        }
-                        $data['jet_sign'] = 'евро';
-                        $data['jet_sign_second'] = 'лв.';
-                        $jet_min_250 = 125.00;
-                        break;
-                    case 3:
-                        if ($jet_currency_code == "BGN") {
-                            $jet_price = number_format($jet_price / 1.95583, 2, ".", "");
-                        }
-                        $data['jet_sign'] = 'евро';
-                        $data['jet_sign_second'] = '';
-                        $jet_min_250 = 125.00;
-                        break;
-                }
+            if ($product_in_stock && ($jet_currency_code == 'EUR')) {
+                $jet_price = $this->currency->convert($jet_price, $this->config->get('config_currency'), 'EUR');
+                $data['jet_price'] = $jet_price;
+                $data['jet_sign'] = 'евро';
+                $data['jet_sign_second'] = '';
+                $jet_min_250 = 125.00;
                 
                 if ($jet_price < $jet_min_250) {
                     $data['jet_vnoski'] = '9';
@@ -277,19 +249,12 @@ $data['products'] = array();
                                     {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-                                    {% if jet_eur == 0 or jet_eur == 3 %}
+
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_priceall"></span></div>
                                             <div></div>
                                         </div>
-                                    {% else %}
-                                        <div class="jet_input_text jet_disable">
-                                            <div><span id="jet_priceall"></span></div>
-                                            <div>
-                                                <span>/</span><span id="jet_priceall_second"></span>
-                                            </div>
-                                        </div>
-                                    {% endif %}
+
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -324,19 +289,12 @@ $data['products'] = array();
                                     {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-                                    {% if jet_eur == 0 or jet_eur == 3 %}
+
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_total_credit_price"></span></div>
                                             <div></div>
                                         </div>
-                                    {% else %}
-                                        <div class="jet_input_text jet_disable">
-                                            <div><span id="jet_total_credit_price"></span></div>
-                                            <div>
-                                                <span>/</span><span id="jet_total_credit_price_second"></span>
-                                            </div>
-                                        </div>
-                                    {% endif %}
+
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -349,19 +307,12 @@ $data['products'] = array();
                                     {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-                                    {% if jet_eur == 0 or jet_eur == 3 %}
+
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_vnoska_popup"></span></div>
                                             <div></div>
                                         </div>
-                                    {% else %}
-                                        <div class="jet_input_text jet_disable">
-                                            <div><span id="jet_vnoska_popup"></span></div>
-                                            <div>
-                                                <span>/</span><span id="jet_vnoska_popup_second"></span>
-                                            </div>
-                                        </div>
-                                    {% endif %}
+
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -396,19 +347,12 @@ $data['products'] = array();
                                     {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-                                    {% if jet_eur == 0 or jet_eur == 3 %}
+
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_obshto"></span></div>
                                             <div></div>
                                         </div>
-                                    {% else %}
-                                        <div class="jet_input_text jet_disable">
-                                            <div><span id="jet_obshto"></span></div>
-                                            <div>
-                                                <span>/</span><span id="jet_obshto_second"></span>
-                                            </div>
-                                        </div>
-                                    {% endif %}
+
                                 </div>
                             </div>
                             <div class="jet_hr"></div>
@@ -658,7 +602,7 @@ $products = $this->cart->getProducts();
             <add position="after" offset="1"><![CDATA[
         /** avalon кредитен калкулатор jet **/
         $products_jet['id'] .= $product['product_id'] . '_';
-        $products_jet['pr'] .= $this->tax->calculate($product['price'], $product['tax_class_id'], $this->config->get('config_tax')) . '_';
+        $products_jet['pr'] .= $this->currency->convert($this->tax->calculate($product['price'], $product['tax_class_id'], $this->config->get('config_tax')), $this->config->get('config_currency'), 'EUR') . '_';
         $products_jet['quantity'] .= $product['quantity'] . '_';
         foreach ($product['option'] as $key => $value) {
             $products_jet['option'][$products_jet_index][$key]['product_option_id'] = $value['product_option_id'];
@@ -707,40 +651,12 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
             $data['jet_price'] = $jet_price;
             
             $jet_currency_code = $this->session->data['currency'];
-            if ($jet_currency_code == 'EUR' || $jet_currency_code == 'BGN') {
-                $data['jet_eur'] = (int) $this->config->get('module_mt_jet_credit_eur');
-                $data['jet_sign'] = 'лв.';
-                $data['jet_sign_second'] = 'евро';
-                $jet_min_250 = 250.00;
-                switch ($data['jet_eur']) {
-                    case 0:
-                        $data['jet_sign'] = 'лв.';
-                        $data['jet_sign_second'] = '';
-                        break;
-                    case 1:
-                        if ($jet_currency_code == "EUR") {
-                            $jet_price = number_format($jet_price * 1.95583, 2, ".", "");
-                        }
-                        $data['jet_sign'] = 'лв.';
-                        $data['jet_sign_second'] = 'евро';
-                        break;
-                    case 2:
-                        if ($jet_currency_code == "BGN") {
-                            $jet_price = number_format($jet_price / 1.95583, 2, ".", "");
-                        }
-                        $data['jet_sign'] = 'евро';
-                        $data['jet_sign_second'] = 'лв.';
-                        $jet_min_250 = 125.00;
-                        break;
-                    case 3:
-                        if ($jet_currency_code == "BGN") {
-                            $jet_price = number_format($jet_price / 1.95583, 2, ".", "");
-                        }
-                        $data['jet_sign'] = 'евро';
-                        $data['jet_sign_second'] = '';
-                        $jet_min_250 = 125.00;
-                        break;
-                }
+            if ($jet_currency_code == 'EUR') {
+                $jet_price = $this->currency->convert($jet_price, $this->config->get('config_currency'), 'EUR');
+                $data['jet_price'] = $jet_price;
+                $data['jet_sign'] = 'евро';
+                $data['jet_sign_second'] = '';
+                $jet_min_250 = 125.00;
                 
                 $_minprice = $this->config->get('module_mt_jet_credit_price');
                 if ($jet_price >= $_minprice) {
@@ -947,19 +863,12 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                     {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-                                    {% if jet_eur == 0 or jet_eur == 3 %}
+
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_priceall"></span></div>
                                             <div></div>
                                         </div>
-                                    {% else %}
-                                        <div class="jet_input_text jet_disable">
-                                            <div><span id="jet_priceall"></span></div>
-                                            <div>
-                                                <span>/</span><span id="jet_priceall_second"></span>
-                                            </div>
-                                        </div>
-                                    {% endif %}
+
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -994,19 +903,12 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                     {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-                                    {% if jet_eur == 0 or jet_eur == 3 %}
+
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_total_credit_price"></span></div>
                                             <div></div>
                                         </div>
-                                    {% else %}
-                                        <div class="jet_input_text jet_disable">
-                                            <div><span id="jet_total_credit_price"></span></div>
-                                            <div>
-                                                <span>/</span><span id="jet_total_credit_price_second"></span>
-                                            </div>
-                                        </div>
-                                    {% endif %}
+
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -1019,19 +921,12 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                     {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-                                    {% if jet_eur == 0 or jet_eur == 3 %}
+
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_vnoska_popup"></span></div>
                                             <div></div>
                                         </div>
-                                    {% else %}
-                                        <div class="jet_input_text jet_disable">
-                                            <div><span id="jet_vnoska_popup"></span></div>
-                                            <div>
-                                                <span>/</span><span id="jet_vnoska_popup_second"></span>
-                                            </div>
-                                        </div>
-                                    {% endif %}
+
                                 </div>
                             </div>
                             <div class="jet_row">
@@ -1066,19 +961,12 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
                                     {% endif %}
                                 </div>
                                 <div class="jet_column_right">
-                                    {% if jet_eur == 0 or jet_eur == 3 %}
+
                                         <div class="jet_input_text jet_disable">
                                             <div><span id="jet_obshto"></span></div>
                                             <div></div>
                                         </div>
-                                    {% else %}
-                                        <div class="jet_input_text jet_disable">
-                                            <div><span id="jet_obshto"></span></div>
-                                            <div>
-                                                <span>/</span><span id="jet_obshto_second"></span>
-                                            </div>
-                                        </div>
-                                    {% endif %}
+
                                 </div>
                             </div>
                             <div class="jet_hr"></div>

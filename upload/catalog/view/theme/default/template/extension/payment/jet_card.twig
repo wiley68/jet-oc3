@@ -315,19 +315,12 @@ input[type="checkbox"].jet_uslovia{
 		</div>
 		<div class="jet_column_right">
 			<input type="hidden" id="jet_card_priceall_input" name="jet_card_priceall_input" />
-			{% if jet_card_eur == 0 or jet_card_eur == 3 %}
+
 				<div class="jet_input_text jet_disable">
 					<div><span id="jet_card_priceall"></span></div>
 					<div></div>
 				</div>
-			{% else %}
-				<div class="jet_input_text jet_disable">
-					<div><span id="jet_card_priceall"></span></div>
-					<div>
-						<span>/</span><span id="jet_card_priceall_second"></span>
-					</div>
-				</div>
-			{% endif %}
+
 		</div>
 	</div>
 	<div class="jet_row">
@@ -364,19 +357,12 @@ input[type="checkbox"].jet_uslovia{
 		</div>
 		<div class="jet_column_right">
 			<input type="hidden" id="jet_card_total_credit_price_input" name="jet_card_total_credit_price_input" />
-			{% if jet_card_eur == 0 or jet_card_eur == 3 %}
+
 				<div class="jet_input_text jet_disable">
 					<div><span id="jet_card_total_credit_price"></span></div>
 					<div></div>
 				</div>
-			{% else %}
-				<div class="jet_input_text jet_disable">
-					<div><span id="jet_card_total_credit_price"></span></div>
-					<div>
-						<span>/</span><span id="jet_card_total_credit_price_second"></span>
-					</div>
-				</div>
-			{% endif %}
+
 		</div>
 	</div>
 	<div class="jet_row">
@@ -390,19 +376,12 @@ input[type="checkbox"].jet_uslovia{
 		</div>
 		<div class="jet_column_right">
 			<input type="hidden" id="jet_card_vnoska_input" name="jet_card_vnoska_input" />
-			{% if jet_card_eur == 0 or jet_card_eur == 3 %}
+
 				<div class="jet_input_text jet_disable">
 					<div><span id="jet_card_vnoska"></span></div>
 					<div></div>
 				</div>
-			{% else %}
-				<div class="jet_input_text jet_disable">
-					<div><span id="jet_card_vnoska"></span></div>
-					<div>
-						<span>/</span><span id="jet_card_vnoska_second"></span>
-					</div>
-				</div>
-			{% endif %}
+
 		</div>
 	</div>
 	<div class="jet_row">
@@ -440,19 +419,12 @@ input[type="checkbox"].jet_uslovia{
 		</div>
 		<div class="jet_column_right">
 			<input type="hidden" id="jet_card_obshto_input" name="jet_card_obshto_input" />
-			{% if jet_card_eur == 0 or jet_card_eur == 3 %}
+
 				<div class="jet_input_text jet_disable">
 					<div><span id="jet_card_obshto"></span></div>
 					<div></div>
 				</div>
-			{% else %}
-				<div class="jet_input_text jet_disable">
-					<div><span id="jet_card_obshto"></span></div>
-					<div>
-						<span>/</span><span id="jet_card_obshto_second"></span>
-					</div>
-				</div>
-			{% endif %}
+
 		</div>
 	</div>
 	<div class="jet_row">
@@ -678,7 +650,7 @@ jQuery(document).ready(function($) {
 				$('#button-confirm').prop('disabled', false);
 			} else {
 				$("#jet_card_alert_overlay").addClass("show");
-				jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 лв.!', false);
+				jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 евро!', false);
 				$('#jet_card_uslovia').prop('checked', false);
 				$('#jet_card_uslovia1').prop('checked', false);
 			}

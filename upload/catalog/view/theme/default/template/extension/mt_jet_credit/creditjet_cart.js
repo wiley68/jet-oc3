@@ -31,7 +31,7 @@ jQuery(document).ready(function($) {
 					$('#jet_step_2').css('display', 'block');
 				} else {
 					$('#jet_alert_overlay').addClass('show');
-					jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 лв.!', false);
+					jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 евро!', false);
 				}
 			});
 			$('#back2_jetcredit').on('click', function(event) {
@@ -279,7 +279,7 @@ jQuery(document).ready(function($) {
 				});
 			} else {
 				$("#jet_alert_overlay").addClass("show");
-				jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 лв.!', false);
+				jetShowCustomAlert('Месечната вноска трябва да надхвърля сумата от 20 евро!', false);
 				$('#uslovia').prop('checked', false);
 				$('#uslovia1').prop('checked', false);
 			}

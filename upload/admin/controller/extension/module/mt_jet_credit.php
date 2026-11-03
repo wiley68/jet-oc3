@@ -9,7 +9,13 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		$this->document->setTitle('ПБ Лични Финанси');
 		$this->load->model('setting/setting');
 		if (($this->request->server['REQUEST_METHOD'] == 'POST') && $this->validate()) {
-			$this->model_setting_setting->editSetting('module_mt_jet_credit', $this->request->post);
+			$settings = $this->request->post;
+			unset($settings['module_mt_jet_credit_eur']);
+			$existing_settings = $this->model_setting_setting->getSetting('module_mt_jet_credit');
+			if (array_key_exists('module_mt_jet_credit_eur', $existing_settings)) {
+				$settings['module_mt_jet_credit_eur'] = $existing_settings['module_mt_jet_credit_eur'];
+			}
+			$this->model_setting_setting->editSetting('module_mt_jet_credit', $settings);
 			$this->session->data['success'] = 'Успешно записахте направените промени.';
 			$this->cache->delete('module_mt_jet_credit');
 			$this->response->redirect($this->url->link('extension/module/mt_jet_credit', 'user_token=' . $this->session->data['user_token'], true));
@@ -162,11 +168,7 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		} else {
 			$data['module_mt_jet_credit_count'] = $this->config->get('module_mt_jet_credit_count') == "" ? 1 : $this->config->get('module_mt_jet_credit_count');
 		}
-		if (isset($this->request->post['module_mt_jet_credit_eur'])) {
-			$data['module_mt_jet_credit_eur'] = $this->request->post['module_mt_jet_credit_eur'];
-		} else {
-			$data['module_mt_jet_credit_eur'] = $this->config->get('module_mt_jet_credit_eur') == "" ? 0 : $this->config->get('module_mt_jet_credit_eur');
-		}
+
 		if (isset($this->request->post['module_mt_jet_credit_price'])) {
 			$data['module_mt_jet_credit_price'] = $this->request->post['module_mt_jet_credit_price'];
 		} else {
