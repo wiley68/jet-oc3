@@ -4,7 +4,7 @@
 module.exports = function runCalculatorRegression(sources) {
  let checks = 0;
  const check = (condition, message) => { checks++; if (!condition) throw new Error(message); };
- function environment(source, options = false, css = '') {
+ function environment(source, options = false, css = '', initialValues = {}) {
   let now = 0, timerId = 0, loaderCount = 0;
   const timers = new Map(), elements = new Map(), requests = [], documentEvents = {}, optionEvents = {}, captureEvents = {};
   const faults = {}, alerts = [], loaderNodes = [];
@@ -21,7 +21,12 @@ module.exports = function runCalculatorRegression(sources) {
    first() { return this; } eq() { return this; }
    find(selector) {
     if (selector === '.jet_offer_loader') return { length: loaderCount };
-    if (selector === 'option') return { each() {} };
+    if (selector === 'option') return { each(fn) {
+     for (const term of ['3', '6', '9', '10', '12', '15', '18', '24', '30', '36']) {
+      const option = get('#jet_vnoski option[value="' + term + '"]').val(term);
+      fn.call(option);
+     }
+    } };
     const element = get(selector); element.parentNode = this; return element;
    }
    on(names, fn) { for (const name of names.split(' ')) (this.events[name] ||= []).push(fn); return this; }
@@ -59,7 +64,7 @@ module.exports = function runCalculatorRegression(sources) {
    requests.push(request); return request;
   };
   class Data { constructor() { if (faults.data) { faults.data = false; throw new Error('mock FormData failure'); } this.values = {}; } append(name, value) { this.values[name] = String(value); } }
-  const initial = { '#jet_price': '600', '#jet_parva': '0', '#jet_vnoski': '12', '#jet_product_id': '1', '#jet_card_in': '0', 'input[name="quantity"]': '1', '#jet_products': '1', '#jet_products_qt': '1', '#jet_products_pr': '600' };
+  const initial = { '#jet_price': '600', '#jet_parva': '0', '#jet_vnoski': '12', '#jet_product_id': '1', '#jet_card_in': '0', 'input[name="quantity"]': '1', '#jet_products': '1', '#jet_products_qt': '1', '#jet_products_pr': '600', ...initialValues };
   for (const [key, value] of Object.entries(initial)) get(key).value = value;
   const placeholder = get('#jet_alert_box'); placeholder.attributes.id = 'jet_alert_box'; placeholder.length = 1;
   function trigger(key, name) { return dispatch(get(key), name); }
@@ -101,6 +106,99 @@ module.exports = function runCalculatorRegression(sources) {
   return { requests, trigger, tick, get, faults, alerts, loaderLayout, changeOption: () => optionEvents.change?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
  }
  const quote = (value = '50.00') => ({ success: 'success', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
+ // F02: execute the real option/quantity JavaScript and PHP calculator, never a submission transport.
+ const { execFileSync } = require('child_process');
+ const phpCache = new Map();
+ const productEndpoint = (input) => {
+  const key = JSON.stringify(input);
+  if (!phpCache.has(key)) phpCache.set(key, JSON.parse(execFileSync('php', ['tests/product-option-prefix.php'], { input: key, encoding: 'utf8' })));
+  return phpCache.get(key);
+ };
+ const f02Start = checks;
+ const prefixCases = [
+  { name: 'select positive', type: 'select', adjustments: [['+', 10]], unit: 610, unchanged: true },
+  { name: 'select negative', type: 'select', adjustments: [['-', 10]], unit: 590 },
+  { name: 'radio positive', type: 'radio', adjustments: [['+', 10]], unit: 610, unchanged: true },
+  { name: 'radio negative', type: 'radio', adjustments: [['-', 10]], unit: 590 },
+  { name: 'positive zero', type: 'select', adjustments: [['+', 0]], unit: 600, unchanged: true },
+  { name: 'negative zero', type: 'radio', adjustments: [['-', 0]], unit: 600, unchanged: true },
+  { name: 'checkbox mixed', type: 'checkbox', adjustments: [['+', 10], ['-', 5]], unit: 605 },
+  { name: 'checkbox negatives', type: 'checkbox', adjustments: [['-', 10], ['-', 5], ['-', 2]], unit: 583 },
+  { name: 'checkbox zeros', type: 'checkbox', adjustments: [['+', 0], ['-', 0]], unit: 600, unchanged: true },
+  { name: 'no options', adjustments: [], unit: 600, unchanged: true },
+ ];
+ for (const type of ['select', 'checkbox']) for (const prefix of [undefined, '', '?', null]) {
+  prefixCases.push({ name: type + ' preserved prefix ' + String(prefix), type, adjustments: [[prefix, 10]], unit: 610, unchanged: true });
+ }
+ const scenarios = [];
+ for (const base_currency of ['EUR', 'USD']) for (const quantity of [1, 2, 4]) for (const item of prefixCases) {
+  scenarios.push({ ...item, base_currency, quantity });
+ }
+ for (const [base, unit] of [[410, 400], [411, 401], [610, 600], [611, 601]]) {
+  scenarios.push({ name: 'corrected term boundary ' + unit, type: 'select', adjustments: [['-', 10]], base, unit, quantity: 1, base_currency: 'EUR' });
+ }
+ scenarios.push(
+  { name: 'minimum follows negative', type: 'select', adjustments: [['-', 10]], unit: 590, minimum: 595 },
+  { name: 'minimum positive', type: 'select', adjustments: [['+', 10]], unit: 610, minimum: 595, unchanged: true },
+  { name: 'promotion hidden above threshold', type: 'select', adjustments: [['+', 10]], unit: 610, promo_percent: -1, unchanged: true },
+  { name: 'negative leaves hidden promotion', type: 'select', adjustments: [['-', 10]], unit: 590, promo_percent: -1 },
+  { name: 'selected 18 months', type: 'radio', adjustments: [['-', 10]], base: 700, unit: 690, term: 18 },
+  { name: 'taxed EUR negative', type: 'select', adjustments: [['-', 10]], base: 500, unit: 588, tax: true },
+  { name: 'taxed non-EUR negative', type: 'checkbox', adjustments: [['-', 10]], base: 500, unit: 588, tax: true, base_currency: 'USD' }
+ );
+ for (const scenario of scenarios) for (const card of [0, 1]) {
+  const quantity = scenario.quantity ?? 1, term = scenario.term ?? 12, base_currency = scenario.base_currency ?? 'EUR';
+  const factor = base_currency === 'EUR' ? 1 : 2, hasOptions = scenario.adjustments.length > 0;
+  const values = scenario.adjustments.map(([prefix, price], index) => ({ product_option_value_id: String(index + 11), option_value_id: String(index + 101), name: 'Value ' + index, price: price * factor, ...(prefix === undefined ? {} : { price_prefix: prefix }) }));
+  // An unselected priced value catches duplicate/all-values accumulation.
+  values.push({ product_option_value_id: '99', option_value_id: '199', name: 'Unselected', price: 99 * factor, price_prefix: '+' });
+  const selected = scenario.type === 'checkbox' ? scenario.adjustments.map((_, index) => String(index + 11)) : '11';
+  const fixture = productEndpoint({ mode: 'options', base_currency, base_price: (scenario.base ?? 600) * factor, tax: scenario.tax ?? false,
+   options: hasOptions ? [{ product_option_id: '1', option_id: '1', name: 'Option', type: scenario.type, required: true, product_option_value: values }] : [], selected: hasOptions ? { 1: selected } : {} });
+  if (hasOptions) check(fixture.options.optionresult[0].product_option_value[0].price === scenario.adjustments[0][1] * (scenario.tax ? 1.2 : 1), scenario.name + ': jet_check already returns EUR option price');
+  const amount = scenario.unit * quantity, label = scenario.name + '/' + base_currency + '/q' + quantity + '/card' + card;
+  const execute = (source) => {
+   const e = environment(source, hasOptions, sources.css_products, { '#jet_price': String(fixture.base_eur), 'input[name="quantity"]': String(quantity), '#jet_vnoski': String(term), '#jet_card_in': '1' });
+   const settle = () => {
+    if (hasOptions) e.requests.at(-1).resolve(fixture.options);
+    const calculation = e.requests.at(-1);
+    check(calculation.config.url.endsWith('/jet_calculate'), label + ': existing Product calculator');
+    check(calculation.config.data.values.jet_priceall === amount.toFixed(2), label + ': signed adjustment before quantity, no second conversion');
+    check(calculation.config.data.values.jet_vnoski === String(term), label + ': selected term retained');
+    const response = productEndpoint({ mode: 'quote', post: calculation.config.data.values, minimum: scenario.minimum ?? 75, promo_min: 600, promo_term: 12, promo_percent: scenario.promo_percent ?? 0.5 });
+    check(response.promo_sql.length === 1 && response.promo_sql[0].includes('AND ' + amount + ' >= jet_product_price'), label + ': real getPromo receives corrected principal');
+    calculation.resolve(response.quote);
+    return response.quote;
+   };
+   const preview = settle();
+   const promoMatched = amount >= 600 && term === 12, hiddenPromo = promoMatched && scenario.promo_percent === -1;
+   check(e.get('#jet-product-button-container').visible === (!hiddenPromo && amount >= (scenario.minimum ?? 75)), label + ': promotion/minimum button eligibility');
+   check(e.get('#jet_vnoska').text() === preview.jet_vnoska && e.get('#jet_vnoska_card').text() === preview.jet_vnoska_card, label + ': both button installment previews');
+   for (const boundaryTerm of ['15', '18', '24', '30', '36']) check(e.get('#jet_vnoski option[value="' + boundaryTerm + '"]').prop('disabled') === (amount < (['30', '36'].includes(boundaryTerm) ? 601 : 401)), label + ': corrected amount controls term ' + boundaryTerm);
+   e.trigger(card ? '#btn_jet_card' : '#btn_jet', 'click');
+   const popup = settle(), suffix = card ? '_card' : '';
+   const percent = promoMatched && !hiddenPromo ? (scenario.promo_percent ?? 0.5) : (card ? 1.0 : 1.4);
+   check(popup['jet_vnoska' + suffix] === ((amount / term) * (1 + term * percent / 100)).toFixed(2), label + ': unchanged financing formula/promotion');
+   check(e.get('#jet-product-popup-container').visible && e.get('#jet_priceall').text() === amount.toFixed(2), label + ': popup displays corrected amount');
+   check(e.get('#jet_vnoska_popup').text() === popup['jet_vnoska' + suffix], label + ': selected installment displayed');
+   check(e.requests.filter((request) => request.config.url.endsWith('/jet_calculate')).length === 2, label + ': one calculation per preview/open');
+   e.trigger('#buy_jetcredit', 'click');
+   check(e.get('#jet_step_2').visible, label + ': existing Step 2 transition');
+   for (const [key, value] of Object.entries({ jet_name: 'Test', jet_lastname: 'User', jet_egn: '9001010000', jet_phone: '+359888888888', jet_email: 'test@example.invalid' })) e.get('#' + key).val(value);
+   e.trigger('#buy2_jetcredit', 'click');
+   const submission = e.requests.at(-1);
+   check(submission.config.url.endsWith('/jet_send'), label + ': mocked Product submission endpoint');
+   const payload = submission.config.data.values;
+   check(payload.jet_priceall === amount.toFixed(2) && payload.jet_quantity === String(quantity) && payload.jet_vnoski === String(term) && payload.jet_card === String(card), label + ': displayed amount/quantity/term/card sent unchanged');
+   for (const field of ['vnoska', 'obshto', 'gpr', 'glp']) check(payload['jet_' + field] === popup['jet_' + field + suffix], label + ': submitted displayed ' + field);
+   check(payload.jet_total_credit_price === popup.jet_total_credit_price && payload.jet_parva === '0', label + ': existing principal/downpayment payload');
+   check(JSON.parse(payload.jet_variation_id).length === scenario.adjustments.length, label + ': selections not duplicated');
+   return { preview, popup, payload };
+  };
+  const current = execute(sources.products);
+  if (scenario.unchanged) check(JSON.stringify(current) === JSON.stringify(execute(sources.baseline_products)), label + ': positive/zero/no-option/fallback golden unchanged');
+ }
+ console.log(`PASS ${checks - f02Start} F02 prefix/quantity/currency/preview/popup/submission checks`);
  for (const page of ['products', 'cart']) {
   const source = sources[page];
   let e = environment(source);

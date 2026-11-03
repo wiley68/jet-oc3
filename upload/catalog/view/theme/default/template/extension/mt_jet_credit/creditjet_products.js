@@ -228,7 +228,7 @@ jQuery(document).ready(function($) {
 													'value' : json['optionresult'][i]['product_option_value'][n]['name'],
 													'type' : json['optionresult'][i]['type']
 												}];
-												total_price += parseFloat(JSON.stringify(json['optionresult'][i]['product_option_value'][n]['price']).replace(/['"]+/g, ''));
+												total_price += (json['optionresult'][i]['product_option_value'][n]['price_prefix'] === '-' ? -1 : 1) * parseFloat(JSON.stringify(json['optionresult'][i]['product_option_value'][n]['price']).replace(/['"]+/g, ''));
 											}
 										}
 									}
@@ -248,7 +248,7 @@ jQuery(document).ready(function($) {
 												'value' : json['optionresult'][i]['product_option_value'][j]['name'],
 												'type' : json['optionresult'][i]['type']
 											}];
-											total_price += parseFloat(JSON.stringify(json['optionresult'][i]['product_option_value'][j]['price']).replace(/['"]+/g, ''));
+											total_price += (json['optionresult'][i]['product_option_value'][j]['price_prefix'] === '-' ? -1 : 1) * parseFloat(JSON.stringify(json['optionresult'][i]['product_option_value'][j]['price']).replace(/['"]+/g, ''));
 										}
 									}
 								}

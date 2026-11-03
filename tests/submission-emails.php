@@ -66,7 +66,8 @@ try {
  file_put_contents(DIR_SYSTEM.'library/jet_submission_mail.php',$helper);
  foreach(['Calc'=>'upload/catalog/controller/extension/mt_jet_credit/jetcredit.php','Jet'=>'upload/catalog/controller/extension/payment/jet.php','Card'=>'upload/catalog/controller/extension/payment/jet_card.php'] as $name=>$path){
   foreach(['Old','New'] as $prefix){
-   $source=$prefix==='Old'?shell_exec('git show '.escapeshellarg('HEAD:'.$path)):file_get_contents($path);
+   // Immutable pre-Checkout-F01 golden: HEAD now requires context absent from the legacy fixtures.
+   $source=$prefix==='Old'?shell_exec('git show '.escapeshellarg('23c4563c9b00c79e5d0f1ecf6baf97d873064f2e:'.$path)):file_get_contents($path);
    $source=preg_replace('/class Controller\w+ extends Controller/','class '.$prefix.$name.' extends Controller',$source,1);
    $source=str_replace('new PHPMailer(true)','new \\SubmissionTestMailer(true)',$source);
    $file=$temp.'/'.$prefix.$name.'.php';file_put_contents($file,$source);require $file;
