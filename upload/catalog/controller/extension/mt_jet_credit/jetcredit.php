@@ -509,6 +509,19 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 	}
 
 	public function jet_calculate_cart() {
+		if (array_key_exists('jet_checkout_context', $this->request->post)) {
+			$json = false;
+			try {
+				$this->load->model('extension/mt_jet_credit/jetcredit');
+				$snapshot = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutSnapshot($this->request->post['jet_checkout_context']);
+				if ($snapshot) $json = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutQuote($snapshot, $this->request->post);
+			} catch (\Throwable $error) {
+				$json = false;
+			}
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode($json ?: ['success' => 'unsuccess']));
+			return;
+		}
 		if (($this->session->data['currency'] ?? '') !== 'EUR') {
 			$this->response->addHeader('Content-Type: application/json');
 			$this->response->setOutput(json_encode(['success' => false]));

@@ -1,7 +1,8 @@
 <?php
 class ModelExtensionPaymentJet extends Model {
 
-	public function getMethod($address, $total) {
+	public function getMethod($address, $total, $snapshot_eur = null) {
+		if ($snapshot_eur !== null && ((!is_int($snapshot_eur) && !is_float($snapshot_eur)) || !is_finite($snapshot_eur) || $snapshot_eur <= 0)) return [];
 		$query = $this->db->query("SELECT * FROM " . DB_PREFIX . "zone_to_geo_zone WHERE geo_zone_id = '" . (int)$this->config->get('payment_jet_geo_zone_id') . "' AND country_id = '" . (int)$address['country_id'] . "' AND (zone_id = '" . (int)$address['zone_id'] . "' OR zone_id = '0')");
 		if ($this->config->get('payment_jet_total') > 0 && $this->config->get('payment_jet_total') > $total) {
 			$status = false;
@@ -17,7 +18,7 @@ class ModelExtensionPaymentJet extends Model {
 		$jet_currency_code = $this->session->data['currency'];
 		if ($jet_status == 1 & $jet_payment_status == 1 & ($jet_currency_code == 'EUR')) {
 			$jet_minstojnost = (float)$this->config->get('module_mt_jet_credit_price');
-			if ($this->currency->convert($total, $this->config->get('config_currency'), 'EUR') < $jet_minstojnost) {
+			if (($snapshot_eur === null ? $this->currency->convert($total, $this->config->get('config_currency'), 'EUR') : $snapshot_eur) < $jet_minstojnost) {
 				$status = false;
 			}
 		}else{

@@ -511,6 +511,7 @@ jQuery(document).ready(function($) {
 		}
 		if (parseFloat($('#jet_card_parva').val()) < jetCardPriceall) {
 			const jetFormData = new FormData();
+			jetFormData.append('jet_checkout_context', 'jet_card');
 			jetFormData.append('jet_priceall', jetCardPriceall.toFixed(2));
 			jetFormData.append('jet_parva', parseFloat($('#jet_card_parva').val()).toFixed(2));
 			jetFormData.append('jet_vnoski', parseInt($('#jet_card_vnoski').val()));

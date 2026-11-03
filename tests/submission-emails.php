@@ -5,19 +5,25 @@ mkdir($temp . '/library', 0700, true);
 define('DIR_SYSTEM', $temp . '/');
 define('DIR_APPLICATION', getcwd().'/upload/catalog/');define('DB_PREFIX','oc_');define('HTTP_SERVER','http://test/');define('HTTPS_SERVER','https://test/');
 #[AllowDynamicProperties] class Controller {}
+#[AllowDynamicProperties] class Model {}
+require_once 'upload/catalog/model/extension/mt_jet_credit/jetcredit.php';
+require_once 'upload/catalog/model/extension/payment/jet.php';
+require_once 'upload/catalog/model/extension/payment/jet_card.php';
 class Config { public $values=[];function get($k){return $this->values[$k]??'';} }
 class Response {public $output;function addHeader($x){}function setOutput($x){$this->output=$x;} }
 class Currency {public $rates;function __construct($base){$this->rates=$base==='EUR'?['EUR'=>1,'USD'=>2]:['USD'=>1,'EUR'=>0.5];}function convert($v,$from,$to){return $v*$this->rates[$to]/$this->rates[$from];}function getId($c){return 1;}function getValue($c){return $this->rates[$c];}}
 class Tax {function calculate($v,...$rest){return $v*1.2;}function getTax($v,...$rest){return $v/6;}}
-class DB {public $queries=[];function query($s){$this->queries[]=$s;return (object)['num_rows'=>1];}function escape($s){return $s;}}
+class DB {public $queries=[],$geoMatches=1;function query($s){$this->queries[]=$s;return (object)['num_rows'=>strpos($s,'zone_to_geo_zone')!==false?$this->geoMatches:1];}function escape($s){return $s;}}
 class Customer {function isLogged(){return false;}}
 class Cart {public $cleared=false;public $price;public $failure='';function getProducts(){return [['product_id'=>1,'quantity'=>2,'price'=>$this->price,'tax_class_id'=>1,'option'=>[['value'=>'red']]]];}function clear(){if($this->failure==='cart')throw new RuntimeException('mock cart clear failure');$this->cleared=true;}}
 class Products {public $price;function getProduct($id){return ['name'=>'Product','price'=>$this->price,'special'=>0,'quantity'=>10,'tax_class_id'=>1,'model'=>'P','subtract'=>1,'reward'=>0];}function getCategories($id){return [['category_id'=>1]];}function getProductOptions($id){return [['required'=>true,'product_option_id'=>1,'type'=>'select','product_option_value'=>[['price'=>$this->price/10,'name'=>'red','product_option_value_id'=>1,'option_value_id'=>1]]]];}}
 class Category {function getCategory($id){return ['name'=>'Category'];}}
-class Promo {function getPromo(...$args){return ['jet_show_button'=>true,'jet_purcent'=>1.2,'jet_purcent_card'=>0.8];}function getJetWideButtonInlineStyle($v){return '';}}
+class Promo extends ModelExtensionMtJetCreditJetcredit {public $normal=1.2,$card=0.8,$show=true;function getPromo(...$args){return ['jet_show_button'=>$this->show,'jet_purcent'=>$this->normal,'jet_purcent_card'=>$this->card];}function getJetWideButtonInlineStyle($v){return '';}}
 class Trace {public static $events=[];}
-class Orders {public $orders=[],$histories=[],$total,$failure='';
- function getOrder($id){Trace::$events[]='read_order';if($this->failure==='missing')return false;return ['order_id'=>$id,'total'=>$this->total,'firstname'=>'Test','lastname'=>'User','telephone'=>'123','email'=>'test@example.invalid'];}
+class Orders {public $orders=[],$histories=[],$total,$failure='', $snapshot=[], $code='jet', $coefficient=1, $rows=null, $options=null;
+ function getOrder($id){Trace::$events[]='read_order';if($this->failure==='missing')return false;return array_merge(['order_id'=>$id,'store_id'=>0,'customer_id'=>0,'payment_code'=>$this->code,'payment_country_id'=>1,'payment_zone_id'=>1,'currency_code'=>'EUR','currency_value'=>$this->coefficient,'total'=>$this->total,'firstname'=>'Test','lastname'=>'User','telephone'=>'123','email'=>'test@example.invalid'],$this->snapshot);}
+ function getOrderProducts($id){return $this->rows??[['order_product_id'=>1,'product_id'=>1,'name'=>'Product','quantity'=>2,'price'=>$this->total/2/1.2,'tax'=>$this->total/2-$this->total/2/1.2]];}
+ function getOrderOptions($id,$product){return isset($this->options[$product][0])?$this->options[$product]:($this->options??[['value'=>'red']]);}
  function addOrder($d){Trace::$events[]='create_order';if($this->failure==='create')throw new RuntimeException('mock create failure');$this->orders[]=$d;return 99;}
  function addOrderHistory(...$args){Trace::$events[]='history';if($this->failure==='history')throw new RuntimeException('mock native notification failure');$this->histories[]=$args;}
 }
@@ -31,6 +37,13 @@ function setup($class,$base='EUR',$selected='EUR'){
  $c->request=(object)['post'=>['jet_priceall'=>'600','jet_parva'=>'100','jet_vnoski'=>12,'jet_product_id'=>1,'jet_products'=>'1','jet_products_qt'=>'2','jet_products_pr'=>'300','jet_products_vr'=>'[[]]','jet_variation_id'=>'[]','jet_quantity'=>2,'jet_vnoska'=>'50','jet_obshto'=>'600','jet_total_credit_price'=>'500','jet_gpr'=>'10','jet_lname'=>'','jet_egn'=>'1234567890','jet_name'=>'Test','jet_lastname'=>'User','jet_phone'=>'123','jet_email'=>'test@example.invalid','jet_card'=>0,'product_id'=>1,'option'=>[1=>1]],'get'=>['product_id'=>1],'server'=>['HTTPS'=>true,'REMOTE_ADDR'=>'127.0.0.1'],'cookie'=>[]];
  $c->response=new Response;$c->currency=new Currency($base);$c->tax=new Tax;$c->db=new DB;$c->customer=new Customer;$c->cart=new Cart;$c->cart->price=$base==='EUR'?250:500;$c->load=new Loader;$c->url=new Url;
  $c->model_catalog_product=new Products;$c->model_catalog_product->price=$base==='EUR'?250:500;$c->model_catalog_category=new Category;$c->model_extension_mt_jet_credit_jetcredit=new Promo;$c->model_checkout_order=new Orders;$c->model_checkout_order->total=$base==='EUR'?600:1200;
+ $c->model_checkout_order->coefficient=$base==='EUR'?1:0.5;
+ foreach(['jet'=>'ModelExtensionPaymentJet','jet_card'=>'ModelExtensionPaymentJetCard'] as $key=>$modelClass){
+  $payment=new $modelClass;foreach(['config','db','currency','session'] as $property)$payment->$property=$c->$property;
+  $c->{'model_extension_payment_'.$key}=$payment;
+ }
+ foreach(['config','customer','session','load','model_checkout_order','model_extension_payment_jet','model_extension_payment_jet_card'] as $property)$c->model_extension_mt_jet_credit_jetcredit->$property=$c->$property;
+ $c->model_extension_mt_jet_credit_jetcredit->model_extension_mt_jet_credit_jetcredit=$c->model_extension_mt_jet_credit_jetcredit;
  return $c;
 }
 
@@ -66,8 +79,12 @@ try {
   if($smtp){$c->config->values['config_mail_engine']='smtp';$c->config->values['config_mail_smtp_password']='mock';}
   if($kind==='Jet'||$kind==='Card'){
    $key=$kind==='Jet'?'jet':'jet_card';$c->session->data['payment_method']['code']=$key;
+   $c->session->data['guest']=['email'=>'test@example.invalid'];$c->model_checkout_order->code=$key;
+   // Financial fixtures follow the committed calculator, not arbitrary installment values.
+   $calculator=setup('OldCalc');$calculator->jet_calculate_cart();$quote=json_decode($calculator->response->output,true);
+   foreach(['vnoska','total_credit_price','obshto','gpr','glp'] as $field)$c->request->post['jet_'.$field]=$quote['jet_'.$field.($key==='jet_card'&&$field!=='total_credit_price'?'_card':'')];
    foreach($c->request->post as $k=>$v)if(str_starts_with($k,'jet_'))$c->request->post[$key.substr($k,3)]=$v;
-   $c->request->post[$key.'_products_vr']='red';$c->confirm();
+   $c->request->post[$key.'_products_vr']='red';$c->request->post[$key.'_products_pr']='300.00';$c->confirm();
   }else{$c->request->post['jet_card']=str_ends_with($kind,'Card')?1:0;$fn=str_starts_with($kind,'Product')?'jet_send':'jet_send_cart';$c->$fn();}
   return ['result'=>json_decode($c->response->output,true),'messages'=>SubmissionTestMailer::$messages,'attempts'=>SubmissionTestMailer::$attempts,'events'=>Trace::$events,'orders'=>$c->model_checkout_order->orders,'history'=>$c->model_checkout_order->histories,'cleared'=>$c->cart->cleared];
  }
@@ -125,6 +142,7 @@ try {
   $r=submit('New',$kind,'bank@example.invalid',[],'',false,'USD');
   check(!$r['attempts']&&!$r['orders']&&!$r['history'],'EUR restriction unchanged');
  }
+ if (isset($checkoutFinancialTests)) $checkoutFinancialTests();
  echo "PASS $count submission/email checks; real recipient validation; mocked transport/orders/database\n";
 } finally {
  foreach(glob($temp.'/*.php') as $file)unlink($file);

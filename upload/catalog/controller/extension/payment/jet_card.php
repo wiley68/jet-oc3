@@ -19,10 +19,14 @@ class ControllerExtensionPaymentJetCard extends Controller
 		$this->load->language('extension/payment/jet_card');
 		$data['JET_VERSION'] = '2.0.1';
 
-		$this->load->model('checkout/order');
-		$order_info = $this->model_checkout_order->getOrder($this->session->data['order_id']);
-		$products = $this->cart->getProducts();
-		$jet_card_price = $this->currency->convert((float)$order_info['total'], $this->config->get('config_currency'), 'EUR');
+		$this->load->model('extension/mt_jet_credit/jetcredit');
+		try {
+			$snapshot = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutSnapshot('jet_card');
+		} catch (\Throwable $error) {
+			return '';
+		}
+		if (!$snapshot) return '';
+		$jet_card_price = $snapshot['amount'];
 		$jet_card_minstojnost = (float)$this->config->get('module_mt_jet_credit_price');
 
 		$data['jet_card_status'] = false;
@@ -43,27 +47,10 @@ class ControllerExtensionPaymentJetCard extends Controller
 			$jet_card_vnoski = $jet_card_vnoski_default;
 		}
 
-		$jet_card_products = '';
-		$jet_card_products_qt = '';
-		$jet_card_products_pr = '';
-		$jet_card_products_vr = '';
-		foreach ($products as $cart_item) {
-			$jet_card_products .= $cart_item['product_id'] . '_';
-			$jet_card_products_qt .= $cart_item['quantity'] . '_';
-			$jet_card_product_vr_current = '';
-			foreach ($cart_item['option'] as $option) {
-				$jet_card_product_vr_current .= $option['value'] . ', ';
-			}
-			$jet_card_product_vr_current = substr($jet_card_product_vr_current, 0, -2);
-			$jet_card_products_pr_current = $this->tax->calculate($cart_item['price'], $cart_item['tax_class_id'], $this->config->get('config_tax'));
-			$jet_card_products_pr_current = $this->currency->convert($jet_card_products_pr_current, $this->config->get('config_currency'), 'EUR');
-			$jet_card_products_pr .= number_format($jet_card_products_pr_current, 2, ".", "") . '_';
-			$jet_card_products_vr .= $jet_card_product_vr_current . '_';
-		}
-		$data['jet_card_products'] = trim($jet_card_products, "_");
-		$data['jet_card_products_qt'] = substr($jet_card_products_qt, 0, -1);
-		$data['jet_card_products_pr'] = substr($jet_card_products_pr, 0, -1);
-		$data['jet_card_products_vr'] = substr($jet_card_products_vr, 0, -1);
+		$data['jet_card_products'] = $snapshot['products_key'];
+		$data['jet_card_products_qt'] = $snapshot['products_qt'];
+		$data['jet_card_products_pr'] = $snapshot['products_pr'];
+		$data['jet_card_products_vr'] = $snapshot['products_vr'];
 		$data['jet_card_sign'] = $jet_card_sign;
 		$data['jet_card_sign_second'] = $jet_card_sign_second;
 
@@ -92,75 +79,24 @@ class ControllerExtensionPaymentJetCard extends Controller
 		$json['success'] = 'unsuccess';
 		$json['redirect'] = $this->url->link('checkout/success');
 
-		if ($this->session->data['payment_method']['code'] == 'jet_card') {
-			if (isset($this->request->post['jet_card_priceall'])) {
-				$jet_card_priceall = filter_var($this->request->post['jet_card_priceall'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_card_priceall = 0.00;
-			}
-			if (isset($this->request->post['jet_card_vnoski'])) {
-				$jet_card_vnoski = filter_var($this->request->post['jet_card_vnoski'], FILTER_SANITIZE_NUMBER_INT);
-			} else {
-				$jet_card_vnoski = (int) $this->config->get('module_mt_jet_credit_vnoski');
-			}
-			if (isset($this->request->post['jet_card_vnoska'])) {
-				$jet_card_vnoska = filter_var($this->request->post['jet_card_vnoska'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_card_vnoska = 0.00;
-			}
-			if (isset($this->request->post['jet_card_parva'])) {
-				$jet_card_parva = filter_var($this->request->post['jet_card_parva'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_card_parva = 0.00;
-			}
-			if (isset($this->request->post['jet_card_total_credit_price'])) {
-				$jet_card_total_credit_price = filter_var($this->request->post['jet_card_total_credit_price'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_card_total_credit_price = 0.00;
-			}
-			if (isset($this->request->post['jet_card_obshto'])) {
-				$jet_card_obshto = filter_var($this->request->post['jet_card_obshto'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_card_obshto = 0.00;
-			}
-			if (isset($this->request->post['jet_card_gpr'])) {
-				$jet_card_gpr = filter_var($this->request->post['jet_card_gpr'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_card_gpr = 0.00;
-			}
-			if (isset($this->request->post['jet_card_glp'])) {
-				$jet_card_glp = filter_var($this->request->post['jet_card_glp'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_card_glp = 0.00;
-			}
-			if (isset($this->request->post['jet_card_egn'])) {
-				$jet_card_egn = filter_var($this->request->post['jet_card_egn'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_card_egn = " - ";
-			}
-			if (isset($this->request->post['jet_card_products'])) {
-				$jet_card_products = filter_var($this->request->post['jet_card_products'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_card_products = '';
-			}
-			if (isset($this->request->post['jet_card_products_qt'])) {
-				$jet_card_products_qt = filter_var($this->request->post['jet_card_products_qt'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_card_products_qt = '';
-			}
-			if (isset($this->request->post['jet_card_products_pr'])) {
-				$jet_card_products_pr = filter_var($this->request->post['jet_card_products_pr'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_card_products_pr = '';
-			}
-			if (isset($this->request->post['jet_card_products_vr'])) {
-				$jet_card_products_vr = filter_var($this->request->post['jet_card_products_vr'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_card_products_vr = '';
-			}
-
-			$this->load->model('checkout/order');
-			$order = $this->model_checkout_order->getOrder($this->session->data['order_id']);
+		$this->load->model('extension/mt_jet_credit/jetcredit');
+		try {
+			$verified = $this->model_extension_mt_jet_credit_jetcredit->validateCheckoutSubmission('jet_card', $this->request->post);
+		} catch (\Throwable $error) {
+			$verified = false;
+		}
+		if ($verified) {
+			$snapshot = $verified['snapshot'];
+			$order = $snapshot['order'];
+			$jet_card_priceall = $verified['quote']['jet_priceall'];
+			$jet_card_vnoski = $verified['term'];
+			$jet_card_vnoska = $verified['quote']['jet_vnoska_card'];
+			$jet_card_parva = $verified['downpayment'];
+			$jet_card_egn = isset($this->request->post['jet_card_egn']) ? filter_var($this->request->post['jet_card_egn'], FILTER_SANITIZE_STRING) : ' - ';
+			$jet_card_products = filter_var($snapshot['products_key'], FILTER_SANITIZE_STRING);
+			$jet_card_products_qt = filter_var($snapshot['products_qt'], FILTER_SANITIZE_STRING);
+			$jet_card_products_pr = filter_var($snapshot['products_pr'], FILTER_SANITIZE_STRING);
+			$jet_card_products_vr = filter_var(html_entity_decode($snapshot['products_vr'], ENT_QUOTES | ENT_HTML5, 'UTF-8'), FILTER_SANITIZE_STRING);
 			$jet_card_name = isset($order['firstname']) ? $order['firstname'] : '';
 			$jet_card_lastname = isset($order['lastname']) ? $order['lastname'] : '';
 			$jet_card_phone = isset($order['telephone']) ? $order['telephone'] : '';
@@ -199,7 +135,7 @@ class ControllerExtensionPaymentJetCard extends Controller
 						$product_c_txt = $category_info['name'];
 					}
 				}
-				$product = $this->model_catalog_product->getProduct((int)$jet_card_product_id);
+				$product = $snapshot['products'][$index];
 				$jet_variations = $product_v[$index];
 				$product_m_txt = html_entity_decode($product['name']);
 				if ($jet_variations != '') {
@@ -210,11 +146,7 @@ class ControllerExtensionPaymentJetCard extends Controller
 					$product_m_txt = " - ";
 				}
 
-				if (isset($product_p[$index]) && (float)$product_p[$index] != 0) {
-					$product_p_txt = (float)$product_p[$index];
-				} else {
-					$product_p_txt = (float)$this->tax->calculate($product['price'], $product['tax_class_id'], true);
-				}
+				$product_p_txt = (float)$product_p[$index];
 				if (isset($product_q[$index]) && (int)$product_q[$index] != 0) {
 					$product_q_txt = (int)$product_q[$index];
 				} else {

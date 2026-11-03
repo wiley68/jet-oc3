@@ -18,10 +18,14 @@ class ControllerExtensionPaymentJet extends Controller
 		}
 		$this->load->language('extension/payment/jet');
 		$data['JET_VERSION'] = '2.0.1';
-		$this->load->model('checkout/order');
-		$order_info = $this->model_checkout_order->getOrder($this->session->data['order_id']);
-		$products = $this->cart->getProducts();
-		$jet_price = $this->currency->convert((float)$order_info['total'], $this->config->get('config_currency'), 'EUR');
+		$this->load->model('extension/mt_jet_credit/jetcredit');
+		try {
+			$snapshot = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutSnapshot('jet');
+		} catch (\Throwable $error) {
+			return '';
+		}
+		if (!$snapshot) return '';
+		$jet_price = $snapshot['amount'];
 		$jet_minstojnost = (float) $this->config->get('module_mt_jet_credit_price');
 		$data['jet_status'] = false;
 		$data['jet_price'] = $jet_price;
@@ -37,27 +41,10 @@ class ControllerExtensionPaymentJet extends Controller
 		} else {
 			$jet_vnoski = $jet_vnoski_default;
 		}
-		$jet_products = '';
-		$jet_products_qt = '';
-		$jet_products_pr = '';
-		$jet_products_vr = '';
-		foreach ($products as $cart_item) {
-			$jet_products .= $cart_item['product_id'] . '_';
-			$jet_products_qt .= $cart_item['quantity'] . '_';
-			$jet_product_vr_current = '';
-			foreach ($cart_item['option'] as $option) {
-				$jet_product_vr_current .= $option['value'] . ', ';
-			}
-			$jet_product_vr_current = substr($jet_product_vr_current, 0, -2);
-			$jet_products_pr_current = $this->tax->calculate($cart_item['price'], $cart_item['tax_class_id'], $this->config->get('config_tax'));
-			$jet_products_pr_current = $this->currency->convert($jet_products_pr_current, $this->config->get('config_currency'), 'EUR');
-			$jet_products_pr .= number_format($jet_products_pr_current, 2, ".", "") . '_';
-			$jet_products_vr .= $jet_product_vr_current . '_';
-		}
-		$data['jet_products'] = trim($jet_products, "_");
-		$data['jet_products_qt'] = substr($jet_products_qt, 0, -1);
-		$data['jet_products_pr'] = substr($jet_products_pr, 0, -1);
-		$data['jet_products_vr'] = substr($jet_products_vr, 0, -1);
+		$data['jet_products'] = $snapshot['products_key'];
+		$data['jet_products_qt'] = $snapshot['products_qt'];
+		$data['jet_products_pr'] = $snapshot['products_pr'];
+		$data['jet_products_vr'] = $snapshot['products_vr'];
 		$data['jet_sign'] = $jet_sign;
 		$data['jet_sign_second'] = $jet_sign_second;
 
@@ -84,74 +71,24 @@ class ControllerExtensionPaymentJet extends Controller
 		$json = [];
 		$json['success'] = 'unsuccess';
 		$json['redirect'] = $this->url->link('checkout/success');
-		if ($this->session->data['payment_method']['code'] == 'jet') {
-			if (isset($this->request->post['jet_priceall'])) {
-				$jet_priceall = filter_var($this->request->post['jet_priceall'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_priceall = 0.00;
-			}
-			if (isset($this->request->post['jet_vnoski'])) {
-				$jet_vnoski = filter_var($this->request->post['jet_vnoski'], FILTER_SANITIZE_NUMBER_INT);
-			} else {
-				$jet_vnoski = (int) $this->config->get('module_mt_jet_credit_vnoski');
-			}
-			if (isset($this->request->post['jet_vnoska'])) {
-				$jet_vnoska = filter_var($this->request->post['jet_vnoska'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_vnoska = 0.00;
-			}
-			if (isset($this->request->post['jet_parva'])) {
-				$jet_parva = filter_var($this->request->post['jet_parva'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_parva = 0.00;
-			}
-			if (isset($this->request->post['jet_total_credit_price'])) {
-				$jet_total_credit_price = filter_var($this->request->post['jet_total_credit_price'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_total_credit_price = 0.00;
-			}
-			if (isset($this->request->post['jet_obshto'])) {
-				$jet_obshto = filter_var($this->request->post['jet_obshto'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_obshto = 0.00;
-			}
-			if (isset($this->request->post['jet_gpr'])) {
-				$jet_gpr = filter_var($this->request->post['jet_gpr'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_gpr = 0.00;
-			}
-			if (isset($this->request->post['jet_glp'])) {
-				$jet_glp = filter_var($this->request->post['jet_glp'], FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-			} else {
-				$jet_glp = 0.00;
-			}
-			if (isset($this->request->post['jet_egn'])) {
-				$jet_egn = filter_var($this->request->post['jet_egn'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_egn = " - ";
-			}
-			if (isset($this->request->post['jet_products'])) {
-				$jet_products = filter_var($this->request->post['jet_products'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_products = '';
-			}
-			if (isset($this->request->post['jet_products_qt'])) {
-				$jet_products_qt = filter_var($this->request->post['jet_products_qt'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_products_qt = '';
-			}
-			if (isset($this->request->post['jet_products_pr'])) {
-				$jet_products_pr = filter_var($this->request->post['jet_products_pr'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_products_pr = '';
-			}
-			if (isset($this->request->post['jet_products_vr'])) {
-				$jet_products_vr = filter_var($this->request->post['jet_products_vr'], FILTER_SANITIZE_STRING);
-			} else {
-				$jet_products_vr = '';
-			}
-			$this->load->model('checkout/order');
-			$order = $this->model_checkout_order->getOrder($this->session->data['order_id']);
+		$this->load->model('extension/mt_jet_credit/jetcredit');
+		try {
+			$verified = $this->model_extension_mt_jet_credit_jetcredit->validateCheckoutSubmission('jet', $this->request->post);
+		} catch (\Throwable $error) {
+			$verified = false;
+		}
+		if ($verified) {
+			$snapshot = $verified['snapshot'];
+			$order = $snapshot['order'];
+			$jet_priceall = $verified['quote']['jet_priceall'];
+			$jet_vnoski = $verified['term'];
+			$jet_vnoska = $verified['quote']['jet_vnoska'];
+			$jet_parva = $verified['downpayment'];
+			$jet_egn = isset($this->request->post['jet_egn']) ? filter_var($this->request->post['jet_egn'], FILTER_SANITIZE_STRING) : ' - ';
+			$jet_products = filter_var($snapshot['products_key'], FILTER_SANITIZE_STRING);
+			$jet_products_qt = filter_var($snapshot['products_qt'], FILTER_SANITIZE_STRING);
+			$jet_products_pr = filter_var($snapshot['products_pr'], FILTER_SANITIZE_STRING);
+			$jet_products_vr = filter_var(html_entity_decode($snapshot['products_vr'], ENT_QUOTES | ENT_HTML5, 'UTF-8'), FILTER_SANITIZE_STRING);
 			$jet_name = isset($order['firstname']) ? $order['firstname'] : '';
 			$jet_lastname = isset($order['lastname']) ? $order['lastname'] : '';
 			$jet_phone = isset($order['telephone']) ? $order['telephone'] : '';
@@ -186,7 +123,7 @@ class ControllerExtensionPaymentJet extends Controller
 						$product_c_txt = $category_info['name'];
 					}
 				}
-				$product = $this->model_catalog_product->getProduct((int) $jet_product_id);
+				$product = $snapshot['products'][$index];
 				$jet_variations = $product_v[$index];
 				$product_m_txt = html_entity_decode($product['name']);
 				if ($jet_variations != '') {
@@ -196,11 +133,7 @@ class ControllerExtensionPaymentJet extends Controller
 				if ($product_m_txt == "") {
 					$product_m_txt = " - ";
 				}
-				if (isset($product_p[$index]) && (float)$product_p[$index] != 0) {
-					$product_p_txt = (float)$product_p[$index];
-				} else {
-					$product_p_txt = (float)$this->tax->calculate($product['price'], $product['tax_class_id'], true);
-				}
+				$product_p_txt = (float)$product_p[$index];
 				if (isset($product_q[$index]) && (int)$product_q[$index] != 0) {
 					$product_q_txt = (int)$product_q[$index];
 				} else {
