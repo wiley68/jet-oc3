@@ -5,7 +5,46 @@ jQuery(document).ready(function($) {
 		$("#jet-product-popup-container").prependTo("body");
 	}
 
-	const jetChange = (jetPriceall) => {
+
+	let jetCalculationRevision = 0;
+	let jetDownpaymentTimer;
+	const jetDownpaymentValue = () => {
+		const value = String($('#jet_parva').val() || '').trim();
+		const amount = parseFloat(value);
+		return Number.isNaN(amount) ? value : String(amount);
+	};
+	let jetLastDownpayment = jetDownpaymentValue();
+	const jetPopupLoading = (loading) => {
+		const popup = $('#jet-product-popup-container');
+		if (loading && !popup.find('.jet_offer_loader').length) {
+			const content = popup.find('.modalpayment-content_jet').first();
+			$('<div>', { class: 'jet_offer_loader', role: 'status', 'aria-live': 'polite' })
+				.append($('<span>', { text: 'Преизчисляване…' }))
+				.appendTo(content.length ? content : popup);
+		}
+		popup.toggleClass('jet_offer_loading', loading).attr('aria-busy', loading ? 'true' : 'false');
+	};
+	const jetBeginCalculation = () => {
+		clearTimeout(jetDownpaymentTimer);
+		jetLastDownpayment = jetDownpaymentValue();
+		const revision = ++jetCalculationRevision;
+		jetPopupLoading(true);
+		return revision;
+	};
+	const jetFinishCalculation = (revision) => {
+		if (revision === jetCalculationRevision) jetPopupLoading(false);
+	};
+	const jetScheduleDownpayment = () => {
+		const value = jetDownpaymentValue();
+		if (value === jetLastDownpayment) return;
+		jetLastDownpayment = value;
+		++jetCalculationRevision;
+		clearTimeout(jetDownpaymentTimer);
+		jetDownpaymentTimer = setTimeout(() => jetCalculate(false), 400);
+	};
+
+	const jetChange = (jetPriceall, revision) => {
+		if (revision !== jetCalculationRevision) return;
 		jetHideOptions401();
 		jetHideOptions601();
 		if (jetPriceall >= 401) {
@@ -26,7 +65,9 @@ jQuery(document).ready(function($) {
 				data: jetFormData,
 				processData: false,
 				contentType: false,
+				timeout: 30000,
 				success: function(json) {
+					if (revision !== jetCalculationRevision) return;
 					if (json.success === 'success') {
 						if (json.jet_show_button) {
 							$('#jet-product-button-container').show('slow');
@@ -64,10 +105,12 @@ jQuery(document).ready(function($) {
 					}
 				},
 				error: function(error) {
-					console.error('Error:', error);
-				}
+					if (revision === jetCalculationRevision) console.error('Error:', error);
+				},
+				complete: function() { jetFinishCalculation(revision); }
 			});
 		} else {
+			jetFinishCalculation(revision);
 			if ($('#jet_parva').length) {
 				$('#jet_alert_overlay').addClass('show');
 				jetShowCustomAlert('Първоначалната вноска трябва да бъде по-малка от цената на стоките!', false);
@@ -76,6 +119,7 @@ jQuery(document).ready(function($) {
 	}
 
 	const jetCalculate = (test) => {
+		const revision = jetBeginCalculation();
 		let jet_price1 = $('#jet_price').val();
 		let jet_quantity = 1;
 		if ($('input[name="quantity"]').length) {
@@ -85,15 +129,19 @@ jQuery(document).ready(function($) {
 		let total_price = 0;
 		let jet_variation_id = [];
 		if (document.querySelectorAll("[id*='input-option']").length > 0 ) {
+			let calculationStarted = false;
 			$.ajax({
 				url: 'index.php?route=extension/mt_jet_credit/jetcredit/jet_check',
 				type: 'post',
 				data: $('#product input[type=\'text\'], #product input[type=\'hidden\'], #product input[type=\'radio\']:checked, #product input[type=\'checkbox\']:checked, #product select, #product textarea'),
 				dataType: 'json',
+				timeout: 30000,
 				success: function(json) {
+					if (revision !== jetCalculationRevision) return;
 					$('.alert, .text-danger').remove();
 					if (json['error']) {
-						jetChange(jetPriceall);
+						calculationStarted = true;
+						jetChange(jetPriceall, revision);
 						if (test) {
 							if (json['error']['option']) {
 								for (i in json['error']['option']) {
@@ -157,14 +205,21 @@ jQuery(document).ready(function($) {
 							}
 							jet_price1 = parseFloat(jet_price1) + total_price;
 							jetPriceall = parseFloat(jet_price1) * jet_quantity;
-							jetChange(jetPriceall);
+							calculationStarted = true;
+							jetChange(jetPriceall, revision);
 							$('#jet_variation_id').val(JSON.stringify(jet_variation_id));
 						}
 					}
+				},
+				error: function(error) {
+					if (revision === jetCalculationRevision) console.error('Error:', error);
+				},
+				complete: function() {
+					if (!calculationStarted) jetFinishCalculation(revision);
 				}
 			});
 		} else {
-			jetChange(jetPriceall);
+			jetChange(jetPriceall, revision);
 			$('#jet_variation_id').val(JSON.stringify(jet_variation_id));
 		}
 	}
@@ -493,5 +548,7 @@ jQuery(document).ready(function($) {
 		});
 	}
 
+	$('#jet_parva').off('.jetRecalculation').on('input.jetRecalculation change.jetRecalculation', jetScheduleDownpayment);
+
 	jetCalculate(false);
 });

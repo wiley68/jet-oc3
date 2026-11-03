@@ -1,6 +1,45 @@
 jQuery(document).ready(function($) {
 	let card;
 	card = 0;
+
+	let jetCalculationRevision = 0;
+	let jetDownpaymentTimer;
+	const jetDownpaymentValue = () => {
+		const value = String($('#jet_parva').val() || '').trim();
+		if (value === '') return '0';
+		const amount = parseFloat(value);
+		return Number.isNaN(amount) ? value : String(amount);
+	};
+	let jetLastDownpayment = jetDownpaymentValue();
+	const jetPopupLoading = (loading) => {
+		const popup = $('#jet-product-popup-container');
+		if (loading && !popup.find('.jet_offer_loader').length) {
+			const content = popup.find('.modalpayment-content_jet').first();
+			$('<div>', { class: 'jet_offer_loader', role: 'status', 'aria-live': 'polite' })
+				.append($('<span>', { text: 'Преизчисляване…' }))
+				.appendTo(content.length ? content : popup);
+		}
+		popup.toggleClass('jet_offer_loading', loading).attr('aria-busy', loading ? 'true' : 'false');
+	};
+	const jetBeginCalculation = () => {
+		clearTimeout(jetDownpaymentTimer);
+		jetLastDownpayment = jetDownpaymentValue();
+		const revision = ++jetCalculationRevision;
+		jetPopupLoading(true);
+		return revision;
+	};
+	const jetFinishCalculation = (revision) => {
+		if (revision === jetCalculationRevision) jetPopupLoading(false);
+	};
+	const jetScheduleDownpayment = () => {
+		const value = jetDownpaymentValue();
+		if (value === jetLastDownpayment) return;
+		jetLastDownpayment = value;
+		++jetCalculationRevision;
+		clearTimeout(jetDownpaymentTimer);
+		jetDownpaymentTimer = setTimeout(() => jetCalculate(false), 400);
+	};
+
 	/* function */
 	const jetLoad = () => {
 		if ($('#btn_jet').length !== 0) {
@@ -67,7 +106,9 @@ jQuery(document).ready(function($) {
 	}
 
 	const jetCalculate = () => {
+		const revision = jetBeginCalculation();
 		const jetPriceall = parseFloat($('#jet_price').val());
+		const jetDownpayment = parseFloat(jetDownpaymentValue());
 		jetHideOptions401();
 		jetHideOptions601();
 		if (jetPriceall >= 401) {
@@ -76,10 +117,10 @@ jQuery(document).ready(function($) {
 		if (jetPriceall >= 601) {
 			jetShowOptions601();
 		}
-		if (parseFloat($('#jet_parva').val()) < jetPriceall) {
+		if (jetDownpayment < jetPriceall) {
 			const jetFormData = new FormData();
 			jetFormData.append('jet_priceall', jetPriceall.toFixed(2));
-			jetFormData.append('jet_parva', parseFloat($('#jet_parva').val()).toFixed(2));
+			jetFormData.append('jet_parva', jetDownpayment.toFixed(2));
 			jetFormData.append('jet_vnoski', parseInt($('#jet_vnoski').val()));
 			jetFormData.append('jet_products', $('#jet_products').val());
 			jetFormData.append('jet_products_qt', $('#jet_products_qt').val());
@@ -90,7 +131,9 @@ jQuery(document).ready(function($) {
 				data: jetFormData,
 				processData: false,
 				contentType: false,
+				timeout: 30000,
 				success: function(json) {
+					if (revision !== jetCalculationRevision) return;
 					if (json.success === 'success') {
 						if ($('#jet_vnoska').length !== 0) $('#jet_vnoska').text(json.jet_vnoska);
 						if ($('#jet_vnoska_second').length !== 0) $('#jet_vnoska_second').text(json.jet_vnoska_second);
@@ -123,10 +166,12 @@ jQuery(document).ready(function($) {
 					}
 				},
 				error: function(error) {
-					console.error('Error:', error);
-				}
+					if (revision === jetCalculationRevision) console.error('Error:', error);
+				},
+				complete: function() { jetFinishCalculation(revision); }
 			});
 		} else {
+			jetFinishCalculation(revision);
 			$("#jet_alert_overlay").addClass("show");
 			jetShowCustomAlert('Първоначалната вноска трябва да бъде по-малка от цената на стоките!', false);
 		}
@@ -364,6 +409,11 @@ jQuery(document).ready(function($) {
 		if (event.target.id == "jet_vnoski") {
 			jetCalculate();
 		}
+	});
+
+	$('#jet_parva').off('.jetRecalculation').on('input.jetRecalculation change.jetRecalculation', jetScheduleDownpayment);
+	$('#jet_parva').on('blur.jetRecalculation', () => {
+		if (String($('#jet_parva').val() || '').trim() === '') $('#jet_parva').val(0);
 	});
 
 	jetLoad();
