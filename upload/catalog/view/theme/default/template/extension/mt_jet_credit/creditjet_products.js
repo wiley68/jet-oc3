@@ -24,11 +24,11 @@ jQuery(document).ready(function($) {
 		}
 		popup.toggleClass('jet_offer_loading', loading).attr('aria-busy', loading ? 'true' : 'false');
 	};
-	const jetBeginCalculation = () => {
+	const jetBeginCalculation = (loading = true) => {
 		clearTimeout(jetDownpaymentTimer);
 		jetLastDownpayment = jetDownpaymentValue();
 		const revision = ++jetCalculationRevision;
-		jetPopupLoading(true);
+		jetPopupLoading(loading);
 		return revision;
 	};
 	const jetFinishCalculation = (revision) => {
@@ -41,6 +41,10 @@ jQuery(document).ready(function($) {
 		++jetCalculationRevision;
 		clearTimeout(jetDownpaymentTimer);
 		jetDownpaymentTimer = setTimeout(() => jetCalculate(false), 400);
+	};
+
+	const jetButtonInstallments = (visible) => {
+		$('#jet-product-button-container').toggleClass('jet_options_pending', !visible);
 	};
 
 	const jetChange = (jetPriceall, revision) => {
@@ -69,6 +73,7 @@ jQuery(document).ready(function($) {
 				success: function(json) {
 					if (revision !== jetCalculationRevision) return;
 					if (json.success === 'success') {
+						jetButtonInstallments(true);
 						if (json.jet_show_button) {
 							$('#jet-product-button-container').show('slow');
 						}else{
@@ -119,7 +124,9 @@ jQuery(document).ready(function($) {
 	}
 
 	const jetCalculate = (test) => {
-		const revision = jetBeginCalculation();
+		const hasOptions = document.querySelectorAll("[id*='input-option']").length > 0;
+		const revision = jetBeginCalculation(!test || !hasOptions);
+		if (hasOptions) jetButtonInstallments(false);
 		let jet_price1 = $('#jet_price').val();
 		let jet_quantity = 1;
 		if ($('input[name="quantity"]').length) {
@@ -128,7 +135,7 @@ jQuery(document).ready(function($) {
 		let jetPriceall = parseFloat(jet_price1) * jet_quantity;
 		let total_price = 0;
 		let jet_variation_id = [];
-		if (document.querySelectorAll("[id*='input-option']").length > 0 ) {
+		if (hasOptions) {
 			let calculationStarted = false;
 			$.ajax({
 				url: 'index.php?route=extension/mt_jet_credit/jetcredit/jet_check',
@@ -140,8 +147,7 @@ jQuery(document).ready(function($) {
 					if (revision !== jetCalculationRevision) return;
 					$('.alert, .text-danger').remove();
 					if (json['error']) {
-						calculationStarted = true;
-						jetChange(jetPriceall, revision);
+						$('#jet-product-button-container').show();
 						if (test) {
 							if (json['error']['option']) {
 								for (i in json['error']['option']) {
@@ -154,8 +160,11 @@ jQuery(document).ready(function($) {
 								}
 							}
 							$('.text-danger').parent().addClass('has-error');
-							$('#jet_alert_overlay').addClass("show");
-							jetShowCustomAlert('Моля изберете стойност за задължителните опции за продукта!', true);
+							$('#jet_alert_box:empty').remove();
+							if (!$('#jet_alert_box').length) {
+								$('#jet_alert_overlay').addClass("show");
+								jetShowCustomAlert('Моля, изберете първо опция от възможните за продукта!', true, false);
+							}
 						}
 					}else{
 						if (json['success']) {
@@ -205,6 +214,10 @@ jQuery(document).ready(function($) {
 							}
 							jet_price1 = parseFloat(jet_price1) + total_price;
 							jetPriceall = parseFloat(jet_price1) * jet_quantity;
+							if (test) {
+								jetPopupLoading(true);
+								$('#jet-product-popup-container').show();
+							}
 							calculationStarted = true;
 							jetChange(jetPriceall, revision);
 							$('#jet_variation_id').val(JSON.stringify(jet_variation_id));
@@ -219,12 +232,13 @@ jQuery(document).ready(function($) {
 				}
 			});
 		} else {
+			if (test) $('#jet-product-popup-container').show();
 			jetChange(jetPriceall, revision);
 			$('#jet_variation_id').val(JSON.stringify(jet_variation_id));
 		}
 	}
 
-	const jetClose = () => {
+	const jetClose = (recalculate = true) => {
 		$('#jet-product-popup-container').hide();
 		$('#jet_step_1').show();
 		$('#jet_step_2').hide();
@@ -234,7 +248,7 @@ jQuery(document).ready(function($) {
 		const jet_parva = $('#jet_parva');
 		if (parseFloat(jet_parva.val()) !== 0) {
 			jet_parva.val(0);
-			jetCalculate(false);
+			if (recalculate) jetCalculate(false);
 		}
 		changeBtnJetcredit();
 	}
@@ -307,7 +321,7 @@ jQuery(document).ready(function($) {
 		}
 	}
 
-	const jetShowCustomAlert = (message, exit) => {
+	const jetShowCustomAlert = (message, exit, recalculate = true) => {
 		const jetAlertBox = $('<div></div>', {
 			id: 'jet_alert_box',
 			css: {
@@ -349,7 +363,7 @@ jQuery(document).ready(function($) {
 		jetCloseButton.on('click', function() {
 			jetAlertBox.remove();
 			if (exit) {
-				jetClose();
+				jetClose(recalculate);
 			}
 			$('#jet_alert_overlay').removeClass('show');
 		});
@@ -442,14 +456,12 @@ jQuery(document).ready(function($) {
 	$('#btn_jet').on('click', event => {
 		card = 0;
 		jetCalculate(true);
-		$('#jet-product-popup-container').show();
 	});
 
 	if ($('#btn_jet_card').length) {
 		$('#btn_jet_card').on('click', event => {
 			card = 1;
 			jetCalculate(true);
-			$('#jet-product-popup-container').show();
 		});
 	}
 

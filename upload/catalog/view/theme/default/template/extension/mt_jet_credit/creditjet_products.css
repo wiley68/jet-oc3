@@ -544,3 +544,8 @@ input[type="checkbox"].jet_uslovia{
 		animation: none;
 	}
 }
+
+#jet-product-button-container.jet_options_pending .jet_wide_button_text,
+#jet-product-button-container.jet_options_pending .jet_table_img tr + tr {
+	display: none !important;
+}
