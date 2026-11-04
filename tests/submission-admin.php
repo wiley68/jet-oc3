@@ -59,7 +59,7 @@ check($c->model_setting_setting->settings===$settings&&!$c->model_setting_settin
 $c->storage->fail=true;$c->prepareSubmissionSchema();check(json_decode($c->response->output,true)===['success'=>'unsuccess','error'=>'Хранилището не е подготвено или е несъвместимо. Подготовката е отказана; броячът не е нулиран.'],'safe administrative failure without storage details');
 $c=foundationAdmin();$settings=$c->model_setting_setting->settings;$c->install();$c->install();
 check($c->storage->seeds===['17','17']&&!$c->model_setting_setting->edits&&$c->model_setting_setting->settings===$settings,'reinstall preserves persistent settings');
-$c=foundationAdmin();$c->model_setting_setting->settings=[];$c->install();check($c->storage->seeds===[null]&&count($c->model_setting_setting->edits)===1,'settings absence alone never supplies default seed');
+$c=foundationAdmin();$c->model_setting_setting->settings=[];$c->install();check($c->storage->seeds===['1']&&count($c->model_setting_setting->edits)===1,'authorized install supplies server seed only for empty persistent settings');
 $c=foundationAdmin();$c->storage->fail=true;$c->session->data['success']='old success';$c->install();check(count($c->response->redirects)===1&&isset($c->session->data['jet_submission_install_error'])&&!isset($c->session->data['success']),'install failure redirects with safe persistent admin error');
 check(count($c->log->messages)===1&&strpos($c->log->messages[0],'stage=storage-preparation')!==false&&strpos($c->log->messages[0],'secret')===false,'install logs safe stage/source without original sensitive message');
 check(!$c->db->queries&&!$c->model_setting_setting->edits,'storage failure stops later install mutations');
@@ -85,7 +85,7 @@ $c=foundationAdmin();$c->storage->fail=true;$c->request->server['REQUEST_METHOD'
 check($c->load->viewData['module_mt_jet_credit_count']==='','unavailable storage never displays legacy authority or internal error');
 $c=foundationAdmin();unset($c->model_setting_setting->settings['module_mt_jet_credit_count']);$c->prepareSubmissionSchema();check($c->storage->seeds===[null],'ambiguous upgrade never guesses seed');
 $c=foundationAdmin();$c->model_setting_setting->settings['module_mt_jet_credit_count']='invalid';$c->prepareSubmissionSchema();check($c->storage->seeds===['invalid'],'existing-storage-first decision belongs to verified store');
-$c=foundationAdmin();$c->model_setting_setting->settings=[];$c->request->post=['module_mt_jet_credit_count'=>'forged'];$c->install();check($c->storage->seeds===[null]&&!isset($c->model_setting_setting->settings['module_mt_jet_credit_count']),'install never persists or uses client seed');
+$c=foundationAdmin();$c->model_setting_setting->settings=[];$c->request->post=['module_mt_jet_credit_count'=>'forged'];$c->install();check($c->storage->seeds===['1']&&!isset($c->model_setting_setting->settings['module_mt_jet_credit_count']),'install never persists or uses client seed');
 $c=foundationAdmin();unset($c->model_setting_setting->settings['module_mt_jet_credit_count']);$c->request->post=['module_mt_jet_credit_gap'=>'0','module_mt_jet_credit_id'=>'Merchant','module_mt_jet_credit_price'=>'75','module_mt_jet_credit_count'=>'999'];$c->index();check(!isset($c->model_setting_setting->settings['module_mt_jet_credit_count']),'ordinary save cannot create absent seed');
 $twig=file_get_contents(dirname(__DIR__).'/upload/admin/view/template/extension/module/mt_jet_credit.twig');
 preg_match('/<input[^>]*id="module_mt_jet_credit_count"[^>]*>/', $twig,$field);
@@ -109,7 +109,7 @@ foreach([null,'',false,'01'] as $seed){
  $m=new SubmissionMemory;$c->storage=new JetSubmissionStore(new SubmissionConnection($m),'oc_');$c->prepareSubmissionSchema();
  check(json_decode($c->response->output,true)['success']==='unsuccess'&&!$m->tables,'ambiguous or invalid upgrade refused without creating tables');
 }
-$c=foundationAdmin();$c->model_setting_setting->settings=[];$m=new SubmissionMemory;$c->storage=new JetSubmissionStore(new SubmissionConnection($m),'oc_');$c->install();check(!$m->tables&&$m->meta===null&&count($c->response->redirects)===1,'missing seed and storage cause controlled refusal without default or DDL');
+$c=foundationAdmin();$c->model_setting_setting->settings=['module_mt_jet_credit_id'=>'Existing merchant'];$m=new SubmissionMemory;$c->storage=new JetSubmissionStore(new SubmissionConnection($m),'oc_');$c->install();check(!$m->tables&&$m->meta===null&&count($c->response->redirects)===1,'nonempty settings without seed cause controlled refusal without default or DDL');
 check(strpos($c->log->messages[0],'reason=reference-unavailable-or-invalid')!==false,'safe reference diagnosis retained');
 $c->request->server['REQUEST_METHOD']='GET';$c->index();check($c->load->viewData['module_mt_jet_credit_count']===''&&$c->load->viewData['error_warning']!==''&&!isset($c->session->data['jet_submission_install_error']),'redirect renders admin failure outside empty counter and consumes warning');
 $c->index();check($c->load->viewData['error_warning']==='','failure warning consumed once');
@@ -149,17 +149,53 @@ $service=new JetSubmission($c->storage);$intent=$service->createIntent(0,'owner'
 $before=serialize([$m->meta,$m->ledger]);$c->model_setting_setting->settings=[];$c->uninstall();$c->install();
 check(serialize([$m->meta,$m->ledger])===$before&&$c->storage->getNextReference()==='18','native settings removal plus uninstall/reinstall preserves durable counter/key/ledger');
 check(!isset($c->session->data['jet_submission_install_error']),'valid existing storage needs no legacy seed after uninstall');
-foreach(['one-table','missing-singleton','bad-index'] as $case){
+foreach(['one-table','missing-singleton','bad-index','inconsistent-counter'] as $case){
  $copy=clone $m;
  if($case==='one-table')unset($copy->tables['oc_jet_submission']);
  if($case==='missing-singleton')$copy->meta=null;
  if($case==='bad-index')array_pop($copy->tables['oc_jet_submission']['indexes']);
+ if($case==='inconsistent-counter')$copy->meta['next_reference']='17';
  $before=serialize([$copy->tables,$copy->meta,$copy->ledger]);$c=foundationAdmin();$c->model_setting_setting->settings=[];
  $db=new SubmissionConnection($copy);$c->storage=new JetSubmissionStore($db,'oc_');$c->install();
  check(serialize([$copy->tables,$copy->meta,$copy->ledger])===$before&&count($c->response->redirects)===1,'partial/incompatible install controlled refusal without state reset: '.$case);
  check(!preg_match('/CREATE|INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER/',implode(' ',$db->queries)),'invalid existing durable storage never repaired automatically');
 }
 $c=foundationAdmin();$m=new SubmissionMemory;$c->model_setting_setting->settings['module_mt_jet_credit_count']='1';$c->storage=new JetSubmissionStore(new SubmissionConnection($m),'oc_');$c->install();check($c->storage->getNextReference()==='1','new storage initializes from verified persistent seed including explicit one');
+// HOTFIX-02 IMP-02: first-install seed is authorized only by install(), never by POST.
+$c=nativeInstallAdmin();$c->model_setting_setting->settings=[];$m=new SubmissionMemory;
+$m->vars=['autocommit'=>'ON','innodb_flush_log_at_trx_commit'=>'2','log_bin'=>'OFF','sync_binlog'=>'0'];
+$connection=new SubmissionConnection($m);$c->storage=new JetSubmissionStore($connection,'oc_');
+$c->request->server['REQUEST_METHOD']='GET';$c->request->post=[];$c->index();
+check($c->load->viewData['module_mt_jet_credit_count']===''&&!$m->tables,'counter remains empty and read-only before preparation');
+$c->request->post=['module_mt_jet_credit_count'=>'999'];$c->install();
+check(count($m->tables)===2&&$m->meta['next_reference']==='1'&&!$m->ledger&&!$c->response->redirects,'authorized native fresh install initializes one without reserving a reference');
+check(!isset($c->model_setting_setting->settings['module_mt_jet_credit_count']),'fresh installation creates no legacy counter setting');
+$service=new JetSubmission($c->storage);$data=['amount'=>'100.00'];$id=$service->createIntent(0,'owner','cart','basket')['intent_id'];
+$claim=$service->claim($id,0,'owner','jet',$data);
+check($claim['acquired']&&$claim['row']['reference_no']==='1'&&$m->meta['next_reference']==='2','first fresh Cart claim reserves one and advances to two');
+$before=serialize([$m->meta,$m->ledger]);$retry=$service->claim($id,0,'owner','jet',$data);
+check(!$retry['acquired']&&!isset($retry['execution_token'])&&serialize([$m->meta,$m->ledger])===$before,'fresh claim replay cannot increment or become another executor');
+$c->model_setting_setting->settings=[];$queries=count($connection->queries);$c->install();
+check(serialize([$m->meta,$m->ledger])===$before,'fresh default never replaces existing ledger, next reference or digest key during reinstall');
+check(!preg_match('/CREATE|INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER/',implode(' ',array_slice($connection->queries,$queries))),'valid existing submission storage is verified without write operations');
+$c->index();check($c->load->viewData['module_mt_jet_credit_count']==='2','readonly counter displays actual next reference after preparation');
+// Invalid/missing legacy seeds in nonempty settings must not become fresh defaults.
+foreach([null,'',false,'01',[], -1] as $seed){
+ $c=foundationAdmin();$c->model_setting_setting->settings=['module_mt_jet_credit_count'=>$seed];
+ $m=new SubmissionMemory;$connection=new SubmissionConnection($m);$c->storage=new JetSubmissionStore($connection,'oc_');$c->install();
+ check(!$m->tables&&$m->meta===null&&count($c->response->redirects)===1,'invalid existing legacy seed is rejected without defaulting to one');
+}
+foreach([0,'0','17'] as $seed){
+ $c=foundationAdmin();$c->model_setting_setting->settings=['module_mt_jet_credit_count'=>$seed];$c->install();
+ check($c->storage->seeds===[$seed],'existing legacy seed is passed unchanged, including zero');
+ $m=new SubmissionMemory;$c->storage=new JetSubmissionStore(new SubmissionConnection($m),'oc_');$c->install();
+ check($m->meta['next_reference']===(string)$seed&&$c->model_setting_setting->settings['module_mt_jet_credit_count']===$seed,'existing storage-valid seed is preserved rather than replaced by one');
+}
+foreach([[],['module_mt_jet_credit_count'=>'999']] as $post){
+ $c=foundationAdmin();$c->model_setting_setting->settings=[];$c->request->post=$post;
+ $m=new SubmissionMemory;$c->storage=new JetSubmissionStore(new SubmissionConnection($m),'oc_');$c->prepareSubmissionSchema();
+ check(json_decode($c->response->output,true)['success']==='unsuccess'&&!$m->tables&&$m->meta===null,'protected preparation cannot initialize absent settings/storage, even with a posted seed');
+}
 // Native Response::redirect exits, preventing core's unconditional success assignment.
 class HotfixRedirectExit extends RuntimeException {}
 $c=foundationAdmin();$c->storage->fail=true;$c->response=new class extends SchemaResponseDouble {function redirect($url){throw new HotfixRedirectExit;}};

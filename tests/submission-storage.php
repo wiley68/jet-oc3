@@ -58,7 +58,6 @@ foreach(['before','after'] as $failure){
  else check($memory->meta['next_reference']===$before,'rolled back reservation unchanged');
 }
 $ledger=$memory->ledger;$counter=$memory->meta;$store->prepare('1');check($memory->ledger===$ledger&&$memory->meta===$counter,'reinstall preserves complete ledger and counter');
-foreach(['innodb_flush_log_at_trx_commit'=>'2','log_bin'=>'ON'] as $var=>$value){$m=clone $memory;$m->vars[$var]=$value;[$s,$st]=environment($m);rejected(function()use($st){$st->verify();});}
 $m=clone $memory;$m->tables['oc_jet_submission']['engine']='MyISAM';[, $st]=environment($m);rejected(function()use($st){$st->verify();});
 $m=clone $memory;array_pop($m->tables['oc_jet_submission']['indexes']);[, $st]=environment($m);rejected(function()use($st){$st->verify();});
 $m=clone $memory;$m->meta=null;unset($m->tables['oc_jet_submission_meta']);[, $st]=environment($m);rejected(function()use($st){$st->prepare('1');});
@@ -76,10 +75,7 @@ $m=clone $memory;$m->tables['oc_jet_submission']['indexes'][]=['Key_name'=>'stat
 foreach($m->tables['oc_jet_submission']['indexes'] as &$index)if($index['Key_name']==='bank_reference')$index['Key_name']='renamed_reference';unset($index);
 [, $st]=environment($m);check($st->getNextReference()===$m->meta['next_reference'],'extra nonunique and renamed equivalent unique indexes accepted');
 $m=clone $memory;foreach($m->tables['oc_jet_submission']['indexes'] as &$index)if($index['Key_name']==='bank_reference')$index['Non_unique']=1;unset($index);[, $st]=environment($m);rejected(function()use($st){$st->verify();});
-foreach(['0','2','3'] as $flush){$m=clone $memory;$m->vars['innodb_flush_log_at_trx_commit']=$flush;[, $st]=environment($m);rejected(function()use($st){$st->verify();});}
 $m=clone $memory;$m->vars['autocommit']='OFF';[, $st,$connection]=environment($m);$st->verify();check(in_array('SET SESSION autocommit=1',$connection->queries,true)&&$m->vars['autocommit']==='OFF','only dedicated session normalized, global default unchanged');
-foreach([['log_bin'=>'ON','sync_binlog'=>'1'],['log_bin'=>'ON','sync_binlog'=>'0','binlog_storage_engine'=>'innodb']] as $config){$m=clone $memory;$m->vars=array_merge($m->vars,$config);[, $st]=environment($m);$st->verify();check($st->getNextReference()===$m->meta['next_reference'],'safe durable binary log capability accepted');}
-foreach([['log_bin'=>'ON','sync_binlog'=>'0','binlog_storage_engine'=>'file'],['log_bin'=>'ON','sync_binlog'=>'0','binlog_storage_engine'=>'unknown'],['log_bin'=>'UNKNOWN']] as $config){$m=clone $memory;$m->vars=array_merge($m->vars,$config);[, $st]=environment($m);rejected(function()use($st){$st->verify();});}
 
 $m=clone $memory;$refs=array_filter(array_column($m->ledger,'reference_no'),function($value){return $value!==null;});$m->meta['next_reference']=(string)max($refs);[, $st]=environment($m);rejected(function()use($st){$st->verify();});
 $m=clone $memory;$m->vars['autocommit']='UNKNOWN';[, $st]=environment($m);rejected(function()use($st){$st->verify();});
@@ -88,8 +84,7 @@ foreach(['ack-without-change','failure'] as $mode){
  $connection=new class($m) extends SubmissionConnection {public $mode;function query($sql){if($sql==='SET SESSION autocommit=1')return $this->mode==='ack-without-change';return parent::query($sql);}};$connection->mode=$mode;
  $st=new JetSubmissionStore($connection,'oc_');rejected(function()use($st){$st->verify();});
 }
-$m=clone $memory;unset($m->vars['sync_binlog']);[, $st]=environment($m);$st->verify();check($st->getNextReference()===$m->meta['next_reference'],'disabled binary log does not require irrelevant sync variable');
-$m=clone $memory;unset($m->vars['innodb_flush_log_at_trx_commit']);[, $st]=environment($m);rejected(function()use($st){$st->verify();});
+$m=clone $memory;unset($m->vars['autocommit']);[, $st]=environment($m);rejected(function()use($st){$st->verify();});
 $m=clone $memory;$m->tables['oc_jet_submission']['indexes'][3]['Sub_part']=8;[, $st]=environment($m);rejected(function()use($st){$st->verify();});
 
 // Manual registration and known bank failure are terminal outcomes, not retry grants.
@@ -118,4 +113,62 @@ check(JetSubmissionStore::reference('0')==='0','existing zero reference is not s
 [$s,$st,,$m]=environment();$st->prepare('9999999999999999999');$intent=$s->createIntent(0,'owner','product','large reference');$result=$s->claim($intent['intent_id'],0,'owner','jet',$data);check($result['row']['reference_no']==='9999999999999999999'&&$m->meta['next_reference']==='10000000000000000000','decimal reservation independent of PHP integer/float precision');
 [$s,$st,,$m]=environment();$st->prepare('18446744073709551615');$intent=$s->createIntent(0,'owner','product','exhausted');rejected(function()use($s,$intent,$data){$s->claim($intent['intent_id'],0,'owner','jet',$data);});check($m->meta['next_reference']==='18446744073709551615'&&$s->resolve($intent['intent_id'],0,'owner')['state']==='draft','counter exhaustion fails without wrap or claim');
 check(!preg_match('/\b(DROP|TRUNCATE|DELETE|ALTER)\b/',implode("\n",$db->queries)),'no destructive migration or retention SQL');
+
+// HOTFIX-02: hosting durability policy must not gate installation or execution.
+class PortabilityConnection extends SubmissionConnection {
+ public $failureSql='', $failureResult='throw', $engines=null;
+ function query($sql){
+  if(preg_match('/\b(innodb_flush_log_at_trx_commit|log_bin|binlog_storage_engine|sync_binlog)\b/i',$sql)){
+   $this->queries[]=$sql;throw new RuntimeException('optional hosting variable inaccessible');
+  }
+  if($sql===$this->failureSql){$this->queries[]=$sql;if($this->failureResult==='throw')throw new RuntimeException('mock SQL failure');return $this->failureResult;}
+  if($sql==='SHOW ENGINES'&&$this->engines!==null){$this->queries[]=$sql;return (object)['rows'=>$this->engines];}
+  return parent::query($sql);
+ }
+}
+$hostingCases=[
+ 'SuperHosting'=>['innodb_flush_log_at_trx_commit'=>'2','log_bin'=>'OFF','sync_binlog'=>'0'],
+ 'deferred flush'=>['innodb_flush_log_at_trx_commit'=>'0','log_bin'=>'ON','sync_binlog'=>'0','binlog_storage_engine'=>'file'],
+ 'classic binlog'=>['innodb_flush_log_at_trx_commit'=>'1','log_bin'=>'ON','sync_binlog'=>'1'],
+ 'InnoDB binlog'=>['innodb_flush_log_at_trx_commit'=>'1','log_bin'=>'ON','sync_binlog'=>'0','binlog_storage_engine'=>'innodb'],
+ 'alternative flush'=>['innodb_flush_log_at_trx_commit'=>'3','log_bin'=>'ON','sync_binlog'=>'0','binlog_storage_engine'=>'unknown'],
+ 'unknown diagnostics'=>['innodb_flush_log_at_trx_commit'=>'UNKNOWN','log_bin'=>'UNKNOWN','sync_binlog'=>'UNKNOWN'],
+ 'missing diagnostics'=>[]
+];
+foreach($hostingCases as $label=>$variables){
+ $m=new SubmissionMemory;$m->vars=['autocommit'=>'ON']+$variables;
+ $connection=new PortabilityConnection($m);$st=new JetSubmissionStore($connection,'oc_');$st->prepare('17');
+ check(count($m->tables)===2&&$st->getNextReference()==='17'&&!$m->ledger,'hosting preparation succeeds without reservation: '.$label);
+ // A new storage instance must perform runtime verification, not reuse ready=true.
+ $st=new JetSubmissionStore($connection,'oc_');$st->verify();$s=new JetSubmission($st);
+ check($st->getNextReference()==='17','fresh runtime verification succeeds: '.$label);
+ $intent=$s->createIntent(0,'owner','cart','basket');$id=$intent['intent_id'];
+ check($m->meta['next_reference']==='17','intent creates no reservation: '.$label);
+ $claim=$s->claim($id,0,'owner','jet',$data);$t=$claim['execution_token'];
+ check($claim['acquired']&&$claim['row']['reference_no']==='17'&&$m->meta['next_reference']==='18','atomic Cart reservation N to N+1: '.$label);
+ $before=serialize([$m->meta,$m->ledger]);$retry=$s->claim($id,0,'owner','jet',$data);
+ check(!$retry['acquired']&&!isset($retry['execution_token'])&&serialize([$m->meta,$m->ledger])===$before,'in-progress replay cannot acquire or increment: '.$label);
+ $s->startAction($id,0,'owner',$t,'order');$s->recordOrder($id,0,'owner',$t,99);
+ foreach(['bank','admin','customer','history','clear'] as $action){$s->startAction($id,0,'owner',$t,$action);$s->finishAction($id,0,'owner',$t,$action,'done');}
+ $done=$s->complete($id,0,'owner',$t,'bank_sent');$before=serialize([$m->meta,$m->ledger]);
+ check($s->replay($id,0,'owner','jet',$data)===$done&&serialize([$m->meta,$m->ledger])===$before,'completed replay preserves result and storage: '.$label);
+ rejected(function()use($s,$id,$t){$s->startAction($id,0,'owner',$t,'bank');});
+ check(serialize([$m->meta,$m->ledger])===$before,'completed bank action cannot restart: '.$label);
+ check(!preg_match('/\b(innodb_flush_log_at_trx_commit|log_bin|binlog_storage_engine|sync_binlog)\b/i',implode("\n",$connection->queries)),'zero optional durability queries in preparation/runtime/claim/replay: '.$label);
+}
+// Removing diagnostics must not hide actual engine, SQL or transaction failures.
+foreach([[],[['Engine'=>'InnoDB','Support'=>'NO','Transactions'=>'YES']],[['Engine'=>'InnoDB','Support'=>'YES','Transactions'=>'NO']]] as $engines){
+ $m=new SubmissionMemory;$connection=new PortabilityConnection($m);$connection->engines=$engines;$st=new JetSubmissionStore($connection,'oc_');
+ rejected(function()use($st){$st->prepare('17');},'JetSubmissionStorageException');
+ check(!$m->tables&&$m->meta===null,'unsupported transactional engine creates no schema/counter');
+}
+foreach(['SHOW ENGINES',"SHOW VARIABLES LIKE 'autocommit'",'START TRANSACTION',"UPDATE `oc_jet_submission_meta` SET next_reference='18' WHERE singleton=1",'COMMIT'] as $sql){
+ foreach(['throw',false,null] as $outcome){
+  $m=new SubmissionMemory;$connection=new PortabilityConnection($m);$st=new JetSubmissionStore($connection,'oc_');$st->prepare('17');$s=new JetSubmission($st);
+  $id=$s->createIntent(0,'owner','cart','failure')['intent_id'];$connection->failureSql=$sql;$connection->failureResult=$outcome;
+  $s=new JetSubmission(new JetSubmissionStore($connection,'oc_'));
+  rejected(function()use($s,$id,$data){$s->claim($id,0,'owner','jet',$data);},$sql==='COMMIT'?'JetSubmissionCommitUnknown':'JetSubmissionStorageException');
+  check($m->meta['next_reference']==='17'&&$m->ledger[$id]['state']==='draft','failed SQL/transaction grants no claim or reservation');
+ }
+}
 echo "PASS $checks submission storage/service checks; SQL/lock doubles only; real contention/durability NOT TESTED\n";

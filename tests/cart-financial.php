@@ -13,8 +13,15 @@ foreach (['PHPMailer','SMTP','Exception'] as $name) {
 }
 require $repo.'/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php';
 $old=shell_exec('git show HEAD:upload/catalog/controller/extension/mt_jet_credit/jetcredit.php');
-$old=str_replace('class ControllerExtensionMtJetCreditJetCredit extends Controller','class CartLegacyController extends Controller',$old);
+$old=str_replace('class ControllerExtensionMtJetCreditJetCredit extends Controller','class CartLegacyControllerBase extends Controller',$old);
 file_put_contents($scratch.'legacy-cart.php',$old); require $scratch.'legacy-cart.php';
+// HEAD also requires durable submission dependencies; inject the same doubles/owner
+// as CartFinancialController without replacing intent, quote or claim validation.
+class CartLegacyController extends CartLegacyControllerBase {
+    protected function cartModel(){return $this->model_extension_mt_jet_credit_jetcredit;}
+    protected function submissionService(){return $this->registry->get('test_submission_service');}
+    protected function submissionOwner(){return $this->session->getId();}
+}
 class CartFinancialMailer extends PHPMailer\PHPMailer\PHPMailer {
     public static $messages=[];
     function send(){self::$messages[]=['to'=>$this->getToAddresses(),'body'=>$this->Body,'subject'=>$this->Subject];return true;}
@@ -130,10 +137,12 @@ foreach([0,1] as $card){
     [$c,$r,$wire,$q]=quoteCart(null,'100',$card);
     check($q['jet_priceall']==='600.00' && $q['jet_total_credit_price']==='500.00' && $q['jet_vnoska']==='47.67' && $q['jet_vnoska_card']==='45.67','independent financing golden');
     $legacy=new CartLegacyController($r);CartFinancialMailer::$messages=[];$legacy->jet_send_cart();
+    check((json_decode($r->get('response')->output,true)['success']??null)==='success','HEAD golden fixture completes durable submission');
     $oldOrders=$r->get('model_checkout_order')->orders;$oldMail=CartFinancialMailer::$messages;
-    foreach($oldMail as &$message)$message['subject']=preg_replace('/2$/','1',$message['subject']);unset($message); // Approved F07 N+1 reservation.
+    check(count($oldOrders)===1,'HEAD golden fixture creates exactly one mock order');
     [$c,$r,$wire,$q]=quoteCart(null,'100',$card);CartFinancialMailer::$messages=[];$passes=nativePasses($r);$c->jet_send_cart();check(nativePasses($r)===$passes+1,'one native pipeline on successful submission');
     check(json_decode($r->get('response')->output,true)['success']==='success','valid Jet/Card submission: '.$r->get('response')->output.' orders='.count($r->get('model_checkout_order')->orders).' writes='.count($r->get('db')->writes));
+    check(count($r->get('model_checkout_order')->orders)===1,'valid Jet/Card submission creates exactly one mock order');
     check($r->get('model_checkout_order')->orders===$oldOrders,'native legacy order array byte/type golden');
     check(CartFinancialMailer::$messages===$oldMail && count($oldMail)===3,'bank/admin/client complete message goldens');
     check(strpos($oldMail[1]['body'],'ЕГН: **********;')!==false,'masking unchanged');

@@ -93,28 +93,15 @@ class JetSubmissionStore {
                 && strtoupper($engine['Transactions'] ?? '') === 'YES') $found = true;
         }
         if (!$found) throw new JetSubmissionStorageException('Transactional row-locking storage required');
-        $vars = [];
-        foreach (['autocommit', 'innodb_flush_log_at_trx_commit', 'log_bin'] as $name) {
-            $rows = $this->rows('SHOW VARIABLES LIKE ' . $this->quote($name));
-            if (count($rows) !== 1) throw new JetSubmissionStorageException('Cannot verify database durability');
-            $vars[$name] = strtoupper((string)$rows[0]['Value']);
-        }
-        if (!in_array($vars['autocommit'], ['1','ON'], true)) {
+        $rows = $this->rows("SHOW VARIABLES LIKE 'autocommit'");
+        if (count($rows) !== 1) throw new JetSubmissionStorageException('Autocommit required');
+        $autocommit = strtoupper((string)$rows[0]['Value']);
+        if (!in_array($autocommit, ['1','ON'], true)) {
             // Exclusively owned connection; never change server/global settings.
-            if ($this->transaction || !in_array($vars['autocommit'], ['0','OFF'], true)
+            if ($this->transaction || !in_array($autocommit, ['0','OFF'], true)
                 || $this->query('SET SESSION autocommit=1') !== true) throw new JetSubmissionStorageException('Autocommit required');
             $rows = $this->rows("SHOW VARIABLES LIKE 'autocommit'");
             if (count($rows) !== 1 || !in_array(strtoupper((string)$rows[0]['Value']), ['1','ON'], true)) throw new JetSubmissionStorageException('Autocommit required');
-        }
-        if ($vars['innodb_flush_log_at_trx_commit'] !== '1') throw new JetSubmissionStorageException('Durable commits required');
-        if (!in_array($vars['log_bin'], ['0','OFF'], true)) {
-            if (!in_array($vars['log_bin'], ['1','ON'], true)) throw new JetSubmissionStorageException('Unknown binary log configuration');
-            $engine = $this->rows("SHOW VARIABLES LIKE 'binlog_storage_engine'");
-            // InnoDB-based binlog shares the durable InnoDB commit; classic binlog needs sync=1.
-            if (count($engine) !== 1 || strcasecmp((string)$engine[0]['Value'], 'innodb') !== 0) {
-                $sync = $this->rows("SHOW VARIABLES LIKE 'sync_binlog'");
-                if (count($sync) !== 1 || (string)$sync[0]['Value'] !== '1') throw new JetSubmissionStorageException('Durable binary log required');
-            }
         }
     }
 

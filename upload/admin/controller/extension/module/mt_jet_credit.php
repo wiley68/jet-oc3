@@ -295,8 +295,8 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 			$this->load->model('setting/setting');
 			$existing = $this->model_setting_setting->getSetting('module_mt_jet_credit');
 			$stage = 'storage-preparation';
-			$this->prepareSubmissionStorage($existing);
-			// Native uninstall may have removed settings. Never guess a seed from absence.
+			$this->prepareSubmissionStorage($existing, true);
+			// Existing durable storage remains authoritative after native settings removal.
 			if (!$existing) {
 				$stage = 'settings-initialization';
 				$settings = $this->request->post;
@@ -401,10 +401,12 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		return JetSubmissionStore::connect();
 	}
 
-	private function prepareSubmissionStorage($settings) {
+	private function prepareSubmissionStorage($settings, $allowFirstInstall = false) {
 		// Existing storage is verified first by prepare(), even without a legacy seed.
-		// Empty settings cannot prove a first install: core uninstall deletes them too.
-		$this->submissionStore()->prepare($settings['module_mt_jet_credit_count'] ?? null);
+		$seed = $settings['module_mt_jet_credit_count'] ?? null;
+		// Install-only default, not recovery of deleted submission history.
+		if ($allowFirstInstall === true && $settings === []) $seed = '1';
+		$this->submissionStore()->prepare($seed);
 	}
 
 	private function validateSchemaRequest() {
