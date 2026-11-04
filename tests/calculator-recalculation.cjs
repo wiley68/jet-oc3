@@ -106,7 +106,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
   new Function('jQuery', 'document', 'FormData', 'setTimeout', 'clearTimeout', 'console', 'window', 'alert', 'location', source)($, document, Data, schedule, clear, { error() {}, log() {} }, { addEventListener: (name, fn) => (captureEvents[name] ||= []).push(fn), location: { origin: 'http://test.invalid', href: '' } }, (message) => alerts.push(message), {});
   return { requests, trigger, tick, get, faults, alerts, loaderLayout, changeOption: () => optionEvents.change?.(), inputOption: () => optionEvents.input?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
  }
- const quote = (value = '50.00') => ({ success: 'success', __mockQuote: true, jet_quote_ref: 'a'.repeat(48), jet_cart_lineage: 'b'.repeat(48), jet_parva: '0.00', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
+ const quote = (value = '50.00') => ({ success: 'success', __mockQuote: true, jet_intent_id: 'c'.repeat(48), jet_quote_ref: 'a'.repeat(48), jet_cart_lineage: 'b'.repeat(48), jet_parva: '0.00', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
  if (productTests) return productTests(environment, quote);
  // F02: execute the real option/quantity JavaScript and PHP calculator, never a submission transport.
  const { execFileSync } = require('child_process');
@@ -162,6 +162,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
   if (hasOptions) check(fixture.options.optionresult[0].product_option_value[0].price === scenario.adjustments[0][1] * (scenario.tax ? 1.2 : 1), scenario.name + ': jet_check already returns EUR option price');
   const amount = scenario.unit * quantity, label = scenario.name + '/' + base_currency + '/q' + quantity + '/card' + card;
   const execute = (source) => {
+   let durableState;
    const e = environment(source, hasOptions, sources.css_products, { '#jet_price': String(fixture.base_eur), 'input[name="quantity"]': String(quantity), '#jet_vnoski': String(term), '#jet_card_in': '1', '__option_entries': JSON.stringify(optionEntries) });
    const settle = () => {
     if (hasOptions) e.requests.at(-1).resolve(fixture.options);
@@ -169,8 +170,9 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
     check(calculation.config.url.endsWith('/jet_calculate'), label + ': existing Product calculator');
     check(calculation.config.data.values.jet_priceall === amount.toFixed(2), label + ': signed adjustment before quantity, no second conversion');
     check(calculation.config.data.values.jet_vnoski === String(term), label + ': selected term retained');
-    const response = productEndpoint({ ...nativeFixture, mode: 'quote', post: { ...calculation.config.data.values, jet_quantity: String(quantity), jet_options: JSON.stringify(optionEntries) }, minimum: scenario.minimum ?? 75, promo_min: 600, promo_term: 12, promo_percent: scenario.promo_percent ?? 0.5 });
+    const response = productEndpoint({ ...nativeFixture, mode: 'quote', storage: durableState, post: { ...calculation.config.data.values, jet_quantity: String(quantity), jet_options: JSON.stringify(optionEntries) }, minimum: scenario.minimum ?? 75, promo_min: 600, promo_term: 12, promo_percent: scenario.promo_percent ?? 0.5 });
     check(response.promo_sql.length === 1 && response.promo_sql[0].includes('AND ' + amount + ' >= jet_product_price'), label + ': real getPromo receives corrected principal');
+    durableState = response.storage;
     calculation.resolve(response.quote);
     return response.quote;
    };
@@ -201,7 +203,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    return { preview, popup, payload };
   };
   const current = execute(sources.products);
-  const financialOnly = value => JSON.stringify(value, (key, item) => ['jet_quote_ref','jet_options','jet_quantity','jet_downpayment_raw','jet_previous_quote','jet_parva'].includes(key) ? undefined : item);
+  const financialOnly = value => JSON.stringify(value, (key, item) => ['jet_intent_id','jet_quote_ref','jet_options','jet_quantity','jet_downpayment_raw','jet_previous_quote','jet_parva'].includes(key) ? undefined : item);
   if (scenario.unchanged) check(financialOnly(current) === financialOnly(execute(sources.baseline_products)), label + ': positive/zero/no-option/fallback golden unchanged');
  }
  console.log(`PASS ${checks - f02Start} F02 prefix/quantity/currency/preview/popup/submission checks`);
@@ -426,7 +428,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
   const template = sources['checkout_' + mode];
   const snippet = template.slice(template.indexOf('\tlet jetConfirmPending'), template.lastIndexOf('\n\tjetCalculate();'));
   const source = 'jQuery(document).ready(function($) { const jetShowCustomAlert = (message) => alert(message);\n' + snippet + '\n});';
-  for (const kind of ['success', 'failure', 'bank_uncertain', 'network', 'timeout', 'malformed', 'sync_data', 'sync_ajax']) {
+  for (const kind of ['success', 'failure', 'bank_uncertain', 'processing_review', 'network', 'timeout', 'malformed', 'sync_data', 'sync_ajax']) {
    const e = environment(source);
    if (kind === 'sync_data') e.faults.data = true; if (kind === 'sync_ajax') e.faults.ajax = true;
    e.trigger('#button-confirm', 'click');
@@ -436,11 +438,12 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
     if (kind === 'success') e.requests[0].resolve({ success: 'success', code: 'bank_sent', redirect: 'checkout/success' });
     if (kind === 'failure') e.requests[0].resolve({ success: 'unsuccess' });
     if (kind === 'bank_uncertain') e.requests[0].resolve({ success: 'unsuccess', code: 'bank_uncertain', order_id: 1 });
+    if (kind === 'processing_review') e.requests[0].resolve({ success: 'unsuccess', jet_submission_review: true });
     if (kind === 'network') e.requests[0].reject();
     if (kind === 'timeout') e.tick(30000);
     if (kind === 'malformed') e.requests[0].resolve({});
    }
-   if (['bank_uncertain', 'network', 'timeout', 'malformed', 'sync_ajax'].includes(kind)) check(e.alerts.at(-1).startsWith('Резултатът от изпращането не е потвърден.'), 'native uncertainty reported without delivery claim');
+   if (['bank_uncertain', 'processing_review', 'network', 'timeout', 'malformed', 'sync_ajax'].includes(kind)) check(e.alerts.at(-1).startsWith('Резултатът от изпращането не е потвърден.'), 'native uncertainty reported without delivery claim');
    const before = e.requests.length; e.tick(60000); check(e.requests.length === before, 'native no automatic retry');
    e.trigger('#button-confirm', 'click');
    check(e.requests.length === before + (['failure', 'sync_data'].includes(kind) ? 1 : 0), 'native confirmed failure retryable; accepted/uncertain result never resent');

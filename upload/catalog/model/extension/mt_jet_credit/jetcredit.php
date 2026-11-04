@@ -207,7 +207,7 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		return is_array($q) && isset($q['quote']) && ($q['expires'] ?? 0)>time() ? $q : false;
 	}
 
-	public function storeCartQuote($context, $quote, $promotion, $post) {
+	public function storeCartQuote($context, $quote, $promotion, $post, $intent = null) {
 		$quotes = $this->session->data['jet_cart_quotes'] ?? [];
 		if (!is_array($quotes)) return false;
 		foreach ($quotes as $ref=>$q) if (!is_array($q) || ($q['expires'] ?? 0)<=time()) unset($quotes[$ref]);
@@ -216,6 +216,7 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		if (!is_string($previous) || !is_string($lineage)) return false;
 		if ($previous !== '') {
 			if (!isset($quotes[$previous]) || !hash_equals($quotes[$previous]['lineage'],$lineage)) return false;
+			if ($intent !== null && ($quotes[$previous]['intent_id'] ?? null) !== $intent) return false;
 			// Keep a bounded tombstone so concurrent calculations can reference their own predecessor.
 			unset($quotes[$previous]['quote'], $quotes[$previous]['context'], $quotes[$previous]['promotion']);
 		} elseif ($lineage !== '') return false;
@@ -228,7 +229,7 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 			if (!$removed) return false;
 		}
 		$reference = bin2hex(random_bytes(24));
-		$quotes[$reference] = ['expires'=>time()+1800,'lineage'=>$lineage,'context'=>$context,'quote'=>$quote,'promotion'=>$promotion];
+		$quotes[$reference] = ['expires'=>time()+1800,'lineage'=>$lineage,'context'=>$context,'quote'=>$quote,'promotion'=>$promotion,'intent_id'=>$intent];
 		$this->session->data['jet_cart_quotes'] = $quotes;
 		return ['jet_quote_ref'=>$reference,'jet_cart_lineage'=>$lineage];
 	}
@@ -375,13 +376,14 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		$this->session->data['jet_product_quotes'] = $quotes;
 	}
 
-	public function storeProductQuote($context, $quote, $previous = null) {
+	public function storeProductQuote($context, $quote, $previous = null, $intent = null) {
 		$this->pruneProductQuotes();
 		$quotes =& $this->session->data['jet_product_quotes'];
 		$replace = is_string($previous) && isset($quotes[$previous]);
+		if ($intent !== null && $replace && ($quotes[$previous]['intent_id'] ?? null) !== $intent) return false;
 		if (count($quotes) - ($replace ? 1 : 0) >= self::PRODUCT_QUOTE_LIMIT) return false;
 		$reference = bin2hex(random_bytes(24));
-		$quotes[$reference] = ['expires' => time() + self::PRODUCT_QUOTE_TTL, 'fingerprint' => $context['fingerprint'], 'quote' => $quote];
+		$quotes[$reference] = ['expires' => time() + self::PRODUCT_QUOTE_TTL, 'fingerprint' => $context['fingerprint'], 'quote' => $quote, 'intent_id' => $intent];
 		if ($replace) unset($quotes[$previous]);
 		return $reference;
 	}

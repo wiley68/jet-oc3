@@ -56,7 +56,16 @@ class F02Response {
 class F02Loader { function model($name) {} }
 
 $input = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
-$controller = new ControllerExtensionMtJetCreditJetCredit();
+require_once __DIR__.'/fixtures/submission-memory.php';
+$memory=new SubmissionMemory;
+if(isset($input['storage']))foreach(['tables','meta','ledger'] as $field)$memory->$field=$input['storage'][$field];
+$storage=new JetSubmissionStore(new SubmissionConnection($memory),'oc_');$storage->prepare('1');
+$controller = new class extends ControllerExtensionMtJetCreditJetCredit {
+    public $testSubmissionService;
+    protected function submissionService(){return $this->testSubmissionService;}
+    protected function submissionOwner(){return 'f02-test-owner';}
+};
+$controller->testSubmissionService=new JetSubmission($storage);
 $controller->config = new F02Config($input);
 $controller->currency = new F02Currency();
 $controller->tax = new F02Tax();
@@ -84,7 +93,7 @@ if ($input['mode'] === 'options') {
     $controller->model_extension_mt_jet_credit_jetcredit = $model;
     $controller->request = new OpenCartProductRequestDouble($input['post']);
     $controller->jet_calculate();
-    echo json_encode(['quote' => json_decode($controller->response->output, true), 'promo_sql' => $model->db->queries], JSON_THROW_ON_ERROR);
+    echo json_encode(['quote' => json_decode($controller->response->output, true), 'promo_sql' => $model->db->queries, 'storage'=>['tables'=>$memory->tables,'meta'=>$memory->meta,'ledger'=>$memory->ledger]], JSON_THROW_ON_ERROR);
 } else {
     throw new RuntimeException('Unknown F02 fixture mode');
 }

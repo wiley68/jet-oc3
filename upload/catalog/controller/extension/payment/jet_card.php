@@ -68,6 +68,57 @@ class ControllerExtensionPaymentJetCard extends Controller
 		return $this->load->view('extension/payment/jet_card', $data);
 	}
 
+	protected function submissionService() {
+		require_once DIR_SYSTEM . 'library/jet_submission.php';
+		return new JetSubmission(JetSubmissionStore::connect());
+	}
+
+	protected function submissionOwner() {
+		$id = $this->session->getId();
+		if (!is_string($id) || $id === '') throw new \RuntimeException('Session identity unavailable.');
+		return $id . ':' . ($this->customer->isLogged() ? (int)$this->customer->getId() : 0);
+	}
+
+	private function submissionContext() {
+		$service = $this->submissionService();
+		$store = (string)(int)$this->config->get('config_store_id');
+		$owner = $this->submissionOwner();
+		$id = $this->session->data['order_id'] ?? null;
+		if ((!is_int($id) && !is_string($id)) || !ctype_digit((string)$id) || (float)$id <= 0 || (float)$id > 2147483647) throw new \RuntimeException('Order unavailable.');
+		$this->load->model('checkout/order');
+		$order = $this->model_checkout_order->getOrder((int)$id);
+		$id = $service->authenticateCheckoutOrder($store, $id, $order,
+			$this->customer->isLogged() ? $this->customer->getId() : null, $this->session->data['guest']['email'] ?? null);
+		return ['service'=>$service,'store'=>$store,'owner'=>$owner,'order_id'=>(int)$id,'row'=>$service->resolveCheckout($store,$owner,$id)];
+	}
+
+	private function submissionReplay($execution, &$json) {
+		$row = $execution['service']->replay($execution['row']['intent_id'], $execution['store'], $execution['owner'], 'jet_card', $this->request->post);
+		if ($row['state'] !== 'completed') { $json['jet_submission_review'] = true; return; }
+		$json['order_id'] = (int)$row['native_order_id'];
+		$json['code'] = $row['result_code'];
+		$json['notifications'] = ['admin'=>$row['admin_state']==='done','customer'=>$row['customer_state']==='done'];
+		$json['success'] = in_array($row['result_code'], ['bank_sent','manual_registered'], true) ? 'success' : 'unsuccess';
+		if (in_array($row['history_state'], ['failed','uncertain'], true)) $json['order_status_updated'] = false;
+	}
+
+	private function submissionAction($execution, $method, ...$args) {
+		return $execution['service']->$method($execution['row']['intent_id'], $execution['store'], $execution['owner'], $execution['token'], ...$args);
+	}
+
+	private function submissionFailed($execution, &$json) {
+		$json['success'] = 'unsuccess';
+		$json['jet_submission_review'] = true;
+		if (isset($execution['token'])) {
+			try { $this->submissionAction($execution, 'uncertain'); } catch (\Throwable $ignored) {}
+		}
+	}
+
+	private function submissionOutput($json) {
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->setOutput(json_encode($json));
+	}
+
 	public function confirm()
 	{
 		if (($this->session->data['currency'] ?? '') !== 'EUR') {
@@ -81,11 +132,33 @@ class ControllerExtensionPaymentJetCard extends Controller
 
 		$this->load->model('extension/mt_jet_credit/jetcredit');
 		try {
+			$execution = $this->submissionContext();
+			if ($execution['row'] !== null && $execution['row']['state'] !== 'draft') {
+				$this->submissionReplay($execution, $json);
+				$this->submissionOutput($json); return;
+			}
+		} catch (\Throwable $error) {
+			$json['jet_submission_review'] = true;
+			$this->submissionOutput($json); return;
+		}
+		try {
 			$verified = $this->model_extension_mt_jet_credit_jetcredit->validateCheckoutSubmission('jet_card', $this->request->post);
 		} catch (\Throwable $error) {
 			$verified = false;
 		}
 		if ($verified) {
+			try {
+				if ((int)$verified['snapshot']['order']['order_id'] !== $execution['order_id']) throw new \RuntimeException('Checkout order changed.');
+				if ($execution['row'] === null) {
+					$execution['row'] = $execution['service']->createIntent($execution['store'], $execution['owner'], 'checkout', 'checkout', $execution['order_id']);
+				}
+				$claim = $execution['service']->claim($execution['row']['intent_id'], $execution['store'], $execution['owner'], 'jet_card', $this->request->post);
+				if (!$claim['acquired']) {
+					$this->submissionReplay($execution, $json);
+					$this->submissionOutput($json); return;
+				}
+				$execution['token'] = $claim['execution_token'];
+				$execution['reference'] = $claim['row']['reference_no'];
 			$snapshot = $verified['snapshot'];
 			$order = $snapshot['order'];
 			$jet_card_priceall = $verified['quote']['jet_priceall'];
@@ -173,28 +246,38 @@ class ControllerExtensionPaymentJetCard extends Controller
 			$body .= "Месечна вноска: $jet_card_vnoska;\r\n";
 			$body .= "Първоначална вноска: " . number_format(floatval($jet_card_parva), 2, ".", "") . ";\r\n";
 
-			$jet_count = (int)$this->config->get('module_mt_jet_credit_count');
-			$this->editSettingValue('module_mt_jet_credit', 'module_mt_jet_credit_count', $jet_count + 1);
+			$jet_count = $execution['reference'];
 			$subject = $jet_id . ", онлайн заявка по поръчка $jet_count";
 			$ccAddresses = trim($toEmail_other) === '' ? [] : explode(",", str_replace(' ', '', $toEmail_other));
 			try {
 				if (!$order) throw new \RuntimeException('Order persistence failed.');
-				$json['order_id'] = $this->session->data['order_id'];
+				$json['order_id'] = $execution['order_id'];
 				require_once DIR_SYSTEM . 'library/jet_submission_mail.php';
-				$delivery = JetSubmissionMail::deliver($this->config, $ccAddresses, $toEmail_admin, $jet_card_email, $jet_id, $subject, $body, $jet_card_egn);
+				$delivery = JetSubmissionMail::deliver($this->config, $ccAddresses, $toEmail_admin, $jet_card_email, $jet_id, $subject, $body, $jet_card_egn, function ($method, ...$args) use ($execution) { $this->submissionAction($execution, $method, ...$args); });
 				$json['code'] = $delivery['code'];
 				$json['notifications'] = $delivery['notifications'];
 				$json['success'] = in_array($delivery['code'], ['bank_sent', 'manual_registered'], true) ? 'success' : 'unsuccess';
 				if ($json['success'] === 'success') {
+					$this->submissionAction($execution, 'startAction', 'history');
+					$history = 'done';
 					try {
-					$this->model_checkout_order->addOrderHistory($this->session->data['order_id'], $this->config->get('payment_jet_card_order_status_id'));
+					$this->model_checkout_order->addOrderHistory($execution['order_id'], $this->config->get('payment_jet_card_order_status_id'));
 					} catch (\Throwable $error) {
 						$json['order_status_updated'] = false;
+						$history = 'uncertain';
 					}
+					$this->submissionAction($execution, 'finishAction', 'history', $history);
+				}
+				if ($json['code'] === 'bank_uncertain') {
+					$this->submissionAction($execution, 'uncertain');
+				} else {
+					if ($json['code'] === 'bank_failed') $this->submissionAction($execution, 'skipAction', 'history');
+					$this->submissionAction($execution, 'complete', $json['code']);
 				}
 			} catch (\Throwable $error) {
-				$json['success'] = 'unsuccess';
+				$this->submissionFailed($execution, $json);
 			}
+			} catch (\Throwable $error) { $this->submissionFailed($execution, $json); }
 		}
 		$this->response->addHeader('Content-Type: application/json');
 		$this->response->setOutput(json_encode($json));

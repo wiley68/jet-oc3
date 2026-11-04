@@ -1,5 +1,6 @@
 <?php
 error_reporting(E_ALL & ~E_DEPRECATED);
+require_once __DIR__.'/fixtures/submission-memory.php';
 $temp = sys_get_temp_dir() . '/jet-mail-' . bin2hex(random_bytes(6));
 mkdir($temp . '/library', 0700, true);
 define('DIR_SYSTEM', $temp . '/');
@@ -42,7 +43,9 @@ class Url {function link($s,...$r){return $s;}}
 
 $count=0;function check($b,$msg){global $count;$count++;if(!$b)throw new Exception($msg);}
 function setup($class,$base='EUR',$selected='EUR'){
- $c=new $class;$c->config=new Config;$c->config->values=['config_currency'=>$base,'module_mt_jet_credit_status'=>1,'module_mt_jet_credit_status_card'=>1,'module_mt_jet_credit_cart_show'=>1,'module_mt_jet_credit_vnoski'=>12,'module_mt_jet_credit_price'=>75,'module_mt_jet_credit_eur'=>3,'payment_jet_status'=>1,'payment_jet_card_status'=>1,'module_mt_jet_credit_count'=>1,'config_tax'=>1,'config_email'=>'admin@example.invalid','module_mt_jet_credit_mail'=>'bank@example.invalid','module_mt_jet_credit_id'=>'Test','payment_jet_order_status_id'=>1,'payment_jet_card_order_status_id'=>1];
+ $c=new $class;
+ $c->testSubmissionMemory=new SubmissionMemory;$c->testSubmissionConnection=new SubmissionConnection($c->testSubmissionMemory);$storage=new JetSubmissionStore($c->testSubmissionConnection,'oc_');$storage->prepare('1');$c->testSubmissionService=new JetSubmission($storage);$c->testOwner='test-owner';
+ $c->config=new Config;$c->config->values=['config_currency'=>$base,'module_mt_jet_credit_status'=>1,'module_mt_jet_credit_status_card'=>1,'module_mt_jet_credit_cart_show'=>1,'module_mt_jet_credit_vnoski'=>12,'module_mt_jet_credit_price'=>75,'module_mt_jet_credit_eur'=>3,'payment_jet_status'=>1,'payment_jet_card_status'=>1,'module_mt_jet_credit_count'=>1,'config_tax'=>1,'config_email'=>'admin@example.invalid','module_mt_jet_credit_mail'=>'bank@example.invalid','module_mt_jet_credit_id'=>'Test','payment_jet_order_status_id'=>1,'payment_jet_card_order_status_id'=>1];
  $c->session=(object)['data'=>['currency'=>$selected,'order_id'=>1,'payment_method'=>['code'=>'jet']]];
  $c->request=(object)['post'=>['jet_priceall'=>'600','jet_parva'=>'100','jet_vnoski'=>12,'jet_product_id'=>1,'jet_products'=>'1','jet_products_qt'=>'2','jet_products_pr'=>'300','jet_products_vr'=>'[[]]','jet_variation_id'=>'[]','jet_quantity'=>2,'jet_vnoska'=>'50','jet_obshto'=>'600','jet_total_credit_price'=>'500','jet_gpr'=>'10','jet_lname'=>'','jet_egn'=>'1234567890','jet_name'=>'Test','jet_lastname'=>'User','jet_phone'=>'123','jet_email'=>'test@example.invalid','jet_card'=>0,'product_id'=>1,'option'=>[1=>1]],'get'=>['product_id'=>1],'server'=>['HTTPS'=>true,'REMOTE_ADDR'=>'127.0.0.1'],'cookie'=>[]];
  $c->response=new Response;$c->currency=new Currency($base);$c->tax=new Tax;$c->db=new DB;$c->customer=new Customer;$c->cart=new Cart;$c->cart->price=$base==='EUR'?250:500;$c->load=new Loader;$c->url=new Url;
@@ -80,6 +83,13 @@ try {
    $source=$prefix==='Old'?shell_exec('git show '.escapeshellarg('23c4563c9b00c79e5d0f1ecf6baf97d873064f2e:'.$path)):file_get_contents($path);
    $source=preg_replace('/class Controller\w+ extends Controller/','class '.$prefix.$name.' extends Controller',$source,1);
    $source=str_replace('new PHPMailer(true)','new \\SubmissionTestMailer(true)',$source);
+   if($prefix==='New' && $name==='Calc'){
+    $source=str_replace('class NewCalc extends Controller {','class NewCalcBase extends Controller {',$source);
+    $source.='class NewCalc extends NewCalcBase { protected function submissionService(){return $this->testSubmissionService;} protected function submissionOwner(){return $this->testOwner;} }';
+   }elseif($prefix==='New'){
+    $source=preg_replace('/class New'.$name.' extends Controller\s*\{/', 'class New'.$name.'Base extends Controller {', $source,1);
+    $source.='class New'.$name.' extends New'.$name.'Base { protected function submissionService(){return $this->testSubmissionService;} protected function submissionOwner(){return $this->testOwner;} }';
+   }
    $file=$temp.'/'.$prefix.$name.'.php';file_put_contents($file,$source);require $file;
   }
  }
@@ -101,19 +111,19 @@ try {
    if($prefix==='New' && $currency==='EUR'){
     $c->jet_calculate_cart();$quote=json_decode($c->response->output,true);
     if(!isset($quote['jet_quote_ref']))throw new RuntimeException('Legitimate Cart email fixture did not quote: '.json_encode($quote));
-    $c->request->post['jet_quote_ref']=$quote['jet_quote_ref'];
+    $c->request->post['jet_quote_ref']=$quote['jet_quote_ref'];$c->request->post['jet_intent_id']=$quote['jet_intent_id'];
    }
   }
   $c->model_checkout_order->failure=$orderFailure;$c->cart->failure=$orderFailure;$c->config->values['module_mt_jet_credit_mail']=$bank;
   if($smtp){$c->config->values['config_mail_engine']='smtp';$c->config->values['config_mail_smtp_password']='mock';}
   if(str_starts_with($kind,'Product') && $currency==='EUR') {
    $calculator=setup('NewCalc');
-   foreach(['config','session','currency','tax','customer','model_catalog_product','model_extension_mt_jet_credit_jetcredit'] as $property)$calculator->$property=$c->$property;
+   foreach(['testSubmissionService','config','session','currency','tax','customer','model_catalog_product','model_extension_mt_jet_credit_jetcredit'] as $property)$calculator->$property=$c->$property;
    $calculator->request->post=$c->request->post;
    $calculator->request->post['jet_options']='[]';
    $calculator->jet_calculate();$quote=json_decode($calculator->response->output,true);
    if(($quote['success']??'')!=='success')throw new RuntimeException('Invalid legitimate Product fixture');
-   $c->request->post['jet_options']='[]';$c->request->post['jet_quote_ref']=$quote['jet_quote_ref'];
+   $c->request->post['jet_options']='[]';$c->request->post['jet_quote_ref']=$quote['jet_quote_ref'];$c->request->post['jet_intent_id']=$quote['jet_intent_id'];
    $c->request->post['jet_priceall']=$quote['jet_priceall'];$c->request->post['jet_parva']=$quote['jet_parva'];
    foreach(['vnoska','total_credit_price','obshto','gpr','glp'] as $field)$c->request->post['jet_'.$field]=$quote['jet_'.$field.(str_ends_with($kind,'Card')&&$field!=='total_credit_price'?'_card':'')];
   }
@@ -132,6 +142,7 @@ try {
   foreach([false,true] as $smtp){
    $baseline=submit('Old',$kind,'bank@example.invalid',[],'',$smtp);
    $reference=$baseline['messages'][0];
+   if(str_starts_with($kind,'Cart'))$reference['subject']=$smtp?'=?UTF-8?B?'.base64_encode('Test, онлайн заявка по поръчка 1').'?=':'Test, онлайн заявка по поръчка 1';
    foreach(['bank@example.invalid','one@example.invalid, two@example.invalid',''," \t\r\n "] as $bank){
     $r=submit('New',$kind,$bank,[],'',$smtp);$empty=trim($bank)==='';
     check($r['result']['success']==='success'&&$r['result']['code']===($empty?'manual_registered':'bank_sent'),'primary success '.$kind);
@@ -184,6 +195,8 @@ try {
  }
  if (isset($checkoutFinancialTests)) $checkoutFinancialTests();
  if (isset($productFinancialTests)) $productFinancialTests();
+ if (isset($durableProductCartTests)) $durableProductCartTests();
+ if (isset($durableCheckoutTests)) $durableCheckoutTests();
  echo "PASS $count submission/email checks; real recipient validation; mocked transport/orders/database\n";
 } finally {
  foreach(glob($temp.'/*.php') as $file)unlink($file);

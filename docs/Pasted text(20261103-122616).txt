@@ -1,0 +1,378 @@
+Одитът установи **5 потвърдени High findings**, свързани с финансови POST стойности, повторни заявки и публичните промоционални endpoints. **Не е извършвана корекция.**
+
+## A. Git база и обхват
+
+- Клон: `main`
+- HEAD: `ea9fd8a7bf177f31e02f2d5e4ea9b7e652ad5a87`
+- Git tree: `0ae635cffaf1900b628ff7a1ecceb560254401ed`
+- Работна директория: чиста преди и след одита.
+- Активна версия: **2.0.1**.
+- Проверени: текущите контролери, модели, OCMOD интеграция, шаблони, JavaScript, email helper и тестове.
+
+Съществуващият инсталатор е **243 284 байта**, с **50 файла**. CRC, SHA-256 и побайтовото съвпадение с източниците са успешни:
+
+```text
+7197a183ba397362f4a3efd04bbcdbcde533cfb4c73a07394c9082785673a065
+```
+
+## B. Архитектура и submission потоци
+
+| Път | Текуща последователност |
+|---|---|
+| Product | `jet_check` → `jet_calculate` → `jet_send` → native order → проверка чрез `getOrder` → отделни имейли → order history при първичен успех |
+| Cart | Аналогично чрез Cart endpoints; при първичен успех се изчиства количката |
+| Jet Checkout | Използва native order от сесията → отделни имейли → order history |
+| Jet Card Checkout | Същият модел за `jet_card` |
+
+Зависимостите са нативните OpenCart Session/Currency/Tax/Order услуги, OCMOD, Twig, jQuery и включеният **PHPMailer 6.9.3**.
+
+Положително потвърдени са:
+
+- EUR ограниченията използват избраната валута от сесията.
+- Банковото изпращане е след запис/проверка на поръчката.
+- Трите module имейла са отделни, без CC/BCC смесване.
+- Празна банка не блокира регистрацията.
+- EGN маскирането и клиентското въведение работят в проверените сценарии.
+- Отказите на вторичните уведомления не обръщат банковия резултат.
+- Клиентските loader, debounce и no-retry защити преминават регресиите.
+
+Woo v2.0.1 е използван само като read-only сравнителна референция. Не е приемано, че OC3 трябва да копира неговата вътрешна архитектура.
+
+## C. Финансова цялост
+
+### JET-OC3-AUD-001-F01 — Финансовите POST стойности не се потвърждават независимо
+
+**High · Confirmed · P1**
+
+**Източници:** [Product/Cart контролер:253](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:253), [Jet confirm:89](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/payment/jet.php:89), [Jet Card confirm:97](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/payment/jet_card.php:97).
+
+**Пътища:** всички четири.
+
+Сървърът приема цени, вноски, срокове и други финансови стойности от браузъра. Санитизирането не ги сравнява с нативната продуктова цена, количка или поръчка. Product/Cart submission не повтаря required-option и eligibility проверките.
+
+**Доказателство с двойници:**
+
+- Product и Cart приеха `total=1`, downpayment `50`, срок `999`.
+- Записаният total беше `1`; банковото тяло съдържаше главница `-49.00`.
+- Jet и Jet Card приеха банков размер `1.00` при native order total `600`.
+- Product/Cart submission успя и при изключен module status.
+- Нулев срок в калкулатора предизвика `DivisionByZeroError`.
+
+**Предпоставки:** достижим endpoint и EUR сесия; Checkout допълнително изисква съответния payment method/order в сесията.
+
+**Влияние:** подправени финансови заявки и несъответствие между банково писмо и поръчка. Това не доказва автоматично отпускане на кредит.
+
+**Концепция без реализация:** авторитетни native стойности и повторна server-side проверка на съществуващите правила. Нормалните заявки трябва да останат непроменени, а подменените да се отхвърлят. Необходима е внимателна изолация на финансовата валидация.
+
+**Business risk: High · Visual risk: Low.**
+
+### JET-OC3-AUD-001-F02 — Отрицателна цена на опция се добавя положително
+
+**Medium · Confirmed · P2**
+
+**Източник:** [Product JS:231](/home/wiley/projects/jet-oc3/upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_products.js:231).
+
+**Път:** Product.
+
+JavaScript добавя `price`, без да използва `price_prefix`.
+
+**Доказателство:** при продукт `600` и опция `10` с префикс `-`, calculation заявката съдържаше `610.00`, вместо `590.00`.
+
+**Предпоставка:** отрицателна ценова опция.
+
+**Влияние:** грешна основа за показаните и подадените финансови стойности.
+
+**Концепция:** използване на нативната знакова семантика на опциите. Поправката е изолируема, но променя защитени финансови стойности и изисква owner regression.
+
+**Business risk: Medium · Visual risk: None** — дизайнът не се променя, числата могат да се променят.
+
+### JET-OC3-AUD-001-F03 — Данъкът се изчислява върху брутната цена
+
+**Medium · Confirmed · P2**
+
+**Източници:** [Product запис:534](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:534), [Cart запис:1018](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:1018).
+
+**Пътища:** Product/Cart създаване на поръчка.
+
+`getTax()` получава цена с ДДС, въпреки че нативният API изчислява данък върху подадената стойност. Това е потвърдено срещу [OpenCart Tax API](https://raw.githubusercontent.com/opencart/opencart/3.0.3.8/upload/system/library/cart/tax.php).
+
+**Доказателство:** при брутна цена `120` и 20% ДДС записът беше нето `96`, данък `24`, вместо `100` и `20`.
+
+**Предпоставка:** облагаем продукт.
+
+**Влияние:** неточни данъчни редове, отчетност и потенциално фактуриране.
+
+**Концепция:** съгласувано native определяне на нето/данък. Изолируемо е, но трябва да покрие процентни, фиксирани и комбинирани ставки.
+
+**Business risk: High · Visual risk: None.**
+
+### JET-OC3-AUD-001-F04 — Новите поръчки нямат totals разбивка
+
+**Medium · Confirmed · P2**
+
+**Източници:** [Product totals:560](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:560), [Cart totals:1045](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:1045).
+
+**Пътища:** Product/Cart.
+
+`order_data['totals']` винаги е празен. Cart записът също не пренася разбивката за доставка/отстъпки.
+
+**Доказателство:** директно проследяване на order payload. При отстъпка общата сума може да се различава от сбора на продуктовите редове, без обясняващ total ред.
+
+**Предпоставка:** използване на тези поръчки за изпълнение/отчетност, особено с купони или доставка.
+
+**Концепция:** пренасяне на съответстващата native totals разбивка. Това променя защитени order данни и трябва да се обсъди като бизнес промяна, не като козметична корекция.
+
+**Business risk: High · Visual risk: None.**
+
+## D. Submission, concurrency и lifecycle
+
+### JET-OC3-AUD-001-F05 — Няма server-side защита срещу повторно изпращане
+
+**High · Confirmed · P2**
+
+**Източници:** [Product order creation:563](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:563), [Cart order creation:1048](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:1048), [Checkout delivery:229](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/payment/jet.php:229).
+
+**Пътища:** всички четири.
+
+Браузърният lock не е server-side гаранция. Не се проверява устойчиво дали конкретната заявка вече е обработена.
+
+**Доказателство:** повторно извикване на Product submission създаде две mock поръчки и два банкови опита. Checkout може да повтори банковото изпращане за същия session order преди изчистването на сесията.
+
+**Предпоставки:** повторен POST, друг tab, reload или конкурентни заявки.
+
+**Концепция:** server-side свързване на заявката с вече обработения резултат. За Product/Cart това не е само UI поправка и изисква отделен lifecycle договор. Няма внедрена такава архитектура.
+
+**Business risk: High · Visual risk: None.**
+
+### JET-OC3-AUD-001-F06 — Броячът допуска загубени increment-и и еднакви референции
+
+**Medium · Confirmed · P2**
+
+**Източници:** [Четене/запис:400](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:400), [UPDATE:1080](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:1080).
+
+**Пътища:** всички четири.
+
+Стойността се чете от config snapshot, а после се записва абсолютното `N+1`/`N+2`. Няма атомично резервиране или compare-and-set.
+
+**Доказателство:** две заявки, прочели едно и също `N`, конструират еднаква референция и могат да запишат еднаква следваща стойност.
+
+**Предпоставка:** конкурентни заявки, включително от различни сесии.
+
+**Концепция:** атомично резервиране на текущата референция със запазен формат. Изолируемо, но променя семантиката на банковия брояч.
+
+**Business risk: Medium · Visual risk: None.**
+
+### JET-OC3-AUD-001-F07 — Cart увеличава брояча с две
+
+**Low · Confirmed · P3**
+
+**Източник:** [Cart counter:872](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:872).
+
+**Доказателство:** при config стойност `1`, subject използва `2`, а UPDATE записва `3`.
+
+**Влияние:** пропуснати номера и различно поведение спрямо останалите пътища.
+
+**Концепция:** един increment според изрично одобрена обща counter семантика. Поправката е тясно изолируема; не засяга финансовите суми.
+
+**Business risk: Low · Visual risk: None.**
+
+### JET-OC3-AUD-001-F08 — Частичен native order при грешка по време на запис
+
+**Medium · Potential · P2**
+
+**Източник:** [addOrder и catch:563](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:563).
+
+**Пътища:** Product/Cart.
+
+Нативният [OpenCart `addOrder`](https://raw.githubusercontent.com/opencart/opencart/3.0.3.8/upload/catalog/model/checkout/order.php) извършва последователни INSERT-и. Грешка след първия запис може да остави частична поръчка, преди методът да върне ID. Тогава module отговорът няма `order_id`, а клиентът може да разреши нов опит.
+
+**Предпоставки:** междинна DB грешка и подходящи autocommit/storage настройки.
+
+**Доказателство:** source tracing; реална DB повреда не е симулирана.
+
+**Концепция:** първо проверка на native DB/transaction договора, после минимално атомично записване или надеждно разпознаване на частичния запис. Изолируемостта не е потвърдена.
+
+**Business risk: High · Visual risk: None.**
+
+## E. Email, privacy и web security
+
+### JET-OC3-AUD-001-F09 — Административни schema операции са публични catalog endpoints
+
+**High · Confirmed · P1**
+
+**Източници:** [createSchema:14](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:14), [deleteSchema:73](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:73), [admin AJAX:827](/home/wiley/projects/jet-oc3/upload/admin/view/template/extension/module/mt_jet_credit.twig:827).
+
+Няма проверка за admin authentication/modify permission.
+
+**Доказателство:** mock извикване без admin user, дори при USD сесия, достигна INSERT логиката. Стандартният [catalog router](https://raw.githubusercontent.com/opencart/opencart/3.0.3.8/upload/catalog/controller/startup/router.php) позволява този публичен dispatch.
+
+**Предпоставка:** инсталиран модул и достижим стандартен catalog route.
+
+**Влияние:** неоторизирана промяна на промоции, проценти и правила за показване.
+
+**Концепция:** административна authorization граница и защита на мутациите. Изолируемо до schema операциите; нормалното финансиране не трябва да се променя.
+
+**Business risk: Low · Visual risk: None.**
+
+### JET-OC3-AUD-001-F10 — SQL injection в `deleteKop`
+
+**High · Confirmed · P1**
+
+**Източник:** [Model deleteKop:26](/home/wiley/projects/jet-oc3/upload/catalog/model/extension/mt_jet_credit/jetcredit.php:26).
+
+Параметърът влиза директно в SQL без escaping.
+
+**Доказателство:** in-memory DB double получи DELETE с условие, превърнато в тавтология. SQL не е изпълняван.
+
+**Предпоставка:** достижим `deleteSchema`; F09 осигурява такъв път.
+
+**Влияние:** изтриване на всички промоционални правила. Допълнителни blind SQL възможности не са проверявани.
+
+**Концепция:** безопасно обвързване/escaping и валидиране на ключа, със запазване на допустимия `*`. Тясно изолируемо.
+
+**Business risk: Low · Visual risk: None.**
+
+### JET-OC3-AUD-001-F11 — Stored XSS в административния inline handler
+
+**High · Confirmed · P1**
+
+**Източник:** [Admin Twig:648](/home/wiley/projects/jet-oc3/upload/admin/view/template/extension/module/mt_jet_credit.twig:648).
+
+`jet_product_id` се поставя вътре в JavaScript string в `onclick`. HTML quote encoding не е JavaScript-context защита.
+
+**Доказателство:** 17-символен санитизиран идентификатор преминава лимита на полето; след HTML entity decode in-memory handler изпълни безопасен `probe()`. Стандартният [OC3 Twig renderer](https://raw.githubusercontent.com/opencart/opencart/3.0.3.8/upload/system/library/template/twig.php) е с `autoescape=false`.
+
+**Предпоставки:** запис чрез F09 и admin клик върху съответния delete бутон.
+
+**Влияние:** JavaScript изпълнение в контекста на административната страница.
+
+**Концепция:** context-correct encoding или безопасен data attribute/event binding. Възможна е тясна поправка без промяна на дизайна.
+
+**Business risk: Low · Visual risk: None.**
+
+### JET-OC3-AUD-001-F12 — `install/uninstall` не проверяват modify permission
+
+**Medium · Confirmed · P2**
+
+**Източници:** [install:190](/home/wiley/projects/jet-oc3/upload/admin/controller/extension/module/mt_jet_credit.php:190), [uninstall:207](/home/wiley/projects/jet-oc3/upload/admin/controller/extension/module/mt_jet_credit.php:207).
+
+Стандартният [admin permission startup](https://raw.githubusercontent.com/opencart/opencart/3.0.3.8/upload/admin/controller/startup/permission.php) проверява `access`; методите нямат собствена `modify` проверка.
+
+**Доказателство:** admin double с `access=true`, `modify=false` достигна изтриване на настройки и конструиране на `DROP TABLE`. Няма изпълнена DB операция.
+
+**Предпоставки:** admin с access до module страницата и валиден собствен token.
+
+**Концепция:** modify/method проверки преди страничните действия. Изолируемо; правомерният install/uninstall трябва да остане същият.
+
+**Business risk: Low · Visual risk: None.**
+
+### JET-OC3-AUD-001-F13 — Липсва module CSRF защита
+
+**Medium · Potential · P2**
+
+**Източници:** [Product submission:244](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:244), [Checkout confirm:77](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/payment/jet.php:77).
+
+Няма module token/nonce или Origin проверка. Успешните mock заявки не съдържат CSRF token.
+
+**Експлоатируемост:** зависи от реалните SameSite/cookie настройки, избрана валута и Checkout session state. Cross-site browser exploitation не е потвърдена.
+
+**Концепция:** session-bound CSRF проверка на мутациите. Тя не заменя финансовата валидация или replay защитата.
+
+**Business risk: Low · Visual risk: None.**
+
+**Privacy положителни резултати:** не е установено module CC/BCC изтичане между трите писма. Съхраненото в сесията Checkout `order_id`, а не POST ID, определя използваната поръчка; произволен IDOR не е потвърден. Не е намерен request-controlled include път.
+
+## F. Инсталация и съвместимост
+
+### JET-OC3-AUD-001-F14 — Deprecated PHP input filter
+
+**Low · Confirmed · P3**
+
+**Източник:** [FILTER_SANITIZE_STRING:18](/home/wiley/projects/jet-oc3/upload/catalog/controller/extension/mt_jet_credit/jetcredit.php:18), с множество други употреби.
+
+Филтърът е [deprecated от PHP 8.1](https://www.php.net/manual/en/filter.constants.sanitization.php). Провереният CLI е PHP 8.3.6.
+
+**Влияние:** при включено показване на deprecation съобщения е възможно повреждане на AJAX JSON и излагане на технически подробности. Реалната production error конфигурация не е проверена.
+
+**Концепция:** context-specific validation/escaping с regression за точните email данни. Механична замяна може да промени одобреното съдържание.
+
+**Business risk: Medium · Visual risk: Low.**
+
+### JET-OC3-AUD-001-F15 — OCMOD зависи от конкретни theme anchors
+
+**Medium · Potential · P3**
+
+**Източници:** [Product anchor:106](/home/wiley/projects/jet-oc3/install.xml:106), [Cart anchor:720](/home/wiley/projects/jet-oc3/install.xml:720).
+
+Осемте OCMOD операции зависят от конкретни PHP/Twig фрагменти. Друг theme или override може да няма тези anchors.
+
+**Предпоставка:** различна тема/override/core вариант. Няма доказан отказ в owner-approved магазина.
+
+**Концепция:** първо read-only compatibility matrix и проверка на реалните modification logs; промени само при доказано несъвпадение.
+
+**Business risk: Medium · Visual risk: High** при евентуално преместване на markup.
+
+За PHPMailer 6.9.3 **не е приписана уязвимост само заради версията**. Прегледани са [официалните advisories](https://github.com/PHPMailer/PHPMailer/security/advisories); това не представлява пълен dependency certification.
+
+## G. Приоритизирана таблица
+
+Всички кратки номера по-долу са с префикс **`JET-OC3-AUD-001-`**.
+
+| ID | Severity / Status | Доказателство | Пътища | Business / Visual |
+|---|---|---|---|---|
+| F09 | High / Confirmed | Публичен schema call без admin | Admin функции през catalog | Low / None |
+| F10 | High / Confirmed | Конструиран injected DELETE | Schema delete | Low / None |
+| F11 | High / Confirmed | Decoded handler изпълнява probe | Admin | Low / None |
+| F01 | High / Confirmed | Total 1; отрицателна главница; Checkout 600→1 | Всички | High / Low |
+| F05 | High / Confirmed | 2 поръчки, 2 банкови опита | Всички | High / None |
+| F03 | Medium / Confirmed | Gross 120 → net 96, tax 24 | Product/Cart | High / None |
+| F02 | Medium / Confirmed | Отрицателна опция дава 610 вместо 590 | Product | Medium / None |
+| F04 | Medium / Confirmed | Празни order totals | Product/Cart | High / None |
+| F12 | Medium / Confirmed | Modify=false достига uninstall | Admin | Low / None |
+| F06 | Medium / Confirmed | Неатомичен config read + absolute UPDATE | Всички | Medium / None |
+| F08 | Medium / Potential | Последователни native INSERT-и | Product/Cart | High / None |
+| F13 | Medium / Potential | Няма CSRF token; browser условия неизвестни | Submission | Low / None |
+| F07 | Low / Confirmed | Cart counter 1→3 | Cart | Low / None |
+| F14 | Low / Confirmed | Deprecated API | PHP endpoints | Medium / Low |
+| F15 | Medium / Potential | Фиксирани OCMOD anchors | Product/Cart integration | Medium / High |
+
+## H. Препоръчан ред — само за обсъждане
+
+1. Затваряне на публичната административна граница, SQL injection и stored XSS.
+2. Договор за server-side финансови стойности и eligibility проверки.
+3. Повторни заявки и устойчиво разпознаване на вече обработен резултат.
+4. Данъчни стойности, отрицателни опции и totals разбивка.
+5. Admin modify permission, counter concurrency и Cart increment.
+6. CSRF, частични DB записи и compatibility matrix.
+
+Това **не е разрешение за remediation** и не предлага пренасяне на Woo claim/reservation архитектура.
+
+## I. Тестово покритие и ограничения
+
+Изпълнени са:
+
+- **370 frontend regression проверки**.
+- **1194 email/order проверки**, изпълнени чрез адаптация изцяло в паметта, без временни файлове.
+- Допълнителни in-memory probes за tampering, replay, SQL construction, admin authorization, XSS контекст, ДДС и отрицателни опции.
+- PHP syntax, XML parsing, `git diff --check`.
+- Сравнение на SHA-256 за **103 файла**, включително източници и двата `dist/` артефакта — всички непроменени.
+
+Ограничения:
+
+- Няма реален browser/store/DB/SMTP тест.
+- DB concurrency, частични записи и production cookies не са проверени в реалната среда.
+- Съществуващият tax double използва `gross/6`, което не моделира нативния `getTax`; затова зелените досегашни тестове не доказват правилно ДДС.
+- `option_id=0` от frontend probe **не е обявен за доказан native persistence дефект**, защото провереният OC3 order model използва `product_option_id` и `product_option_value_id`.
+- Няма определен в кода общ максимален кредитен размер; не е измисляна нова бизнес граница.
+- Owner-approved визуалният baseline не е преоценяван като дизайн.
+
+## J. Финално потвърждение
+
+- **Няма модифицирани файлове.**
+- **Няма генериран инсталатор.**
+- **Няма Git операции, променящи състоянието.**
+- **Няма реални поръчки, DB мутации или имейли.**
+- **Няма бизнес, визуални или Jet-Woo промени.**
+- Работната директория остава чиста.
+
+**Одитът приключва тук. Remediation не е започвана.**

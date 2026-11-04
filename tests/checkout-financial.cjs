@@ -50,6 +50,10 @@ if (process.argv.includes('--rounding')) {
    check(sent.data.values[code + '_vnoska'] === response[code === 'jet' ? 'jet_vnoska' : 'jet_vnoska_card'], 'displayed installment preserved');
    $('#button-confirm').events.click();
    check(requests.length === 2, 'existing duplicate-confirm lock retained');
+   sent.success({ success: 'unsuccess', jet_submission_review: true }); sent.complete();
+   $('#button-confirm').events.click();
+   check(requests.length === 2, 'durable review response blocks manual repeat after completion');
+   check(!Object.keys(sent.data.values).some(key => key.includes('intent') || key === 'order_id'), 'native session order needs no browser identity authority');
   }
  }
  console.log(`PASS ${checks} real Checkout JavaScript DOM/AJAX snapshot checks`);

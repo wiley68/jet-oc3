@@ -41,7 +41,7 @@ $productFinancialTests = function () {
         $c->jet_calculate();
         $quote=json_decode($c->response->output,true);
         $assert(($quote['success']??'')==='success' && isset($quote['jet_quote_ref']), 'valid Product quote');
-        $c->request->post['jet_quote_ref']=$quote['jet_quote_ref'];
+        $c->request->post['jet_quote_ref']=$quote['jet_quote_ref'];$c->request->post['jet_intent_id']=$quote['jet_intent_id'];
         foreach (['vnoska','total_credit_price','obshto','gpr','glp'] as $field) $c->request->post['jet_'.$field]=$quote['jet_'.$field.($card && $field!=='total_credit_price'?'_card':'')];
         return [$c,$quote];
     };

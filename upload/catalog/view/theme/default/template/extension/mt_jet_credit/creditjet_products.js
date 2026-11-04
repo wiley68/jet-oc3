@@ -48,6 +48,10 @@ jQuery(document).ready(function($) {
 
 	let jetActiveQuote = null;
 	let jetPreviousQuote = '';
+	let jetIntentId = '';
+	let jetIntentPending = false;
+	let jetIntentQueued = false;
+	let jetFormGeneration = 0;
 	const jetNativeOptions = () => $('#product').find('input, select, textarea').serializeArray()
 		.filter((entry) => /^option\[/.test(entry.name));
 	const jetQuantity = () => $('input[name="quantity"]').length ? String($('input[name="quantity"]').first().val()) : '1';
@@ -64,7 +68,7 @@ jQuery(document).ready(function($) {
 		jetActiveQuote = null;
 		$('#buy2_jetcredit').prop('disabled', true);
 	};
-	const jetQuoteCurrent = () => jetActiveQuote && jetActiveQuote.state === jetProductState();
+	const jetQuoteCurrent = () => jetActiveQuote && jetIntentId && jetActiveQuote.intent === jetIntentId && jetActiveQuote.state === jetProductState();
 
 	let jetCalculationRevision = 0;
 	let jetDownpaymentTimer;
@@ -122,7 +126,8 @@ jQuery(document).ready(function($) {
 		const normalizedDown = jetNormalizedDownpayment();
 		if (normalizedDown !== null && Number(normalizedDown) < jetPriceall) {
 			const jetFormData = new FormData();
-			jetFormData.append('jet_priceall', jetPriceall.toFixed(2));
+			jetFormData.append('jet_priceall', jetPriceall.toFixed(2));
+			jetFormData.append('jet_intent_id', jetIntentId);
 			jetFormData.append('jet_parva', normalizedDown);
 			jetFormData.append('jet_downpayment_raw', String($('#jet_parva').val() || ''));
 			jetFormData.append('jet_quantity', jetQuantity());
@@ -130,6 +135,10 @@ jQuery(document).ready(function($) {
 			jetFormData.append('jet_previous_quote', jetPreviousQuote);
 			jetFormData.append('jet_vnoski', parseInt($('#jet_vnoski').val()));
 			jetFormData.append('jet_product_id', $('#jet_product_id').val());
+			const formGeneration = jetFormGeneration;
+			const creatingIntent = !jetIntentId;
+			if (creatingIntent) jetIntentPending = true;
+			try {
 			$.ajax({
 				url: 'index.php?route=extension/mt_jet_credit/jetcredit/jet_calculate',
 				method: 'POST',
@@ -137,13 +146,16 @@ jQuery(document).ready(function($) {
 				processData: false,
 				contentType: false,
 				timeout: 30000,
-				success: function(json) {
+				success: function(json) {
+					if (formGeneration !== jetFormGeneration) return;
+					if (creatingIntent && json && typeof json.jet_intent_id === 'string' && /^[a-f0-9]{48}$/.test(json.jet_intent_id)) jetIntentId = json.jet_intent_id;
 					if (revision !== jetCalculationRevision) return;
 					if (state !== jetProductState()) { jetInvalidateQuote(); jetButtonInstallments(false); return; }
+					if (json && json.jet_submission_review === true) { jetSubmission.needsReview = true; jetShowCustomAlert(jetSubmissionUncertain, false); return; }
 					if (json.success === 'success') {
-						if (typeof json.jet_quote_ref === 'string' && /^[a-f0-9]{48}$/.test(json.jet_quote_ref) && json.jet_parva === normalizedDown) {
+						if (json.jet_intent_id === jetIntentId && jetIntentId && typeof json.jet_quote_ref === 'string' && /^[a-f0-9]{48}$/.test(json.jet_quote_ref) && json.jet_parva === normalizedDown) {
 							jetPreviousQuote = json.jet_quote_ref;
-							jetActiveQuote = { reference: json.jet_quote_ref, state, downpayment: normalizedDown };
+							jetActiveQuote = { intent: jetIntentId, reference: json.jet_quote_ref, state, downpayment: normalizedDown };
 							changeBtnJetcreditBuy();
 						}
 						jetButtonInstallments(true);
@@ -185,8 +197,12 @@ jQuery(document).ready(function($) {
 				error: function(error) {
 					if (revision === jetCalculationRevision) console.error('Error:', error);
 				},
-				complete: function() { jetFinishCalculation(revision); }
-			});
+				complete: function() { jetFinishCalculation(revision); if (creatingIntent) { jetIntentPending = false; if (jetIntentQueued) { jetIntentQueued = false; jetCalculate(false); } } }
+			});
+			} catch (error) {
+				if (creatingIntent) { jetIntentPending = false; jetIntentQueued = false; }
+				jetFinishCalculation(revision);
+			}
 		} else {
 			jetFinishCalculation(revision);
 			if ($('#jet_parva').length) {
@@ -198,6 +214,7 @@ jQuery(document).ready(function($) {
 
 	const jetCalculate = (test) => {
 		if (jetSubmission.locked) return;
+		if (!jetIntentId && jetIntentPending) { jetIntentQueued = true; jetInvalidateQuote(); return; }
 		const hasOptions = document.querySelectorAll("[id*='input-option']").length > 0;
 		const revision = jetBeginCalculation(!test || !hasOptions);
 		const state = jetProductState();
@@ -316,6 +333,7 @@ jQuery(document).ready(function($) {
 
 	const jetClose = (recalculate = true) => {
 		if (jetSubmission.locked) return;
+		if (!jetSubmission.needsReview) { ++jetFormGeneration; jetIntentId = ''; jetPreviousQuote = ''; jetInvalidateQuote(); }
 		$('#jet-product-popup-container').hide();
 		$('#jet_step_1').show();
 		$('#jet_step_2').hide();
@@ -518,6 +536,7 @@ jQuery(document).ready(function($) {
 		jetFormSendData.append('jet_parva', acceptedQuote.downpayment);
 		jetFormSendData.append('jet_downpayment_raw', String($('#jet_parva').val() || ''));
 		jetFormSendData.append('jet_quote_ref', acceptedQuote.reference);
+		jetFormSendData.append('jet_intent_id', acceptedQuote.intent);
 		jetFormSendData.append('jet_options', JSON.stringify(jetNativeOptions()));
 		jetFormSendData.append('jet_total_credit_price', $('#jet_total_credit_price').text());
 		jetFormSendData.append('jet_obshto', $('#jet_obshto').text());
@@ -542,7 +561,7 @@ jQuery(document).ready(function($) {
 			contentType: false,
 			timeout: 30000,
 			success: function(json) {
-				if (!json || !['success', 'unsuccess'].includes(json.success) || json.code === 'bank_uncertain') {
+				if (!json || json.jet_submission_review === true || !['success', 'unsuccess'].includes(json.success) || json.code === 'bank_uncertain') {
 					jetSubmission.needsReview = true;
 					jetShowCustomAlert(jetSubmissionUncertain, false);
 					return;

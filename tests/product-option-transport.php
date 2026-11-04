@@ -50,7 +50,7 @@ $productFinancialTests = function () {
     };
     $submitWire = function ($wire, $quote, $card=0) {
         $wire+=['jet_lname'=>'','jet_name'=>'Test','jet_lastname'=>'User','jet_egn'=>'1234567890','jet_phone'=>'1234567890','jet_email'=>'test@example.invalid'];
-        $wire['jet_card']=(string)$card;$wire['jet_quote_ref']=$quote['jet_quote_ref'];
+        $wire['jet_card']=(string)$card;$wire['jet_quote_ref']=$quote['jet_quote_ref'];$wire['jet_intent_id']=$quote['jet_intent_id'];
         foreach(['vnoska','total_credit_price','obshto','gpr','glp'] as $field)$wire['jet_'.$field]=$quote['jet_'.$field.($card&&$field!=='total_credit_price'?'_card':'')];
         return $wire;
     };

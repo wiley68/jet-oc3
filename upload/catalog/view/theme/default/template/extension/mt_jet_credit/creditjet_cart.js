@@ -5,6 +5,10 @@ jQuery(document).ready(function($) {
 
 	let jetActiveQuote = null;
 	let jetPreviousQuote = '';
+	let jetIntentId = '';
+	let jetIntentPending = false;
+	let jetIntentQueued = false;
+	let jetFormGeneration = 0;
 	let jetCartLineage = '';
 	const jetStaleMessage = 'Условията на количката са променени. Заявката за финансиране не е изпратена. Моля, обновете количката и направете ново изчисление на финансирането.';
 	const jetCanonicalDown = () => {
@@ -15,7 +19,7 @@ jQuery(document).ready(function($) {
 	};
 	const jetQuoteState = () => JSON.stringify([$('#jet_price').val(), $('#jet_vnoski').val(), card,
 		jetCanonicalDown(), ...['jet_products','jet_products_qt','jet_products_pr','jet_products_vr','jet_cart_rows'].map(id => $('#' + id).val())]);
-	const jetQuoteCurrent = () => jetActiveQuote && jetActiveQuote.state === jetQuoteState();
+	const jetQuoteCurrent = () => jetActiveQuote && jetIntentId && jetActiveQuote.intent === jetIntentId && jetActiveQuote.state === jetQuoteState();
 	const jetInvalidateQuote = () => {
 		jetActiveQuote = null;
 		$('#buy_jetcredit').prop('disabled', true);
@@ -169,6 +173,7 @@ jQuery(document).ready(function($) {
 
 	const jetCalculate = () => {
 		if (jetSubmission.locked) return;
+		if (!jetIntentId && jetIntentPending) { jetIntentQueued = true; jetInvalidateQuote(); return; }
 		const revision = jetBeginCalculation();
 		const jetPriceall = parseFloat($('#jet_price').val());
 		const canonicalDown = jetCanonicalDown();
@@ -185,6 +190,7 @@ jQuery(document).ready(function($) {
 		if (Number.isFinite(jetPriceall) && jetPriceall > 0 && Number.isFinite(jetDownpayment) && jetDownpayment < Number(jetPriceall.toFixed(2))) {
 			const jetFormData = new FormData();
 			jetFormData.append('jet_priceall', jetPriceall.toFixed(2));
+			jetFormData.append('jet_intent_id', jetIntentId);
 			jetFormData.append('jet_parva', canonicalDown);
 			jetFormData.append('jet_downpayment_raw', String($('#jet_parva').val() || ''));
 			jetFormData.append('jet_card', card);
@@ -196,6 +202,10 @@ jQuery(document).ready(function($) {
 			jetFormData.append('jet_products', $('#jet_products').val());
 			jetFormData.append('jet_products_qt', $('#jet_products_qt').val());
 			jetFormData.append('jet_products_pr', $('#jet_products_pr').val());
+			const formGeneration = jetFormGeneration;
+			const creatingIntent = !jetIntentId;
+			if (creatingIntent) jetIntentPending = true;
+			try {
 			$.ajax({
 				url: 'index.php?route=extension/mt_jet_credit/jetcredit/jet_calculate_cart',
 				method: 'POST',
@@ -204,16 +214,19 @@ jQuery(document).ready(function($) {
 				contentType: false,
 				timeout: 30000,
 				success: function(json) {
+					if (formGeneration !== jetFormGeneration) return;
+					if (creatingIntent && json && typeof json.jet_intent_id === 'string' && /^[a-f0-9]{48}$/.test(json.jet_intent_id)) jetIntentId = json.jet_intent_id;
 					if (revision !== jetCalculationRevision || state !== jetQuoteState()) return;
 					if (json && json.jet_quote_invalid === true) { jetPreviousQuote = ''; jetCartLineage = ''; }
 					if (json && json.jet_cart_stale === true) { jetShowCustomAlert(jetStaleMessage, false); return; }
+					if (json && json.jet_submission_review === true) { jetSubmission.needsReview = true; jetShowCustomAlert(jetSubmissionUncertain, false); return; }
 					if (json && json.success === 'success') {
-						if (typeof json.jet_quote_ref === 'string' && /^[a-f0-9]{48}$/.test(json.jet_quote_ref)
+						if (json.jet_intent_id === jetIntentId && jetIntentId && typeof json.jet_quote_ref === 'string' && /^[a-f0-9]{48}$/.test(json.jet_quote_ref)
 							&& typeof json.jet_cart_lineage === 'string' && /^[a-f0-9]{48}$/.test(json.jet_cart_lineage) && json.jet_parva === canonicalDown
 							&& json.jet_show_button === true && Number(json.jet_vnoski) === Number($('#jet_vnoski').val()) && Number(json.jet_card) === card
 							&& Number(json.jet_priceall) === Number(jetPriceall.toFixed(2))) {
 							jetPreviousQuote = json.jet_quote_ref; jetCartLineage = json.jet_cart_lineage;
-							jetActiveQuote = { reference: json.jet_quote_ref, state, downpayment: canonicalDown };
+							jetActiveQuote = { intent: jetIntentId, reference: json.jet_quote_ref, state, downpayment: canonicalDown };
 						}
 						if ($('#jet_vnoska').length !== 0) $('#jet_vnoska').text(json.jet_vnoska);
 						if ($('#jet_vnoska_second').length !== 0) $('#jet_vnoska_second').text(json.jet_vnoska_second);
@@ -248,8 +261,12 @@ jQuery(document).ready(function($) {
 				error: function(error) {
 					if (revision === jetCalculationRevision) console.error('Error:', error);
 				},
-				complete: function() { jetFinishCalculation(revision); if (revision === jetCalculationRevision && jetQuoteCurrent()) { changeBtnJetcredit(); changeBtnJetcreditBuy(); } }
+				complete: function() { jetFinishCalculation(revision); if (creatingIntent) { jetIntentPending = false; if (jetIntentQueued) { jetIntentQueued = false; jetCalculate(false); } } if (revision === jetCalculationRevision && jetQuoteCurrent()) { changeBtnJetcredit(); changeBtnJetcreditBuy(); } }
 			});
+			} catch (error) {
+				if (creatingIntent) { jetIntentPending = false; jetIntentQueued = false; }
+				jetFinishCalculation(revision);
+			}
 		} else {
 			jetFinishCalculation(revision);
 			$("#jet_alert_overlay").addClass("show");
@@ -259,6 +276,7 @@ jQuery(document).ready(function($) {
 
 	const jetClose = () => {
 		if (jetSubmission.locked) return;
+		if (!jetSubmission.needsReview) { ++jetFormGeneration; jetIntentId = ''; jetPreviousQuote = ''; jetCartLineage = ''; jetInvalidateQuote(); }
 		$('#jet-product-popup-container').css('display', 'none');
 		$('#jet_step_1').css('display', 'block');
 		$('#jet_step_2').css('display', 'none');
@@ -341,6 +359,7 @@ jQuery(document).ready(function($) {
 		try {
 		const jetFormSendData = new FormData();
 		jetFormSendData.append('jet_quote_ref', acceptedQuote.reference);
+		jetFormSendData.append('jet_intent_id', acceptedQuote.intent);
 		jetFormSendData.append('jet_cart_rows', $('#jet_cart_rows').val());
 		jetFormSendData.append('jet_downpayment_raw', acceptedQuote.downpayment);
 		jetFormSendData.append('jet_priceall', $('#jet_priceall').text());
@@ -371,7 +390,7 @@ jQuery(document).ready(function($) {
 			contentType: false,
 			timeout: 30000,
 			success: function(json) {
-				if (!json || !['success', 'unsuccess'].includes(json.success) || json.code === 'bank_uncertain') {
+				if (!json || json.jet_submission_review === true || !['success', 'unsuccess'].includes(json.success) || json.code === 'bank_uncertain') {
 					jetSubmission.needsReview = true;
 					jetShowCustomAlert(jetSubmissionUncertain, false);
 					return;

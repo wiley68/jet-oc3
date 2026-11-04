@@ -10,8 +10,12 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		$this->load->model('setting/setting');
 		if (($this->request->server['REQUEST_METHOD'] == 'POST') && $this->validate()) {
 			$settings = $this->request->post;
-			unset($settings['module_mt_jet_credit_eur']);
+			unset($settings['module_mt_jet_credit_eur'], $settings['module_mt_jet_credit_count']);
 			$existing_settings = $this->model_setting_setting->getSetting('module_mt_jet_credit');
+			// editSetting replaces the group: retain only the persistent initialization seed.
+			if (array_key_exists('module_mt_jet_credit_count', $existing_settings)) {
+				$settings['module_mt_jet_credit_count'] = $existing_settings['module_mt_jet_credit_count'];
+			}
 			if (array_key_exists('module_mt_jet_credit_eur', $existing_settings)) {
 				$settings['module_mt_jet_credit_eur'] = $existing_settings['module_mt_jet_credit_eur'];
 			}
@@ -43,8 +47,9 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		if (isset($this->error['warning'])) {
 			$data['error_warning'] = $this->error['warning'];
 		} else {
-			$data['error_warning'] = '';
+			$data['error_warning'] = $this->session->data['jet_submission_install_error'] ?? '';
 		}
+		unset($this->session->data['jet_submission_install_error']);
 		if (isset($this->request->post['module_mt_jet_credit_status'])) {
 			$data['module_mt_jet_credit_status'] = $this->request->post['module_mt_jet_credit_status'];
 		} else {
@@ -167,10 +172,10 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 		} else {
 			$data['module_mt_jet_credit_vnoska'] = $this->config->get('module_mt_jet_credit_vnoska') == '' ? 1 : $this->config->get('module_mt_jet_credit_vnoska');
 		}
-		if (isset($this->request->post['module_mt_jet_credit_count'])) {
-			$data['module_mt_jet_credit_count'] = $this->request->post['module_mt_jet_credit_count'];
-		} else {
-			$data['module_mt_jet_credit_count'] = $this->config->get('module_mt_jet_credit_count') == "" ? 1 : $this->config->get('module_mt_jet_credit_count');
+		try {
+			$data['module_mt_jet_credit_count'] = $this->submissionStore()->getNextReference();
+		} catch (\Throwable $error) {
+			$data['module_mt_jet_credit_count'] = '';
 		}
 
 		if (isset($this->request->post['module_mt_jet_credit_price'])) {
@@ -279,10 +284,28 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 	}
 
 	public function install() {
-		$this->load->model('setting/setting');
-		$this->model_setting_setting->editSetting('module_mt_jet_credit', $this->request->post);
-		$table_kop_name = DB_PREFIX . 'jet_kop';
-		$this->db->query("CREATE TABLE IF NOT EXISTS `$table_kop_name` (
+		if (!$this->authorizedSubmissionInstall()) {
+			$this->response->addHeader('HTTP/1.1 403 Forbidden');
+			$this->response->addHeader('Content-Type: application/json');
+			$this->response->setOutput(json_encode(['success'=>'unsuccess']));
+			return;
+		}
+		$stage = 'settings-read';
+		try {
+			$this->load->model('setting/setting');
+			$existing = $this->model_setting_setting->getSetting('module_mt_jet_credit');
+			$stage = 'storage-preparation';
+			$this->prepareSubmissionStorage($existing);
+			// Native uninstall may have removed settings. Never guess a seed from absence.
+			if (!$existing) {
+				$stage = 'settings-initialization';
+				$settings = $this->request->post;
+				unset($settings['module_mt_jet_credit_count']);
+				$this->model_setting_setting->editSetting('module_mt_jet_credit', $settings);
+			}
+			$stage = 'promotion-preparation';
+			$table_kop_name = DB_PREFIX . 'jet_kop';
+			$this->db->query("CREATE TABLE IF NOT EXISTS `$table_kop_name` (
 			`id` int(11) NOT NULL AUTO_INCREMENT,
 			`jet_product_id` varchar(20) NOT NULL,
 			`jet_product_percent` DECIMAL(5,2) NOT NULL,
@@ -293,14 +316,95 @@ class ControllerExtensionModuleMTJetCredit extends Controller {
 			PRIMARY KEY (`id`),
 			FULLTEXT idx (`jet_product_id`)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;");
+		} catch (\Throwable $error) {
+			$this->logSubmissionPreparationFailure($stage, $error);
+			$this->session->data['jet_submission_install_error'] = 'Инсталацията не е завършена. Подаването на заявления остава недостъпно при неподготвено хранилище. Проверете административния журнал; не повтаряйте деинсталация/инсталация.';
+			unset($this->session->data['success']);
+			// Native redirect terminates the request before core can report install success.
+			$this->response->redirect($this->url->link('extension/module/mt_jet_credit', 'user_token=' . $this->session->data['user_token'], true));
+			return;
+		}
 	}
-	
+
+	private function authorizedSubmissionInstall() {
+		$token = $this->request->get['user_token'] ?? null;
+		$expected = $this->session->data['user_token'] ?? null;
+		if (!$this->user->isLogged() || !is_string($token) || !is_string($expected) || $expected === '' || !hash_equals($expected, $token)) return false;
+		if ($this->user->hasPermission('modify', 'extension/module/mt_jet_credit')) return true;
+		// Core grants module rights in DB after Cart\User loaded its permission snapshot.
+		// This exception belongs exclusively to the authenticated native install route.
+		return ($this->request->get['route'] ?? '') === 'extension/extension/module/install'
+			&& ($this->request->get['extension'] ?? '') === 'mt_jet_credit'
+			&& $this->user->hasPermission('modify', 'extension/extension/module');
+	}
+
+	private function logSubmissionPreparationFailure($stage, $error) {
+		// Only fixed reason codes; never log SQL, exception arguments/messages or tokens.
+		$reasons = [
+			'Invalid reference'=>'reference-unavailable-or-invalid',
+			'Submission storage connection failed'=>'connection-failed',
+			'Submission storage operation failed'=>'operation-failed',
+			'Transactional row-locking storage required'=>'transactional-storage-required',
+			'Cannot verify database durability'=>'durability-unverified',
+			'Autocommit required'=>'autocommit-required',
+			'Durable commits required'=>'durable-commits-required',
+			'Unknown binary log configuration'=>'binary-log-unknown',
+			'Durable binary log required'=>'durable-binlog-required',
+			'Partial submission schema; preparation refused'=>'partial-schema',
+			'Invalid submission metadata'=>'invalid-metadata',
+			'Counter/ledger inconsistency'=>'counter-ledger-inconsistent',
+			'Submission column default mismatch'=>'column-default-mismatch',
+			'Submission unique constraints mismatch'=>'unique-constraints-mismatch'
+		];
+		$file = basename($error->getFile());
+		if (!in_array($file, ['mt_jet_credit.php','jet_submission_store.php'], true)) $file = 'dependency';
+		$message = 'JET-SUBMISSION-PREPARE stage=' . $stage . ' reason=' . ($reasons[$error->getMessage()] ?? 'unexpected-failure')
+			. ' source=' . $file . ':' . (int)$error->getLine();
+		try { $this->log->write($message); } catch (\Throwable $ignored) { /* Reporting must not cause another install failure. */ }
+	}
+
 	public function uninstall() {
-		$this->load->model('setting/setting');
-		$this->model_setting_setting->deleteSetting('module_mt_jet_credit');
-		$table_kop_name = DB_PREFIX . 'jet_kop';
-		$this->db->query("DROP TABLE IF EXISTS `$table_kop_name`;");
+		if (!$this->user->hasPermission('modify', 'extension/module/mt_jet_credit')) {
+			throw new \RuntimeException('Module modification permission required.');
+		}
+		// Native core may already have deleted module settings. This hook retains
+		// promotion rules, ledger, key and reserved references.
 		$this->load->controller('extension/modification/refresh');
+	}
+
+	// Explicit non-destructive upgrade for already installed v2.0.1 modules.
+	// Invoke via authenticated admin POST with the normal user_token; no catalog DDL.
+	public function prepareSubmissionSchema() {
+		if (!$this->validateSchemaRequest()) return;
+		$token = $this->request->get['user_token'] ?? null;
+		$expected = $this->session->data['user_token'] ?? null;
+		$json = ['success' => 'unsuccess'];
+		if (!is_string($token) || !is_string($expected) || $expected === '' || !hash_equals($expected, $token)) {
+			$this->response->addHeader('HTTP/1.1 403 Forbidden');
+		} else {
+			try {
+				$this->load->model('setting/setting');
+				$this->prepareSubmissionStorage($this->model_setting_setting->getSetting('module_mt_jet_credit'));
+				$json['success'] = 'success';
+			} catch (\Throwable $error) {
+				$this->logSubmissionPreparationFailure('explicit-preparation', $error);
+				// Do not expose SQL, schema details or connection credentials.
+				$json['error'] = 'Хранилището не е подготвено или е несъвместимо. Подготовката е отказана; броячът не е нулиран.';
+			}
+		}
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->setOutput(json_encode($json));
+	}
+
+	protected function submissionStore() {
+		require_once DIR_SYSTEM . 'library/jet_submission_store.php';
+		return JetSubmissionStore::connect();
+	}
+
+	private function prepareSubmissionStorage($settings) {
+		// Existing storage is verified first by prepare(), even without a legacy seed.
+		// Empty settings cannot prove a first install: core uninstall deletes them too.
+		$this->submissionStore()->prepare($settings['module_mt_jet_credit_count'] ?? null);
 	}
 
 	private function validateSchemaRequest() {

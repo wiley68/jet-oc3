@@ -5,6 +5,7 @@ require __DIR__.'/opencart-request.php';
 $cartStart=$checks;
 define('HTTP_SERVER','http://test/'); define('HTTPS_SERVER','https://test/');
 $repo=dirname(__DIR__);
+require_once __DIR__.'/fixtures/submission-memory.php';
 foreach (['PHPMailer','SMTP','Exception'] as $name) {
     $target=DIR_APPLICATION.'controller/extension/mt_jet_credit/PHPMailer/'.$name.'.php';
     if (!is_dir(dirname($target))) mkdir(dirname($target),0700,true);
@@ -46,6 +47,8 @@ class CartFinancialCart extends Cart\Cart {public $clears=0;function clear(){++$
 class CartFinancialModel extends ModelExtensionMtJetCreditJetcredit {}
 class CartFinancialController extends ControllerExtensionMtJetCreditJetCredit {
     protected function cartModel(){return $this->model_extension_mt_jet_credit_jetcredit;}
+    protected function submissionService(){return $this->registry->get('test_submission_service');}
+    protected function submissionOwner(){return $this->session->getId();}
 }
 class CartFinancialResponse {public $output;function addHeader($v){}function setOutput($v){$this->output=$v;}}
 class CartFinancialOrders {
@@ -70,7 +73,7 @@ class CartFinancialLoader {
     }
 }
 function cartEnvironment($configure=null){
-    [, $r]=environment();$db=new CartFinancialDB;$r->set('db',$db);
+    [, $r]=environment();$memory=new SubmissionMemory;$r->set('test_submission_memory',$memory);$storage=new JetSubmissionStore(new SubmissionConnection($memory),'oc_');$storage->prepare('1');$r->set('test_submission_service',new JetSubmission($storage));$db=new CartFinancialDB;$r->set('db',$db);
     put($r->get('currency'),'currencies',['EUR'=>['currency_id'=>1,'value'=>1],'USD'=>['currency_id'=>2,'value'=>2]]);
     foreach(['cart','customer','tax','currency','weight'] as $k)put($r->get($k),'db',$db);
     $cart=blank('CartFinancialCart');foreach(get_object_vars($r->get('cart')) as $k=>$v)put($cart,$k,$v);
@@ -104,20 +107,21 @@ function quoteCart($configure=null,$down='100',$card=0,$term=12){
         try {$debug=internal($c,'cartCalculate',$m,$ctx,$r->get('request')->post);}catch(Throwable $e){$debug=$e->getMessage();}
         check(false,'legitimate native Cart quoted: '.json_encode([$q,$debug,$m->cartTransportMatches($ctx,$r->get('request')->post)]));
     }
-    $wire['jet_quote_ref']=$q['jet_quote_ref'];$wire['jet_parva']=$q['jet_parva'];
+    $wire['jet_quote_ref']=$q['jet_quote_ref'];$wire['jet_intent_id']=$q['jet_intent_id'];$wire['jet_parva']=$q['jet_parva'];
     foreach(['vnoska','total_credit_price','obshto','gpr','glp'] as $f)$wire['jet_'.$f]=$q['jet_'.$f.($card&&$f!=='total_credit_price'?'_card':'')];
     cartWire($r,$wire);return [$c,$r,$wire,$q];
 }
-function rejectCart($c,$r,$stale=null){
-    CartFinancialMailer::$messages=[];$before=serialize($r->get('session')->data);$writes=count($r->get('db')->writes);
+function rejectCart($c,$r,$stale=null,$expectedPasses=1){
+    CartFinancialMailer::$messages=[];$reservation=$r->get('test_submission_memory')->meta['next_reference'];$before=serialize($r->get('session')->data);$writes=count($r->get('db')->writes);
     $orders=count($r->get('model_checkout_order')->orders);$history=count($r->get('model_checkout_order')->history);$clear=$r->get('cart')->clears;
-    $passes=nativePasses($r);$c->jet_send_cart();check(nativePasses($r)===$passes+1,'one native pipeline per submission endpoint');$out=json_decode($r->get('response')->output,true);
+    $passes=nativePasses($r);$c->jet_send_cart();check(nativePasses($r)===$passes+$expectedPasses,'one native pipeline per authorized submission, none before owner rejection');$out=json_decode($r->get('response')->output,true);
     check(($out['success']??null)!=='success','rejected financial request');
     if($stale!==null)check(($out['jet_cart_stale']??false)===$stale,'confirmed stale classification');
      $after=$r->get('session')->data;$original=unserialize($before);
     if(!isset($after['voucher']))unset($original['voucher']);
     check(serialize($after)===serialize($original),'only native voucher cleanup allowed on rejection');
     check(count($r->get('db')->writes)===$writes,'zero counter/DB write');
+    check($r->get('test_submission_memory')->meta['next_reference']===$reservation,'zero durable reference reservation after financial rejection');
     check(count($r->get('model_checkout_order')->orders)===$orders && count($r->get('model_checkout_order')->history)===$history,'zero order/history');
     check(!CartFinancialMailer::$messages && $r->get('cart')->clears===$clear,'zero emails/cart clear');
 }
@@ -127,6 +131,7 @@ foreach([0,1] as $card){
     check($q['jet_priceall']==='600.00' && $q['jet_total_credit_price']==='500.00' && $q['jet_vnoska']==='47.67' && $q['jet_vnoska_card']==='45.67','independent financing golden');
     $legacy=new CartLegacyController($r);CartFinancialMailer::$messages=[];$legacy->jet_send_cart();
     $oldOrders=$r->get('model_checkout_order')->orders;$oldMail=CartFinancialMailer::$messages;
+    foreach($oldMail as &$message)$message['subject']=preg_replace('/2$/','1',$message['subject']);unset($message); // Approved F07 N+1 reservation.
     [$c,$r,$wire,$q]=quoteCart(null,'100',$card);CartFinancialMailer::$messages=[];$passes=nativePasses($r);$c->jet_send_cart();check(nativePasses($r)===$passes+1,'one native pipeline on successful submission');
     check(json_decode($r->get('response')->output,true)['success']==='success','valid Jet/Card submission: '.$r->get('response')->output.' orders='.count($r->get('model_checkout_order')->orders).' writes='.count($r->get('db')->writes));
     check($r->get('model_checkout_order')->orders===$oldOrders,'native legacy order array byte/type golden');
@@ -159,7 +164,7 @@ foreach(['quantity','price','option','shipping','tax','currency_rate','customer'
     if($change==='customer')put($r->get('customer'),'customer_id',5);
     if($change==='session')put($r->get('session'),'session_id','foreign-session');
     if($change==='promotion')$r->get('db')->promotion=['jet_product_percent'=>-1,'jet_product_id'=>'*','id'=>2];
-    rejectCart($c,$r,true);
+    rejectCart($c,$r,$change!=='session',$change==='session'?0:1);
 }
 foreach(['coupon','voucher'] as $discount){[$c,$r]=quoteCart(function($r)use($discount){$r->get('session')->data[$discount]=$discount==='coupon'?'C10':'V75';},'0');if($discount==='coupon')$r->get('db')->coupon=false;else$r->get('db')->balance=0;rejectCart($c,$r,true);}
 foreach(['expired','missing','foreign','malformed'] as $kind){[$c,$r,$wire,$q]=quoteCart();if($kind==='expired')$r->get('session')->data['jet_cart_quotes'][$q['jet_quote_ref']]['expires']=time()-1;elseif($kind==='missing')unset($r->get('request')->post['jet_quote_ref']);elseif($kind==='foreign')$r->get('request')->post['jet_quote_ref']=str_repeat('f',48);else$r->get('request')->post['jet_quote_ref']=[];rejectCart($c,$r,false);}
@@ -234,4 +239,9 @@ $r->get('db')->promotion['id']=12;$second=$model->getCartPromotion('1',12,500);
 check($first['fingerprint']!==$second['fingerprint'],'same-rate different-rule evidence changes fingerprint');
 $r->get('db')->promotion['id']=11;
 check($model->getCartPromotion('1',12,500)===$first,'interleaved calls do not retain other quote evidence');
+// Replay after actual native Cart financial validation skips the totals pipeline entirely.
+[$c,$r]=quoteCart();CartFinancialMailer::$messages=[];$c->jet_send_cart();$result=$r->get('response')->output;
+$passes=nativePasses($r);$effects=[count($r->get('model_checkout_order')->orders),count($r->get('model_checkout_order')->history),$r->get('cart')->clears,count(CartFinancialMailer::$messages),$r->get('test_submission_memory')->meta['next_reference']];
+$c->jet_send_cart();check($r->get('response')->output===$result&&nativePasses($r)===$passes,'accepted replay returns prior result without a new native Cart evaluation');
+check($effects===[count($r->get('model_checkout_order')->orders),count($r->get('model_checkout_order')->history),$r->get('cart')->clears,count(CartFinancialMailer::$messages),$r->get('test_submission_memory')->meta['next_reference']],'accepted Cart replay has zero business effects');
 echo 'PASS '.($checks-$cartStart)." Cart financial/transport/order/email security checks; native evaluator with SQL/order/mail doubles\n";

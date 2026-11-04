@@ -718,7 +718,7 @@ jQuery(document).ready(function($) {
 			contentType: false,
 			timeout: 30000,
 			success: function(json) {
-				if (!json || !['success', 'unsuccess'].includes(json.success) || json.code === 'bank_uncertain') {
+				if (!json || json.jet_submission_review === true || !['success', 'unsuccess'].includes(json.success) || json.code === 'bank_uncertain') {
 					jetConfirmNeedsReview = true;
 					alert('Резултатът от изпращането не е потвърден. Моля, свържете се с магазина за проверка.');
 					return;
