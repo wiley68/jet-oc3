@@ -59,7 +59,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    if (faults.ajax) { faults.ajax = false; throw new Error('mock synchronous AJAX failure'); }
    const request = { config, finished: false };
    let timeout;
-   request.resolve = (data) => { if (request.finished) return; request.finished = true; clear(timeout); if (data?.__mockQuote && config.url.endsWith('/jet_calculate')) data = { ...data, jet_parva: config.data.values.jet_parva }; config.success?.(data); config.complete?.(); };
+   request.resolve = (data) => { if (request.finished) return; request.finished = true; clear(timeout); if (data?.__mockQuote && /\/jet_calculate(?:_cart)?$/.test(config.url)) data = { ...data, jet_parva: config.data.values.jet_parva, jet_vnoski: config.data.values.jet_vnoski, jet_card: config.data.values.jet_card || 0 }; config.success?.(data); config.complete?.(); };
    request.reject = (reason = 'error') => { if (request.finished) return; request.finished = true; clear(timeout); config.error?.({ statusText: reason }); config.complete?.(); };
    if (config.timeout) timeout = schedule(() => request.reject('timeout'), config.timeout);
    requests.push(request); return request;
@@ -106,7 +106,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
   new Function('jQuery', 'document', 'FormData', 'setTimeout', 'clearTimeout', 'console', 'window', 'alert', 'location', source)($, document, Data, schedule, clear, { error() {}, log() {} }, { addEventListener: (name, fn) => (captureEvents[name] ||= []).push(fn), location: { origin: 'http://test.invalid', href: '' } }, (message) => alerts.push(message), {});
   return { requests, trigger, tick, get, faults, alerts, loaderLayout, changeOption: () => optionEvents.change?.(), inputOption: () => optionEvents.input?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
  }
- const quote = (value = '50.00') => ({ success: 'success', __mockQuote: true, jet_quote_ref: 'a'.repeat(48), jet_parva: '0.00', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
+ const quote = (value = '50.00') => ({ success: 'success', __mockQuote: true, jet_quote_ref: 'a'.repeat(48), jet_cart_lineage: 'b'.repeat(48), jet_parva: '0.00', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
  if (productTests) return productTests(environment, quote);
  // F02: execute the real option/quantity JavaScript and PHP calculator, never a submission transport.
  const { execFileSync } = require('child_process');
@@ -254,6 +254,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    current.requests[0].resolve(quote()); baseline.requests[0].resolve(quote());
    for (const env of [current, baseline]) { env.get('#jet_parva').val(value); env.trigger('#btn_preizcisli', 'click'); }
    if (page === 'products') { check(current.requests.length === (value.trim() === '' ? 2 : 1), 'Product blank normalization/invalid negative rejection'); continue; }
+   if (page === 'cart') { check(current.requests.length === 1 && !current.loading(), 'Cart invalid/negative/nonpositive-principal input rejected before transport: ' + value); continue; }
    check(current.requests.length === baseline.requests.length, page + ': original validation request count for ' + value);
    check(JSON.stringify(current.requests.at(-1).config.data.values) === JSON.stringify(baseline.requests.at(-1).config.data.values), 'original invalid/empty/negative payload preserved');
    if (current.requests.length === 1) check(!current.loading(), 'validation rejection hides loader');

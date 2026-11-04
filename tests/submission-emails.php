@@ -15,10 +15,20 @@ class Currency {public $rates;function __construct($base){$this->rates=$base==='
 class Tax {function calculate($v,...$rest){return $v*1.2;}function getTax($v,...$rest){return $v/6;}}
 class DB {public $queries=[],$geoMatches=1;function query($s){$this->queries[]=$s;return (object)['num_rows'=>strpos($s,'zone_to_geo_zone')!==false?$this->geoMatches:1];}function escape($s){return $s;}}
 class Customer {function isLogged(){return false;}}
-class Cart {public $cleared=false;public $price;public $failure='';function getProducts(){return [['product_id'=>1,'quantity'=>2,'price'=>$this->price,'tax_class_id'=>1,'option'=>[['value'=>'red']]]];}function clear(){if($this->failure==='cart')throw new RuntimeException('mock cart clear failure');$this->cleared=true;}}
+class Cart {public $cleared=false;public $price;public $failure='';function getProducts(){return [['cart_id'=>11,'product_id'=>1,'quantity'=>2,'price'=>$this->price,'tax_class_id'=>1,'option'=>[],'name'=>'Product','model'=>'P','subtract'=>1,'reward'=>0,'points'=>0,'stock'=>true,'minimum'=>1,'shipping'=>true]];}function clear(){if($this->failure==='cart')throw new RuntimeException('mock cart clear failure');$this->cleared=true;}}
 class Products {public $price,$options=null,$special=0,$stock=10,$overrides=[];function getProduct($id){return array_merge(['name'=>'Product','price'=>$this->price,'special'=>$this->special,'quantity'=>$this->stock,'tax_class_id'=>1,'model'=>'P','subtract'=>1,'reward'=>0],$this->overrides);}function getCategories($id){return [['category_id'=>1]];}function getProductOptions($id){return $this->options??[['required'=>false,'product_option_id'=>1,'option_id'=>1,'name'=>'Option','type'=>'select','product_option_value'=>[['price'=>$this->price/10,'price_prefix'=>'+','name'=>'red','product_option_value_id'=>1,'option_value_id'=>1]]]];}}
 class Category {function getCategory($id){return ['name'=>'Category'];}}
 class Promo extends ModelExtensionMtJetCreditJetcredit {public $normal=1.2,$card=0.8,$show=true;function getPromo(...$args){return ['jet_show_button'=>$this->show,'jet_purcent'=>$this->normal,'jet_purcent_card'=>$this->card];}function getJetWideButtonInlineStyle($v){return '';}}
+// Deliberately separate authority double for the shared legacy email golden harness.
+// Real native evaluator integration is exercised in cart-financial.php.
+class CartMailPromo extends Promo {
+ function evaluateCartNativeTotals(){
+  if(($this->session->data['currency']??'')!=='EUR')return ['success'=>false,'code'=>'unsupported_currency'];
+  $rows=$this->cart->getProducts();$unit=$this->currency->convert($this->tax->calculate($rows[0]['price'],1,true),$this->config->get('config_currency'),'EUR');
+  return ['success'=>true,'code'=>'evaluated','amount_eur'=>$unit*2,'totals'=>[['code'=>'total','value'=>$unit*2]],'context'=>['products'=>$rows,'owner'=>$this->session->data['currency']]];
+ }
+ function getCartPromotion($key,$term,$principal){$p=$this->getPromo($key,$term,$principal);return ['promotion'=>$p,'fingerprint'=>hash('sha256',serialize($p))];}
+}
 class Trace {public static $events=[];}
 class Orders {public $orders=[],$histories=[],$total,$failure='', $snapshot=[], $code='jet', $coefficient=1, $rows=null, $options=null;
  function getOrder($id){Trace::$events[]='read_order';if($this->failure==='missing')return false;return array_merge(['order_id'=>$id,'store_id'=>0,'customer_id'=>0,'payment_code'=>$this->code,'payment_country_id'=>1,'payment_zone_id'=>1,'currency_code'=>'EUR','currency_value'=>$this->coefficient,'total'=>$this->total,'firstname'=>'Test','lastname'=>'User','telephone'=>'123','email'=>'test@example.invalid'],$this->snapshot);}
@@ -42,7 +52,7 @@ function setup($class,$base='EUR',$selected='EUR'){
   $payment=new $modelClass;foreach(['config','db','currency','session'] as $property)$payment->$property=$c->$property;
   $c->{'model_extension_payment_'.$key}=$payment;
  }
- foreach(['tax','currency','model_catalog_product','config','customer','session','load','model_checkout_order','model_extension_payment_jet','model_extension_payment_jet_card'] as $property)$c->model_extension_mt_jet_credit_jetcredit->$property=$c->$property;
+ foreach(['tax','currency','model_catalog_product','config','customer','session','cart','load','model_checkout_order','model_extension_payment_jet','model_extension_payment_jet_card'] as $property)$c->model_extension_mt_jet_credit_jetcredit->$property=$c->$property;
  $c->model_extension_mt_jet_credit_jetcredit->model_extension_mt_jet_credit_jetcredit=$c->model_extension_mt_jet_credit_jetcredit;
  return $c;
 }
@@ -73,9 +83,27 @@ try {
    $file=$temp.'/'.$prefix.$name.'.php';file_put_contents($file,$source);require $file;
   }
  }
+ class NewCartCalc extends NewCalc { protected function cartModel(){return $this->model_extension_mt_jet_credit_jetcredit;} }
  function submit($prefix,$kind,$bank='bank@example.invalid',$failures=[],$orderFailure='',$smtp=false,$currency='EUR'){
   SubmissionTestMailer::$messages=[];SubmissionTestMailer::$attempts=[];SubmissionTestMailer::$failures=$failures;Trace::$events=[];
   $c=setup($prefix.(str_starts_with($kind,'Product')||str_starts_with($kind,'Cart')?'Calc':$kind),'EUR',$currency);
+  if(str_starts_with($kind,'Cart')){
+   if($prefix==='New'){
+    $c=setup('NewCartCalc','EUR',$currency);$mock=new CartMailPromo;
+    foreach(get_object_vars($c->model_extension_mt_jet_credit_jetcredit) as $k=>$v)$mock->$k=$v;
+    $c->model_extension_mt_jet_credit_jetcredit=$mock;
+   }
+   $c->request->post['jet_cart_rows']='11';$c->request->post['jet_products_vr']='[]';
+   $calc=setup('OldCalc');$calc->jet_calculate_cart();$q=json_decode($calc->response->output,true);
+   $c->request->post['jet_priceall']=$q['jet_priceall'];
+   foreach(['vnoska','total_credit_price','obshto','gpr','glp'] as $field)$c->request->post['jet_'.$field]=$q['jet_'.$field.(str_ends_with($kind,'Card')&&$field!=='total_credit_price'?'_card':'')];
+   $c->request->post['jet_card']=str_ends_with($kind,'Card')?1:0;
+   if($prefix==='New' && $currency==='EUR'){
+    $c->jet_calculate_cart();$quote=json_decode($c->response->output,true);
+    if(!isset($quote['jet_quote_ref']))throw new RuntimeException('Legitimate Cart email fixture did not quote: '.json_encode($quote));
+    $c->request->post['jet_quote_ref']=$quote['jet_quote_ref'];
+   }
+  }
   $c->model_checkout_order->failure=$orderFailure;$c->cart->failure=$orderFailure;$c->config->values['module_mt_jet_credit_mail']=$bank;
   if($smtp){$c->config->values['config_mail_engine']='smtp';$c->config->values['config_mail_smtp_password']='mock';}
   if(str_starts_with($kind,'Product') && $currency==='EUR') {
@@ -108,7 +136,7 @@ try {
     $r=submit('New',$kind,$bank,[],'',$smtp);$empty=trim($bank)==='';
     check($r['result']['success']==='success'&&$r['result']['code']===($empty?'manual_registered':'bank_sent'),'primary success '.$kind);
     check($r['attempts']===($empty?['admin','customer']:['bank','admin','customer']),'separate dispatch order');
-    check($r['orders']===$baseline['orders']&&$r['history']===$baseline['history']&&$r['cleared']===$baseline['cleared'],'native order data/status/cart behavior preserved');
+    check($r['orders']===$baseline['orders']&&$r['history']===$baseline['history']&&$r['cleared']===$baseline['cleared'],'native order data/status/cart behavior preserved '.$kind);
     foreach($r['messages'] as $m){
      check(!$m['cc']&&!$m['bcc'],'no CC/BCC leakage');
      foreach(['subject','type','encoding','charset','mailer'] as $field)check($m[$field]===$reference[$field],'original message metadata: '.$field);

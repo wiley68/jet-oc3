@@ -584,6 +584,7 @@ $products = $this->cart->getProducts();
         /** avalon кредитен калкулатор jet **/
         $products_jet = [];
         $products_jet['id'] = '';
+        $products_jet['rows'] = '';
         $products_jet['pr'] = '';
         $products_jet['quantity'] = '';
         $products_jet['price'] = 0;
@@ -601,6 +602,7 @@ $products = $this->cart->getProducts();
             ]]></search>
             <add position="after" offset="1"><![CDATA[
         /** avalon кредитен калкулатор jet **/
+        $products_jet['rows'] .= $product['cart_id'] . '_';
         $products_jet['id'] .= $product['product_id'] . '_';
         $products_jet['pr'] .= $this->currency->convert($this->tax->calculate($product['price'], $product['tax_class_id'], $this->config->get('config_tax')), $this->config->get('config_currency'), 'EUR') . '_';
         $products_jet['quantity'] .= $product['quantity'] . '_';
@@ -643,6 +645,7 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
         $jet_status = $this->config->get('module_mt_jet_credit_status');
         $jet_card_show = $this->config->get('module_mt_jet_credit_cart_show');
         if ($jet_status && $jet_card_show) {
+            $data['jet_cart_rows'] = substr($products_jet['rows'], 0, -1);
             $data['jet_products'] = substr($products_jet['id'], 0, -1);
             $data['jet_products_pr'] = substr($products_jet['pr'], 0, -1);
             $data['jet_products_qt'] = substr($products_jet['quantity'], 0, -1);
@@ -727,7 +730,8 @@ $this->response->setOutput($this->load->view('checkout/cart', $data));
     <input type="hidden" id="jet_products" value="{{ jet_products }}" />
     <input type="hidden" id="jet_products_qt" value="{{ jet_products_qt }}" />
     <input type="hidden" id="jet_products_pr" value="{{ jet_products_pr }}" />
-    <input type="hidden" id="jet_products_vr" value='{{ jet_products_vr }}' />
+    <input type="hidden" id="jet_products_vr" value="{{ jet_products_vr|e('html_attr') }}" />
+    <input type="hidden" id="jet_cart_rows" value="{{ jet_cart_rows|e('html_attr') }}" />
     <div id="jet-product-button-container" style="padding-top:{{ jet_gap }}px;">
         <div id="jet_alert_overlay" class="jet_alert_overlay"></div>
         <div id="jet_alert_box"></div>

@@ -228,11 +228,17 @@ $checkoutFinancialTests = function () {
             $assert(json_decode($calc->response->output, true) === ['success' => 'unsuccess'], 'selector rejection reveals no order data');
             $assert(!SubmissionTestMailer::$attempts && !$calc->model_checkout_order->histories, 'calculator rejection has no side effects');
         }
-        unset($calc->request->post['jet_checkout_context']);
-        $calc->request->post['jet_priceall'] = '600.00';
-        $old = setup('OldCalc'); $old->request->post = $calc->request->post;
-        $old->jet_calculate_cart(); $calc->jet_calculate_cart();
-        $assert($calc->response->output === $old->response->output, 'ordinary Cart calculation unchanged despite existing session order');
+        // Regular Cart now requires its own native authority/transport and quote.
+        // A persisted Checkout order is still not its amount source.
+        $regular = setup('NewCartCalc'); $authority = new CartMailPromo;
+        foreach (get_object_vars($regular->model_extension_mt_jet_credit_jetcredit) as $k=>$v) $authority->$k=$v;
+        $regular->model_extension_mt_jet_credit_jetcredit=$authority;
+        $regular->session->data['order_id']=999;
+        $regular->request->post['jet_cart_rows']='11'; $regular->request->post['jet_products_vr']='[]';
+        $old=setup('OldCalc'); $old->request->post=$regular->request->post; $old->jet_calculate_cart();
+        $regular->jet_calculate_cart(); $quote=json_decode($regular->response->output,true);
+        $assert(isset($quote['jet_quote_ref']) && $quote['jet_priceall']==='600.00', 'regular Cart quote ignores persisted Checkout amount');
+        foreach (json_decode($old->response->output,true) as $key=>$value) $assert($quote[$key]===$value,'regular Cart original financial field '.$key);
     }
     echo "PASS $checks Checkout security/financial golden checks; original calculator and email golden references\n";
 };

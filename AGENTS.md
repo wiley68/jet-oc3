@@ -80,3 +80,106 @@ Preserve unless separately authorized:
 - Native OpenCart product option behavior.
 
 Do not change native OpenCart behavior to simplify JetCredit implementation.
+
+## 8. Platform and Runtime Compatibility Policy
+
+### Product compatibility is independent of the test environment
+
+Every module targets an explicitly declared platform family and supported runtime compatibility range.
+
+The current development or test store is only one representative installation.
+
+Never infer the product's supported platform, PHP or database versions from the current workstation, test store, CI environment or agent runtime.
+
+Do not assume that the environment in which code is developed represents the only environment where the product will be installed.
+
+### Platform family support
+
+Support the declared platform family, subject only to explicit, documented and owner-approved exceptions.
+
+For JET-OC3, the declared platform family is OpenCart 3.x.
+
+Do not restrict JET-OC3 to OpenCart 3.0.3.8 or 3.0.3.9 merely because those releases were used for development or testing.
+
+Do not implement exact platform-version whitelists without a proven technical necessity and explicit owner approval.
+
+The platform family declaration does not mean that every version has identical internals. Genuine incompatibilities must be identified and handled safely.
+
+### PHP and database compatibility
+
+The supported PHP and database ranges must be defined from the project's compatibility requirements and relevant platform recommendations.
+
+Do not derive those ranges from locally installed PHP or database versions.
+
+Implement features using constructs and APIs compatible with the project's declared range.
+
+Do not silently raise the minimum supported PHP or database version when introducing new functionality, security fixes or automated tests.
+
+Do not invent compatibility limits when the project has not established them.
+
+A runtime used in automated tests is evidence about that environment, not a universal product requirement.
+
+### PHP Compatibility Baseline
+
+- Develop using syntax and standard APIs compatible with the project's declared minimum PHP version.
+- For JET-OC3, use PHP 7.3.33 as the provisional minimum compatibility baseline.
+- Do not introduce PHP 7.4+ syntax or APIs without explicit justification and owner approval.
+- Avoid known backward-incompatible behavior on newer supported PHP versions.
+- Prefer capability checks over exact PHP version checks.
+- Do not build separate full test environments for every PHP version.
+- Use targeted compatibility checks and existing regression tests.
+- Never silently raise the minimum supported PHP version.
+
+The minimum PHP version defines the coding baseline, not the only supported runtime.
+
+### Capability-based compatibility
+
+Prefer validation of actual required interfaces, capabilities, data contracts and security properties.
+
+Do not use exact platform versions, PHP versions, database versions or fixed source fingerprints as substitutes for compatibility when equivalent safety can be established through reliable contract/capability checks.
+
+If exact source verification is genuinely necessary for a security boundary, document the reason and the resulting compatibility limitation.
+
+Do not weaken security validation merely to support more versions.
+
+When safe compatibility cannot be demonstrated, report the issue and request owner approval instead of silently narrowing the product's support range.
+
+### Representative testing
+
+The owner selects representative test stores and development environments.
+
+Do not create separate full testing environments for every supported combination of platform, PHP and database versions by default.
+
+Prefer existing owner-maintained test stores, reusable automated tests and targeted compatibility checks.
+
+Choose testing methods primarily according to total development and testing effort, while preserving required financial integrity, security, privacy and critical regression guarantees.
+
+The owner accepts the residual compatibility risk from combinations not individually tested.
+
+Do not claim that untested combinations have passed testing.
+
+### Compatibility maintenance
+
+When an incompatibility is discovered:
+
+1. Identify the actual incompatible API, behavior or dependency.
+2. Determine the smallest safe correction.
+3. Preserve compatibility with previously supported environments.
+4. Add focused regression coverage where practical.
+5. Do not solve the issue by restricting the product to the environment where it was discovered.
+
+### Exceptions and approval
+
+Any new platform or runtime restriction must be technically justified, documented and explicitly approved by the owner.
+
+Never silently narrow the product compatibility contract.
+
+Distinguish compatibility requirements from security support recommendations and end-of-life notices.
+
+### JET-OC3 project requirements
+
+- Platform family: OpenCart 3.x.
+- Financing currency: EUR only.
+- Language identifiers must not restrict financing.
+- Office/Home and test-store runtime versions are representative configurations, not product limits.
+- PHP 7.3.33 is the provisional minimum coding baseline. The full supported PHP range and MySQL range require a separate evidence-based decision.
