@@ -17,7 +17,7 @@ class ControllerExtensionPaymentJet extends Controller
 			return '';
 		}
 		$this->load->language('extension/payment/jet');
-		$data['JET_VERSION'] = '2.0.1';
+		$data['JET_VERSION'] = '2.0.2';
 		$this->load->model('extension/mt_jet_credit/jetcredit');
 		try {
 			$snapshot = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutSnapshot('jet');
