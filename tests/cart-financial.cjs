@@ -12,6 +12,19 @@ run({},(environment,quote)=>{
   for(const [k,v] of Object.entries({jet_name:'Test',jet_lastname:'User',jet_egn:'9001010000',jet_phone:'+359888888888',jet_email:'test@example.invalid'}))e.get('#'+k).val(v);
   return e;
  };
+ {
+  const e = environment(source, false, css);
+  e.requests[0].resolve(offer());
+  check(e.get('#jet-product-button-container').visible, 'eligible preview displays entry buttons');
+  e.trigger('#btn_jet', 'click');
+  check(!e.get('#jet-product-popup-container').visible, 'opening waits for an authoritative calculation');
+  e.requests.at(-1).resolve({success:'unsuccess',jet_promotion_excluded:true});
+  check(!e.get('#jet-product-popup-container').visible && !e.get('#jet-product-button-container').visible,
+   'excluded Cart hides both entry buttons and cannot open an empty popup');
+  e.get('#jet_vnoski').val('9');e.trigger('#jet_vnoski', 'change');
+  e.requests.at(-1).resolve(offer());
+  check(e.get('#jet-product-button-container').visible, 'eligible context restores Cart entry buttons');
+ }
  const sends=e=>e.requests.filter(r=>r.config.url.endsWith('/jet_send_cart'));
  for(const [raw,canonical] of [['12.345','12.35'],['1.005','1.00'],['2.675','2.67'],['0.125','0.13']]){
   const e=prepare();e.get('#jet_parva').val(raw);e.trigger('#jet_parva','input');

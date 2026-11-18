@@ -28,9 +28,10 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		try {
 			$this->load->model('extension/mt_jet_credit/jetcredit');
 			$context = $this->productRequestContext($this->request->post);
-			$quote = $context ? $this->productCalculate($context, $this->request->post) : false;
+			$quote = $context ? $this->productCalculate($context, $this->request->post, $excluded) : false;
 			if ($quote) {
 				$json = $quote;
+				if ($excluded) $json['jet_promotion_excluded'] = true;
 				if ($quote['jet_show_button']) {
 					$intent = $this->submissionContext('product', true);
 					if ($intent['row']['state'] !== 'draft') { $this->submissionReview(); return; }
@@ -136,7 +137,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		return $context && !isset($context['error']) ? $context : false;
 	}
 
-	private function productCalculate($context, $post) {
+	private function productCalculate($context, $post, &$excluded = null) {
 		$model = $this->model_extension_mt_jet_credit_jetcredit;
 		$submitted = $model->productNumber($post['jet_priceall'] ?? null);
 		$down = $model->normalizeProductDownpayment(array_key_exists('jet_downpayment_raw', $post) ? $post['jet_downpayment_raw'] : ($post['jet_parva'] ?? null));
@@ -159,7 +160,8 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		$jet_purcent_card = (float)$this->config->get('module_mt_jet_credit_purcent_card');
 		$jet_show_button = true;
 		$jet_promo = $this->model_extension_mt_jet_credit_jetcredit->getPromo( $jet_product_id, $jet_vnoski, $jet_total_credit_price );
-		$jet_show_button = (bool) $jet_promo['jet_show_button'];
+		$excluded = !$jet_promo['jet_show_button'];
+		$jet_show_button = !$excluded;
 		if ($_minprice > $jet_total_credit_price) {
 			$jet_show_button = false;
 		}
@@ -583,9 +585,9 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 		$jet_purcent = (float) $this->config->get('module_mt_jet_credit_purcent');
 		$jet_purcent_card = (float)$this->config->get('module_mt_jet_credit_purcent_card');
 		$jet_show_button = true;
-		$promotion = $model->getCartPromotion($context['products_key'], $jet_vnoski, $jet_total_credit_price);
+		$promotion = $model->getCartPromotion($context['product_ids'], $jet_vnoski, $jet_total_credit_price);
 		$jet_promo = $promotion['promotion'];
-		if (!$jet_promo['jet_show_button']) { return ['quote'=>null,'promotion'=>$promotion['fingerprint'],'eligible'=>false]; }
+		if (!$jet_promo['jet_show_button']) { return ['quote'=>null,'promotion'=>$promotion['fingerprint'],'eligible'=>false,'excluded'=>true]; }
 		$jet_show_button = (bool) $jet_promo['jet_show_button'];
 		$jet_purcent = (float) $jet_promo['jet_purcent'];
 		$jet_purcent_card = (float) $jet_promo['jet_purcent_card'];
@@ -638,9 +640,13 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 			try {
 				$this->load->model('extension/mt_jet_credit/jetcredit');
 				$snapshot = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutSnapshot($this->request->post['jet_checkout_context']);
-				if ($snapshot) $json = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutQuote($snapshot, $this->request->post);
+				if ($snapshot) {
+					$result = $this->model_extension_mt_jet_credit_jetcredit->checkoutQuoteResult($snapshot, $this->request->post);
+					$json = $result['quote'];
+					if ($result['excluded']) $json = ['success' => 'unsuccess', 'jet_promotion_excluded' => true];
+				}
 			} catch (\Throwable $error) {
-				$json = false;
+				$json = ['success' => 'unsuccess', 'jet_quote_error' => true];
 			}
 			$this->response->addHeader('Content-Type: application/json');
 			$this->response->setOutput(json_encode($json ?: ['success' => 'unsuccess']));
@@ -654,6 +660,10 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 			$previous = $model->findCartQuote($this->request->post['jet_previous_quote'] ?? null);
 			if ($previous && $previous['context']['fingerprint'] !== $context['fingerprint']) { $this->cartFailure(true); return; }
 			$result = $this->cartCalculate($model,$context,$this->request->post);
+			if ($result && !empty($result['excluded'])) {
+				$this->submissionOutput(['success'=>'unsuccess','jet_promotion_excluded'=>true]);
+				return;
+			}
 			if (!$result || !$result['quote']) { $this->cartFailure(); return; }
 			$json = $result['quote'];
 			if ($result['eligible']) {

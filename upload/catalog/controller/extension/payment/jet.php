@@ -17,10 +17,15 @@ class ControllerExtensionPaymentJet extends Controller
 			return '';
 		}
 		$this->load->language('extension/payment/jet');
-		$data['JET_VERSION'] = '2.0.2';
+		$data['JET_VERSION'] = '2.0.3';
 		$this->load->model('extension/mt_jet_credit/jetcredit');
 		try {
 			$snapshot = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutSnapshot('jet');
+			if ($snapshot && $this->model_extension_mt_jet_credit_jetcredit->checkoutInitialPromotionExcluded($snapshot['product_ids'], $snapshot['amount'])) {
+				unset($this->session->data['payment_method'], $this->session->data['payment_methods']['jet'], $this->session->data['payment_methods']['jet_card']);
+				$checkout = htmlspecialchars($this->url->link('checkout/checkout', '', true), ENT_QUOTES, 'UTF-8', false);
+				return '<p>Финансирането за тази поръчка не е налично. <a href="' . $checkout . '">Изберете друг начин на плащане.</a></p>';
+			}
 		} catch (\Throwable $error) {
 			return '';
 		}
@@ -136,7 +141,9 @@ class ControllerExtensionPaymentJet extends Controller
 		try {
 			$verified = $this->model_extension_mt_jet_credit_jetcredit->validateCheckoutSubmission('jet', $this->request->post);
 		} catch (\Throwable $error) {
-			$verified = false;
+			$json['jet_quote_error'] = true;
+			$this->submissionOutput($json);
+			return;
 		}
 		if ($verified) {
 			try {
@@ -256,6 +263,8 @@ class ControllerExtensionPaymentJet extends Controller
 				$this->submissionFailed($execution, $json);
 			}
 			} catch (\Throwable $error) { $this->submissionFailed($execution, $json); }
+		} else {
+			$json['jet_quote_invalid'] = true;
 		}
 		$this->response->addHeader('Content-Type: application/json');
 		$this->response->setOutput(json_encode($json));

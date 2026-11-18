@@ -4,6 +4,7 @@ jQuery(document).ready(function($) {
 
 
 	let jetActiveQuote = null;
+	let jetOpenPending = false;
 	let jetPreviousQuote = '';
 	let jetIntentId = '';
 	let jetIntentPending = false;
@@ -111,14 +112,14 @@ jQuery(document).ready(function($) {
 			$('#jet_step_2').css('display', 'none');
 			$('#btn_jet').on('click', function(event) {
 				card = 0;
+				jetOpenPending = true;
 				jetCalculate();
-				$('#jet-product-popup-container').css('display', 'block');
 			});
 			if ($('#btn_jet_card').length !== 0) {
 				$('#btn_jet_card').on('click', function(event) {
 					card = 1;
+					jetOpenPending = true;
 					jetCalculate();
-					$('#jet-product-popup-container').css('display', 'block');
 				});
 			}
 			$('#back_jetcredit').on('click', function(event) {
@@ -218,9 +219,16 @@ jQuery(document).ready(function($) {
 					if (creatingIntent && json && typeof json.jet_intent_id === 'string' && /^[a-f0-9]{48}$/.test(json.jet_intent_id)) jetIntentId = json.jet_intent_id;
 					if (revision !== jetCalculationRevision || state !== jetQuoteState()) return;
 					if (json && json.jet_quote_invalid === true) { jetPreviousQuote = ''; jetCartLineage = ''; }
-					if (json && json.jet_cart_stale === true) { jetShowCustomAlert(jetStaleMessage, false); return; }
-					if (json && json.jet_submission_review === true) { jetSubmission.needsReview = true; jetShowCustomAlert(jetSubmissionUncertain, false); return; }
+					if (json && json.jet_cart_stale === true) { jetOpenPending = false; jetShowCustomAlert(jetStaleMessage, false); return; }
+					if (json && json.jet_submission_review === true) { jetOpenPending = false; jetSubmission.needsReview = true; jetShowCustomAlert(jetSubmissionUncertain, false); return; }
+					if (json && json.jet_promotion_excluded === true) {
+						jetOpenPending = false;
+						$('#jet-product-button-container').hide();
+						$('#jet-product-popup-container').hide();
+						return;
+					}
 					if (json && json.success === 'success') {
+						$('#jet-product-button-container').show();
 						if (json.jet_intent_id === jetIntentId && jetIntentId && typeof json.jet_quote_ref === 'string' && /^[a-f0-9]{48}$/.test(json.jet_quote_ref)
 							&& typeof json.jet_cart_lineage === 'string' && /^[a-f0-9]{48}$/.test(json.jet_cart_lineage) && json.jet_parva === canonicalDown
 							&& json.jet_show_button === true && Number(json.jet_vnoski) === Number($('#jet_vnoski').val()) && Number(json.jet_card) === card
@@ -241,33 +249,35 @@ jQuery(document).ready(function($) {
 						$('#jet_glp').text(json.jet_glp);
 						$('#jet_obshto').text(json.jet_obshto);
 						if ($('#jet_obshto_second').length !== 0) $('#jet_obshto_second').text(json.jet_obshto_second);
-						if (parseInt($('#jet_card_in').val()) == 1) {
-							if ($('#jet_vnoska_card').length !== 0) {
-								$('#jet_vnoska_card').text(json.jet_vnoska_card);
-								if ($('#jet_vnoska_card_second').length !== 0) $('#jet_vnoska_card_second').text(json.jet_vnoska_card_second);
-								$('#jet_vnoski_text_card').text(parseInt($('#jet_vnoski').val()));
-								if (card == 1) {
-									$('#jet_vnoska_popup').text(json.jet_vnoska_card);
-									if ($('#jet_vnoska_popup_second').length !== 0) $('#jet_vnoska_popup_second').text(json.jet_vnoska_card_second);
-									$('#jet_gpr').text(json.jet_gpr_card);
-									$('#jet_glp').text(json.jet_glp_card);
-									$('#jet_obshto').text(json.jet_obshto_card);
-									if ($('#jet_obshto_second').length !== 0) $('#jet_obshto_second').text(json.jet_obshto_card_second);
-								}
+						if (parseInt($('#jet_card_in').val(), 10) === 1) {
+							$('#jet_vnoska_card').text(json.jet_vnoska_card);
+							$('#jet_vnoska_card_second').text(json.jet_vnoska_card_second);
+							$('#jet_vnoski_text_card').text(parseInt($('#jet_vnoski').val(), 10));
+							if (card === 1) {
+								$('#jet_vnoska_popup').text(json.jet_vnoska_card);
+								$('#jet_vnoska_popup_second').text(json.jet_vnoska_card_second);
+								$('#jet_gpr').text(json.jet_gpr_card);
+								$('#jet_glp').text(json.jet_glp_card);
+								$('#jet_obshto').text(json.jet_obshto_card);
+								$('#jet_obshto_second').text(json.jet_obshto_card_second);
 							}
 						}
+						if (jetOpenPending) $('#jet-product-popup-container').show();
 					}
+					jetOpenPending = false;
 				},
 				error: function(error) {
-					if (revision === jetCalculationRevision) console.error('Error:', error);
+					if (revision === jetCalculationRevision) { jetOpenPending = false; console.error('Error:', error); }
 				},
 				complete: function() { jetFinishCalculation(revision); if (creatingIntent) { jetIntentPending = false; if (jetIntentQueued) { jetIntentQueued = false; jetCalculate(false); } } if (revision === jetCalculationRevision && jetQuoteCurrent()) { changeBtnJetcredit(); changeBtnJetcreditBuy(); } }
 			});
 			} catch (error) {
+				jetOpenPending = false;
 				if (creatingIntent) { jetIntentPending = false; jetIntentQueued = false; }
 				jetFinishCalculation(revision);
 			}
 		} else {
+			jetOpenPending = false;
 			jetFinishCalculation(revision);
 			$("#jet_alert_overlay").addClass("show");
 			jetShowCustomAlert('Първоначалната вноска трябва да бъде по-малка от цената на стоките!', false);
@@ -276,6 +286,10 @@ jQuery(document).ready(function($) {
 
 	const jetClose = () => {
 		if (jetSubmission.locked) return;
+		jetOpenPending = false;
+		clearTimeout(jetDownpaymentTimer);
+		++jetCalculationRevision;
+		jetPopupLoading(false);
 		if (!jetSubmission.needsReview) { ++jetFormGeneration; jetIntentId = ''; jetPreviousQuote = ''; jetCartLineage = ''; jetInvalidateQuote(); }
 		$('#jet-product-popup-container').css('display', 'none');
 		$('#jet_step_1').css('display', 'block');

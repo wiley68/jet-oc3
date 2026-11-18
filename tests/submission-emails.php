@@ -19,7 +19,16 @@ class Customer {function isLogged(){return false;}}
 class Cart {public $cleared=false;public $price;public $failure='';function getProducts(){return [['cart_id'=>11,'product_id'=>1,'quantity'=>2,'price'=>$this->price,'tax_class_id'=>1,'option'=>[],'name'=>'Product','model'=>'P','subtract'=>1,'reward'=>0,'points'=>0,'stock'=>true,'minimum'=>1,'shipping'=>true]];}function clear(){if($this->failure==='cart')throw new RuntimeException('mock cart clear failure');$this->cleared=true;}}
 class Products {public $price,$options=null,$special=0,$stock=10,$overrides=[];function getProduct($id){return array_merge(['name'=>'Product','price'=>$this->price,'special'=>$this->special,'quantity'=>$this->stock,'tax_class_id'=>1,'model'=>'P','subtract'=>1,'reward'=>0],$this->overrides);}function getCategories($id){return [['category_id'=>1]];}function getProductOptions($id){return $this->options??[['required'=>false,'product_option_id'=>1,'option_id'=>1,'name'=>'Option','type'=>'select','product_option_value'=>[['price'=>$this->price/10,'price_prefix'=>'+','name'=>'red','product_option_value_id'=>1,'option_value_id'=>1]]]];}}
 class Category {function getCategory($id){return ['name'=>'Category'];}}
-class Promo extends ModelExtensionMtJetCreditJetcredit {public $normal=1.2,$card=0.8,$show=true;function getPromo(...$args){return ['jet_show_button'=>$this->show,'jet_purcent'=>$this->normal,'jet_purcent_card'=>$this->card];}function getJetWideButtonInlineStyle($v){return '';}}
+class Promo extends ModelExtensionMtJetCreditJetcredit {
+ public $normal = 1.2, $card = 0.8, $show = true;
+ function getPromo(...$args) {
+  return ['jet_show_button' => $this->show, 'jet_purcent' => $this->normal, 'jet_purcent_card' => $this->card];
+ }
+ protected function basketPromotionResult(array $ids, $term, $principal) {
+  return ['promotion' => $this->getPromo(), 'evidence' => []];
+ }
+ function getJetWideButtonInlineStyle($v) { return ''; }
+}
 // Deliberately separate authority double for the shared legacy email golden harness.
 // Real native evaluator integration is exercised in cart-financial.php.
 class CartMailPromo extends Promo {
@@ -52,7 +61,7 @@ function setup($class,$base='EUR',$selected='EUR'){
  $c->model_catalog_product=new Products;$c->model_catalog_product->price=$base==='EUR'?250:500;$c->model_catalog_category=new Category;$c->model_extension_mt_jet_credit_jetcredit=new Promo;$c->model_checkout_order=new Orders;$c->model_checkout_order->total=$base==='EUR'?600:1200;
  $c->model_checkout_order->coefficient=$base==='EUR'?1:0.5;
  foreach(['jet'=>'ModelExtensionPaymentJet','jet_card'=>'ModelExtensionPaymentJetCard'] as $key=>$modelClass){
-  $payment=new $modelClass;foreach(['config','db','currency','session'] as $property)$payment->$property=$c->$property;
+  $payment=new $modelClass;foreach(['config','db','currency','session','load','cart','model_extension_mt_jet_credit_jetcredit'] as $property)$payment->$property=$c->$property;
   $c->{'model_extension_payment_'.$key}=$payment;
  }
  foreach(['tax','currency','model_catalog_product','config','customer','session','cart','load','model_checkout_order','model_extension_payment_jet','model_extension_payment_jet_card'] as $property)$c->model_extension_mt_jet_credit_jetcredit->$property=$c->$property;

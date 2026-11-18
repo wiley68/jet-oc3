@@ -31,6 +31,7 @@ $helper=str_replace('new \\PHPMailer\\PHPMailer\\PHPMailer(true)','new \\CartFin
 file_put_contents(DIR_SYSTEM.'library/jet_submission_mail.php',$helper);
 class CartFinancialDB extends CartNativeMemoryDB {
     public $cartRows=null,$promotion=null,$optionKinds=[];
+    public $promotionRules = null;
     function query($sql){
         if (!preg_match('/^\s*SELECT\s/i',$sql)) {$this->writes[]=$sql;return (object)['rows'=>[],'row'=>[],'num_rows'=>1];}
         $rows=null;
@@ -41,7 +42,11 @@ class CartFinancialDB extends CartNativeMemoryDB {
         } elseif (strpos($sql,'FROM oc_product_option_value pov ')!==false) {
             preg_match("/pov.product_option_value_id = '(\d+)'/",$sql,$m);$id=(int)$m[1];
             $rows=[['option_value_id'=>100+$id,'name'=>'стойност '.$id.' "цитат" &amp; апостроф\'','quantity'=>10,'subtract'=>0,'price'=>10,'price_prefix'=>$id===11?'-':'+','points'=>0,'points_prefix'=>'+','weight'=>0,'weight_prefix'=>'+']];
-        } elseif (strpos($sql,'FROM oc_jet_kop')!==false) $rows=$this->promotion===null?[]:[$this->promotion];
+        } elseif (strpos($sql,'FROM oc_jet_kop')!==false) {
+            $rows = $this->promotionRules === null
+                ? ($this->promotion === null ? [] : [$this->promotion])
+                : $this->matchingPromotion($sql);
+        }
         if ($rows!==null) {$this->queries[]=$sql;return (object)['rows'=>$rows,'row'=>$rows[0]??[],'num_rows'=>count($rows)];}
         $result=parent::query($sql);
         if (strpos($sql,'FROM oc_product_to_store ')!==false && $result->num_rows) {
@@ -49,9 +54,36 @@ class CartFinancialDB extends CartNativeMemoryDB {
         }
         return $result;
     }
+    private function matchingPromotion($sql) {
+        check(preg_match("/WHERE \(jet_product_id = '\*' OR jet_product_id = '(\d+)'\)/", $sql, $product)
+            && preg_match('/FIND_IN_SET\((\d+), REPLACE\(jet_product_meseci/', $sql, $term)
+            && preg_match('/AND (\d+(?:\.\d+)?) >= jet_product_price/', $sql, $principal)
+            && strpos($sql, "CASE WHEN jet_product_id = '{$product[1]}' THEN 0 ELSE 1 END,") !== false
+            && strpos($sql, 'jet_product_start <= CURDATE()') !== false
+            && strpos($sql, 'jet_product_end >= CURDATE()') !== false
+            && preg_match('/id ASC\s+LIMIT 1/', $sql), 'per-product promotion query and precedence');
+        $rows = array_filter($this->promotionRules, function ($row) use ($product, $term, $principal) {
+            return in_array($row['jet_product_id'], ['*', $product[1]], true)
+                && in_array($term[1], explode('_', $row['jet_product_meseci']), true)
+                && (float)$principal[1] >= (float)$row['jet_product_price']
+                && $row['jet_product_start'] <= '2026-06-01' && $row['jet_product_end'] >= '2026-06-01';
+        });
+        usort($rows, function ($left, $right) {
+            return [$left['jet_product_id'] === '*', $left['id']] <=> [$right['jet_product_id'] === '*', $right['id']];
+        });
+        preg_match('/SELECT (.+?) FROM oc_jet_kop/s', preg_replace('/\s+/', ' ', $sql), $select);
+        $columns = array_map('trim', explode(',', $select[1]));
+        return $rows ? [array_intersect_key($rows[0], array_flip($columns))] : [];
+    }
+
 }
 class CartFinancialCart extends Cart\Cart {public $clears=0;function clear(){++$this->clears;}}
-class CartFinancialModel extends ModelExtensionMtJetCreditJetcredit {}
+class CartFinancialModel extends ModelExtensionMtJetCreditJetcredit {
+    // The historical controller fixture passes a single product key.
+    function getCartPromotion($product_ids, $term, $principal) {
+        return parent::getCartPromotion((array)$product_ids, $term, $principal);
+    }
+}
 class CartFinancialController extends ControllerExtensionMtJetCreditJetCredit {
     protected function cartModel(){return $this->model_extension_mt_jet_credit_jetcredit;}
     protected function submissionService(){return $this->registry->get('test_submission_service');}
@@ -238,16 +270,165 @@ foreach([null,0,-1,1.2] as $percent){
  $expected=['jet_show_button'=>$percent!==-1,'jet_purcent'=>($percent===null||$percent===-1)?1.2:(float)$percent,'jet_purcent_card'=>($percent===null||$percent===-1)?0.8:(float)$percent];
  check($model->getPromo('1',12,500)===$expected,'unchanged public promotion return contract '.var_export($percent,true));
  $passes=nativePasses($r);$queries=count($r->get('db')->queries);
- $result=$model->getCartPromotion('1',12,500);
+ $result=$model->getCartPromotion(['1'],12,500);
  check($result['promotion']===$expected,'Cart uses same promotion selection');
  check(count($r->get('db')->queries)===$queries+1 && nativePasses($r)===$passes,'Cart evidence uses one promotion query, no totals pass');
 }
 $r->get('db')->promotion=['jet_product_percent'=>1.2,'jet_product_id'=>'*','id'=>11];
-$first=$model->getCartPromotion('1',12,500);
-$r->get('db')->promotion['id']=12;$second=$model->getCartPromotion('1',12,500);
+$first=$model->getCartPromotion(['1'],12,500);
+$r->get('db')->promotion['id']=12;$second=$model->getCartPromotion(['1'],12,500);
 check($first['fingerprint']!==$second['fingerprint'],'same-rate different-rule evidence changes fingerprint');
 $r->get('db')->promotion['id']=11;
-check($model->getCartPromotion('1',12,500)===$first,'interleaved calls do not retain other quote evidence');
+check($model->getCartPromotion(['1'],12,500)===$first,'interleaved calls do not retain other quote evidence');
+function basketRule($product, $rate, $id = 1, $terms = '12', $minimum = 0, $end = '2026-12-31') {
+    return ['jet_product_id' => $product, 'jet_product_percent' => $rate, 'id' => $id,
+        'jet_product_meseci' => $terms, 'jet_product_price' => $minimum,
+        'jet_product_start' => '2026-01-01', 'jet_product_end' => $end];
+}
+function basketCart($ids, $rules) {
+    return function ($r) use ($ids, $rules) {
+        $db = $r->get('db');
+        $db->promotionRules = $rules;
+        $db->cartRows = [];
+        foreach ($ids as $index => $id) {
+            $db->cartRows[] = ['cart_id' => 11 + $index, 'product_id' => $id,
+                'quantity' => 2, 'option' => '{}', 'recurring_id' => 0];
+        }
+    };
+}
+function basketCheckoutFixture($r, $context) {
+    $r->set('load', new class($r->get('load')) {
+        private $native;
+        function __construct($native) { $this->native = $native; }
+        function model($route) {
+            if (!in_array($route, ['checkout/order', 'extension/payment/jet', 'extension/payment/jet_card',
+                'extension/mt_jet_credit/jetcredit'], true)) $this->native->model($route);
+        }
+    });
+    $r->set('model_checkout_order', new class($context) {
+        public $code;
+        private $context;
+        function __construct($context) { $this->context = $context; }
+        function getOrder($id) {
+            return ['order_id' => $id, 'store_id' => 0, 'customer_id' => 0,
+                'email' => 'client@example.invalid', 'total' => $this->context['amount'],
+                'currency_value' => 1, 'currency_code' => 'EUR', 'payment_code' => $this->code];
+        }
+        function getOrderProducts($id) {
+            $rows = [];
+            foreach ($this->context['products'] as $index => $product) {
+                $rows[] = $product + ['order_product_id' => $index + 1, 'tax' => 0];
+            }
+            return $rows;
+        }
+        function getOrderOptions($id, $line) { return []; }
+    });
+    $payment = new class { function getMethod($address, $total, $amount) { return true; } };
+    $r->set('model_extension_payment_jet', $payment);
+    $r->set('model_extension_payment_jet_card', $payment);
+    $session = $r->get('session');
+    unset($session->data['customer_id']);
+    $session->data['order_id'] = 1;
+    $session->data['guest'] = ['email' => 'client@example.invalid'];
+}
+function basketParity($ids, $rules, $recalculations) {
+    [$c, $r] = cartEnvironment(basketCart($ids, $rules));
+    $model = $r->get('model_extension_mt_jet_credit_jetcredit');
+    $context = $model->getCartContext();
+    check($context['product_ids'] === $ids, 'Cart keeps native product IDs in row order');
+    $cartQuotes = [];
+    foreach ([0, 1] as $card) {
+        $previous = [];
+        foreach ($recalculations as [$down, $term, $rates]) {
+            cartWire($r, cartPayload($model, $context, $down, $card, $term) + $previous);
+            $c->jet_calculate_cart();
+            $quote = json_decode($r->get('response')->output, true);
+            check(($quote['success'] === 'success') === ($rates !== null), 'Cart promotion availability for method ' . json_encode([$card, $down, $term, $ids]));
+            $cartQuotes[$card][] = $quote;
+            if (isset($quote['jet_quote_ref'])) {
+                $previous = ['jet_previous_quote' => $quote['jet_quote_ref'],
+                    'jet_cart_lineage' => $quote['jet_cart_lineage'], 'jet_intent_id' => $quote['jet_intent_id']];
+            }
+        }
+    }
+    basketCheckoutFixture($r, $context);
+    foreach (['jet', 'jet_card'] as $card => $code) {
+        $r->get('session')->data['payment_method'] = ['code' => $code];
+        $r->get('model_checkout_order')->code = $code;
+        $snapshot = $model->getCheckoutSnapshot($code);
+        check($snapshot && array_map('strval', $snapshot['product_ids']) === $ids, 'Checkout keeps native product IDs in row order');
+        foreach ($recalculations as $index => [$down, $term, $rates]) {
+            cartWire($r, ['jet_checkout_context' => $code, 'jet_priceall' => $context['amount'],
+                'jet_parva' => $down, 'jet_vnoski' => (string)$term]);
+            $c->jet_calculate_cart();
+            $quote = json_decode($r->get('response')->output, true);
+            check(($quote['success'] === 'success') === ($rates !== null), 'Checkout promotion availability for ' . $code);
+            if ($rates === null) continue;
+            $principal = (float)$context['amount'] - (float)$down;
+            foreach (['', '_card'] as $method => $suffix) {
+                $expected = number_format($principal / $term * (1 + $term * $rates[$method] / 100), 2, '.', '');
+                $field = 'jet_vnoska' . $suffix;
+                check($quote[$field] === $expected && $cartQuotes[$card][$index][$field] === $expected,
+                    'Cart and Checkout installment matches expected rate for ' . $code . $suffix);
+            }
+        }
+    }
+}
+$a = basketRule('1', '0.50');
+$b = basketRule('2', '0.99', 2);
+$excluded = basketRule('1', '-1');
+foreach ([
+    [['1'], [], [1.20, 0.80]],
+    [['1'], [$a], [0.50, 0.50]],
+    [['1'], [$excluded], null],
+    [['1', '2'], [$a, basketRule('2', '0.5', 2)], [0.50, 0.50]],
+    [['1', '2'], [$a, $b], [0.99, 0.99]],
+    [['1', '2', '3'], [basketRule('1', '0.00'), basketRule('2', '0.50', 2), basketRule('3', '1.20', 3)], [1.20, 1.20]],
+    [['1', '2'], [$a], [1.20, 0.80]],
+    [['1', '2'], [], [1.20, 0.80]],
+    [['1', '2'], [$excluded, $b], null],
+    [['1'], [basketRule('*', '-1', 1), basketRule('1', '0.50', 2)], [0.50, 0.50]],
+    [['1', '2'], [basketRule('*', '-1', 1), basketRule('1', '0.50', 2)], null],
+    [['1'], [basketRule('1', '0.50', 1), basketRule('1', '-1', 2)], [0.50, 0.50]],
+    [['2', '1'], [$excluded], null],
+    [['1', '2'], [basketRule('*', '0.25', 1), basketRule('1', '0.50', 2), basketRule('1', '0.99', 3)], [0.50, 0.50]],
+    [['1', '2'], [basketRule('*', '0.25', 1), basketRule('1', '0.99', 2, '12', 0, '2026-05-31')], [0.25, 0.25]],
+    [['1', '2', '1'], [$a, $b], [0.99, 0.99]],
+] as [$ids, $rules, $rates]) {
+    basketParity($ids, $rules, [['100', 12, $rates]]);
+}
+basketParity(['1', '2'], [basketRule('1', '0.50', 1, '12', 1100), $b], [
+    ['100', 12, [0.99, 0.99]],
+    ['101', 12, [1.20, 0.80]],
+    ['100', 9, [1.20, 0.80]],
+    ['100', 12, [0.99, 0.99]],
+]);
+
+// An edit to the non-winning rule preserves the result but invalidates the quote.
+[$c, $r] = quoteCart(basketCart(['1', '2'], [$a, $b]));
+$model = $r->get('model_extension_mt_jet_credit_jetcredit');
+$before = $model->getCartPromotion(['1', '2'], 12, 1100);
+$r->get('db')->promotionRules[0]['jet_product_price'] = 100;
+$after = $model->getCartPromotion(['1', '2'], 12, 1100);
+check($before['promotion'] === $after['promotion'] && $before['fingerprint'] !== $after['fingerprint'],
+    'same-rate in-place rule edit changes basket promotion evidence');
+rejectCart($c, $r, true);
+
+// The exact requested term is either offered or excluded. No alternative is selected.
+foreach ([0, 1] as $card) {
+    [$c, $r] = cartEnvironment(basketCart(['1', '2'], [basketRule('1', '-1'), basketRule('2', '0.50')]));
+    $model = $r->get('model_extension_mt_jet_credit_jetcredit');
+    foreach ([12, 9] as $term) {
+        $wire = cartPayload($model, $model->getCartContext(), '100', $card, $term);
+        $passes = nativePasses($r);
+        cartWire($r, $wire); $c->jet_calculate_cart();
+        $result = json_decode($r->get('response')->output, true);
+        check(nativePasses($r) === $passes + 1, 'one native totals pass');
+        check(($result['jet_promotion_excluded'] ?? false) === ($term === 12), 'one excluded product vetoes only the requested term');
+        check(($result['jet_vnoski'] ?? null) === ($term === 12 ? null : $term), 'no automatic term replacement');
+        check(isset($result['jet_quote_ref']) === ($term === 9), 'no quote persisted for an exclusion');
+    }
+}
 // Replay after actual native Cart financial validation skips the totals pipeline entirely.
 [$c,$r]=quoteCart();CartFinancialMailer::$messages=[];$c->jet_send_cart();$result=$r->get('response')->output;
 $passes=nativePasses($r);$effects=[count($r->get('model_checkout_order')->orders),count($r->get('model_checkout_order')->history),$r->get('cart')->clears,count(CartFinancialMailer::$messages),$r->get('test_submission_memory')->meta['next_reference']];

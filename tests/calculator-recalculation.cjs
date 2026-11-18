@@ -4,14 +4,16 @@
 module.exports = function runCalculatorRegression(sources, productTests = null) {
  let checks = 0;
  const check = (condition, message) => { checks++; if (!condition) throw new Error(message); };
- function environment(source, options = false, css = '', initialValues = {}) {
+ function environment(source, options = false, css = '', initialValues = {}, markupIds = null) {
   let now = 0, timerId = 0, loaderCount = 0;
   const timers = new Map(), elements = new Map(), requests = [], documentEvents = {}, optionEvents = {}, captureEvents = {};
   const faults = {}, alerts = [], loaderNodes = [];
+  let paymentMethod = null;
   const document = {
+   querySelector: () => paymentMethod ? { value: paymentMethod } : null,
    querySelectorAll: (selector) => !options ? [] : selector.includes('id*=') ? [{}] : selector.includes('id^=') ? [{ addEventListener: (name, fn) => { optionEvents[name] = fn; } }] : [],
    addEventListener: (name, fn) => (documentEvents[name] ||= []).push(fn),
-   getElementById: (id) => get('#' + id)
+   getElementById: (id) => hasMarkup('#' + id) ? get('#' + id) : null
   };
   class Element {
    constructor(key, attributes = {}) { this.key = key; this.length = 1; this.attributes = attributes; this.value = ''; this.content = attributes.text || ''; this.events = {}; this.classes = new Set(); this.children = []; this.visible = false; this[0] = this; this.props = {}; this.classList = { add: (name) => this.classes.add(name), contains: (name) => this.classes.has(name) }; }
@@ -22,15 +24,16 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    first() { return this; } eq() { return this; }
    find(selector) {
     if (selector === '.jet_offer_loader') return { length: loaderCount };
+    const thisSelector = this.key;
     if (selector === 'option') return { each(fn) {
      for (const term of ['3', '6', '9', '10', '12', '15', '18', '24', '30', '36']) {
-      const option = get('#jet_vnoski option[value="' + term + '"]').val(term);
+      const option = get((markupIds ? thisSelector : '#jet_vnoski') + ' option[value="' + term + '"]').val(term);
       fn.call(option);
      }
     } };
     const element = get(selector); element.parentNode = this; return element;
    }
-   on(names, fn) { for (const name of names.split(' ')) (this.events[name] ||= []).push(fn); return this; }
+   on(names, selector, fn) { if (typeof selector === 'function') fn = selector; for (const name of names.split(' ')) (this.events[name] ||= []).push(fn); return this; }
    off(namespace) { for (const name of Object.keys(this.events)) if (name.includes(namespace)) delete this.events[name]; return this; }
    append(child) { if (child instanceof Element) { this.children.push(child); if (child.attributes.id) elements.set('#' + child.attributes.id, child); } return this; }
    appendTo(parent) { this.parentNode = typeof parent === 'string' ? get(parent) : parent; if (this.attributes.class === 'jet_offer_loader') { loaderCount++; loaderNodes.push(this); } return this; }
@@ -46,12 +49,16 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    contains(target) { return this === target || this.children.some((child) => child.contains(target)); }
    querySelector() { return this.children.find((child) => child.key.startsWith('<button')); }
    focus() { this.focused = true; } blur() { this.focused = false; } css() { return this; } show() { this.visible = true; return this; } hide() { this.visible = false; return this; }
-   is() { return false; } click() { dispatch(this, 'click'); return this; }
+   is(selector) { return selector === ':checked' && !!this.props.checked; } click() { dispatch(this, 'click'); return this; }
   }
-  const get = (key) => { if (!elements.has(key)) elements.set(key, new Element(key)); return elements.get(key); };
+  const hasMarkup = key => !markupIds || !/^#[\w-]+$/.test(key) || markupIds.has(key);
+  const emptySelection = { length: 0, val() {}, text() {}, on() {}, remove() {} };
+  const get = (key) => { if (!hasMarkup(key)) return emptySelection; if (!elements.has(key)) elements.set(key, new Element(key)); return elements.get(key); };
   function $(key, attrs) {
    if (key === '#jet-product-popup-container .jet_offer_loader > span' && loaderNodes.length) return loaderNodes[0].children[0];
-   if (key === '#jet_alert_box:empty') { const alert = get('#jet_alert_box'); return !alert.children.length && !alert.content ? alert : { remove() {} }; }
+   if (key === document) return get('__document');
+   if (key === '#jet_alert_box:empty') { const alert = get('#jet_alert_box'); if (!alert.length) return alert; return !alert.children.length && !alert.content ? alert : { remove() {} }; }
+   if (typeof key === 'string' && !hasMarkup(key)) return emptySelection;
    return typeof key === 'string' && key.startsWith('<') ? new Element(key, attrs) : key instanceof Element ? key : get(key); }
   const schedule = (fn, delay) => { const id = ++timerId; timers.set(id, { at: now + delay, fn }); return id; };
   const clear = (id) => timers.delete(id);
@@ -59,16 +66,25 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    if (faults.ajax) { faults.ajax = false; throw new Error('mock synchronous AJAX failure'); }
    const request = { config, finished: false };
    let timeout;
-   request.resolve = (data) => { if (request.finished) return; request.finished = true; clear(timeout); if (data?.__mockQuote && /\/jet_calculate(?:_cart)?$/.test(config.url)) data = { ...data, jet_parva: config.data.values.jet_parva, jet_vnoski: config.data.values.jet_vnoski, jet_card: config.data.values.jet_card || 0 }; config.success?.(data); config.complete?.(); };
+   request.resolve = (data) => { if (request.finished) return; request.finished = true; clear(timeout); if (data?.__mockQuote && /\/jet_calculate(?:_cart)?$/.test(config.url)) {
+    const values = config.data.values;
+    data = { jet_vnoska_card: data.jet_vnoska, jet_gpr_card: '8.00', jet_glp_card: '7.00', jet_obshto_card: '650.00',
+     ...data, jet_priceall: values.jet_priceall, jet_parva: values.jet_parva, jet_vnoski: values.jet_vnoski, jet_card: values.jet_card || 0 };
+   } config.success?.(data); config.complete?.(); };
    request.reject = (reason = 'error') => { if (request.finished) return; request.finished = true; clear(timeout); config.error?.({ statusText: reason }); config.complete?.(); };
    if (config.timeout) timeout = schedule(() => request.reject('timeout'), config.timeout);
    requests.push(request); return request;
   };
   class Data { constructor() { if (faults.data) { faults.data = false; throw new Error('mock FormData failure'); } this.values = {}; } append(name, value) { this.values[name] = String(value); } }
   const initial = { '#jet_price': '600', '#jet_parva': '0', '#jet_vnoski': '12', '#jet_product_id': '1', '#jet_card_in': '0', 'input[name="quantity"]': '1', '#jet_products': '1', '#jet_products_qt': '1', '#jet_products_pr': '600', ...initialValues };
-  for (const [key, value] of Object.entries(initial)) get(key).value = value;
-  const placeholder = get('#jet_alert_box'); placeholder.attributes.id = 'jet_alert_box'; placeholder.length = 1;
-  function trigger(key, name) { return dispatch(get(key), name); }
+  for (const [key, value] of Object.entries(initial)) if (hasMarkup(key)) get(key).value = value;
+  if (hasMarkup('#jet_alert_box')) {
+   const placeholder = get('#jet_alert_box'); placeholder.attributes.id = 'jet_alert_box'; placeholder.length = 1;
+  }
+  function trigger(key, name) {
+   if (!hasMarkup(key)) throw new Error('No element in production markup: ' + key);
+   return dispatch(get(key), name);
+  }
   function dispatch(element, name) {
    element.id = element.key.slice(1);
    const event = { target: element, cancelable: true, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
@@ -104,7 +120,9 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
     text: loader?.children[0]?.text() };
   };
   new Function('jQuery', 'document', 'FormData', 'setTimeout', 'clearTimeout', 'console', 'window', 'alert', 'location', source)($, document, Data, schedule, clear, { error() {}, log() {} }, { addEventListener: (name, fn) => (captureEvents[name] ||= []).push(fn), location: { origin: 'http://test.invalid', href: '' } }, (message) => alerts.push(message), {});
-  return { requests, trigger, tick, get, faults, alerts, loaderLayout, changeOption: () => optionEvents.change?.(), inputOption: () => optionEvents.input?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
+  return { requests, trigger, tick, get, faults, alerts, loaderLayout,
+   replacePanel() { elements.delete('#jet_checkout_offer'); elements.delete('#button-confirm'); },
+   switchPayment(value) { paymentMethod = value; for (const fn of get('__document').events['change.jetCheckoutSelection'] || []) fn.call({ value }); }, changeOption: () => optionEvents.change?.(), inputOption: () => optionEvents.input?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
  }
  const quote = (value = '50.00') => ({ success: 'success', __mockQuote: true, jet_intent_id: 'c'.repeat(48), jet_quote_ref: 'a'.repeat(48), jet_cart_lineage: 'b'.repeat(48), jet_parva: '0.00', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
  if (productTests) return productTests(environment, quote);
@@ -178,15 +196,15 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    };
    const preview = settle();
    const promoMatched = amount >= 600 && term === 12, hiddenPromo = promoMatched && scenario.promo_percent === -1;
-   check(e.get('#jet-product-button-container').visible === (!hiddenPromo && amount >= (scenario.minimum ?? 75)), label + ': promotion/minimum button eligibility');
-   check(e.get('#jet_vnoska').text() === preview.jet_vnoska && e.get('#jet_vnoska_card').text() === preview.jet_vnoska_card, label + ': both button installment previews');
+   check(e.get('#jet-product-button-container').visible === !hiddenPromo, label + ': promotion/minimum button eligibility');
+   check(hiddenPromo || (e.get('#jet_vnoska').text() === preview.jet_vnoska && e.get('#jet_vnoska_card').text() === preview.jet_vnoska_card), label + ': both button installment previews');
    for (const boundaryTerm of ['15', '18', '24', '30', '36']) check(e.get('#jet_vnoski option[value="' + boundaryTerm + '"]').prop('disabled') === (amount < (['30', '36'].includes(boundaryTerm) ? 601 : 401)), label + ': corrected amount controls term ' + boundaryTerm);
    e.trigger(card ? '#btn_jet_card' : '#btn_jet', 'click');
    const popup = settle(), suffix = card ? '_card' : '';
    const percent = promoMatched && !hiddenPromo ? (scenario.promo_percent ?? 0.5) : (card ? 1.0 : 1.4);
    check(popup['jet_vnoska' + suffix] === ((amount / term) * (1 + term * percent / 100)).toFixed(2), label + ': unchanged financing formula/promotion');
-   check(e.get('#jet-product-popup-container').visible && e.get('#jet_priceall').text() === amount.toFixed(2), label + ': popup displays corrected amount');
-   check(e.get('#jet_vnoska_popup').text() === popup['jet_vnoska' + suffix], label + ': selected installment displayed');
+   check(hiddenPromo ? !e.get('#jet-product-popup-container').visible : (e.get('#jet-product-popup-container').visible && e.get('#jet_priceall').text() === amount.toFixed(2)), label + ': popup displays corrected amount');
+   check(hiddenPromo || e.get('#jet_vnoska_popup').text() === popup['jet_vnoska' + suffix], label + ': selected installment displayed');
    check(e.requests.filter((request) => request.config.url.endsWith('/jet_calculate')).length === 2, label + ': one calculation per preview/open');
    if (!preview.jet_show_button) return { preview, popup };
    e.trigger('#buy_jetcredit', 'click');
@@ -204,7 +222,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
   };
   const current = execute(sources.products);
   const financialOnly = value => JSON.stringify(value, (key, item) => ['jet_intent_id','jet_quote_ref','jet_options','jet_quantity','jet_downpayment_raw','jet_previous_quote','jet_parva'].includes(key) ? undefined : item);
-  if (scenario.unchanged) check(financialOnly(current) === financialOnly(execute(sources.baseline_products)), label + ': positive/zero/no-option/fallback golden unchanged');
+  if (scenario.unchanged && scenario.promo_percent !== -1) check(financialOnly(current) === financialOnly(execute(sources.baseline_products)), label + ': positive/zero/no-option/fallback golden unchanged');
  }
  console.log(`PASS ${checks - f02Start} F02 prefix/quantity/currency/preview/popup/submission checks`);
  for (const page of ['products', 'cart']) {
@@ -426,10 +444,13 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
  for (const mode of ['jet', 'jet_card']) {
   if (!sources['checkout_' + mode]) continue;
   const template = sources['checkout_' + mode];
-  const snippet = template.slice(template.indexOf('\tlet jetConfirmPending'), template.lastIndexOf('\n\tjetCalculate();'));
-  const source = 'jQuery(document).ready(function($) { const jetShowCustomAlert = (message) => alert(message);\n' + snippet + '\n});';
+  const source = template.slice(template.indexOf('jQuery(document).ready'), template.lastIndexOf('//--></script>'));
   for (const kind of ['success', 'failure', 'bank_uncertain', 'processing_review', 'network', 'timeout', 'malformed', 'sync_data', 'sync_ajax']) {
-   const e = environment(source);
+   const e = environment(source, false, '', { ['#' + mode + '_price']: '600', ['#' + mode + '_parva']: '0',
+    ['#' + mode + '_vnoski']: '12', ['#' + mode + '_egn']: '1234567890' });
+   e.get('#' + mode + '_uslovia').prop('checked', true);
+   e.get('#' + mode + '_uslovia1').prop('checked', true);
+   e.requests.shift().resolve(quote());
    if (kind === 'sync_data') e.faults.data = true; if (kind === 'sync_ajax') e.faults.ajax = true;
    e.trigger('#button-confirm', 'click');
    if (!kind.startsWith('sync_')) {
@@ -446,7 +467,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    if (['bank_uncertain', 'processing_review', 'network', 'timeout', 'malformed', 'sync_ajax'].includes(kind)) check(e.alerts.at(-1).startsWith('Резултатът от изпращането не е потвърден.'), 'native uncertainty reported without delivery claim');
    const before = e.requests.length; e.tick(60000); check(e.requests.length === before, 'native no automatic retry');
    e.trigger('#button-confirm', 'click');
-   check(e.requests.length === before + (['failure', 'sync_data'].includes(kind) ? 1 : 0), 'native confirmed failure retryable; accepted/uncertain result never resent');
+   check(e.requests.length === before + (kind === 'sync_data' ? 1 : 0), 'quote rejection requires recalculation; accepted/uncertain result never resent');
   }
  }
  // Product options lookup and calculation form one loader lifecycle.

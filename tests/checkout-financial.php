@@ -70,7 +70,96 @@ $checkoutFinancialTests = function () {
         $assert(!$c->model_checkout_order->orders && !$c->model_checkout_order->histories, $label . ': no order/history mutations');
         $assert(!array_filter($c->db->queries, function ($sql) { return preg_match('/^\s*(UPDATE|INSERT|DELETE)/i', $sql); }), $label . ': no counter/database mutations');
     };
+    // Exercise discovery and the real aggregate at final confirmation for both native payment methods.
+    foreach (['jet', 'jet_card'] as $code) foreach ([null, 'winning', 'initial'] as $ruleChanged) {
+        [$c] = $environment($code);
+        $c->model_checkout_order->rows = [
+            ['order_product_id'=>1,'product_id'=>1,'name'=>'First','quantity'=>1,'price'=>250,'tax'=>50],
+            ['order_product_id'=>2,'product_id'=>2,'name'=>'Second','quantity'=>1,'price'=>250,'tax'=>50]
+        ];
+        $db = new class extends DB {
+            public $rate = '0.99';
+            public function query($sql) {
+                if (strpos($sql, 'FROM oc_jet_kop') === false) return parent::query($sql);
+                $this->queries[] = $sql;
+                preg_match("/OR jet_product_id = '(\d+)'/", $sql, $product);
+                preg_match('/FIND_IN_SET\((\d+),/', $sql, $term);
+                $rate = $product[1] === '2' ? $this->rate : ($term[1] === '3' || $term[1] === '12' ? '-1' : '0.50');
+                return (object)['num_rows'=>1,'row'=>['jet_product_id'=>$product[1],'jet_product_percent'=>$rate,'id'=>$product[1]]];
+            }
+        };
+        $c->config->values['module_mt_jet_credit_purcent'] = 1.2;
+        $c->config->values['module_mt_jet_credit_purcent_card'] = 0.8;
+        $model = new ModelExtensionMtJetCreditJetcredit();
+        foreach (get_object_vars($c->model_extension_mt_jet_credit_jetcredit) as $key => $value) $model->$key = $value;
+        $model->db = $db;
+        $c->model_extension_mt_jet_credit_jetcredit = $model;
+        $calc = setup('NewCalc');
+        foreach (get_object_vars($c) as $key => $value) $calc->$key = $value;
+        $snapshot = $model->getCheckoutSnapshot($code);
+        $c->config->values['module_mt_jet_credit_vnoski'] = 6;
+        $calc->request->post = ['jet_checkout_context'=>$code,'jet_priceall'=>'600.00',
+            'jet_parva'=>'100','jet_vnoski'=>'12','jet_products'=>$snapshot['products_key']];
+        $calc->jet_calculate_cart();
+        $assert(json_decode($calc->response->output, true)['jet_promotion_excluded'] === true, 'requested term excluded without fallback');
+        $calc->request->post['jet_vnoski'] = '6';
+        Trace::$events = [];
+        $calc->jet_calculate_cart(); $quote = json_decode($calc->response->output, true);
+        $assert($quote['success'] === 'success', 'eligible exact term calculates');
+        $assert(Trace::$events === ['read_order'], 'Checkout resolves the persisted order once per search');
+        $assert($quote['jet_vnoska'] === $quote['jet_vnoska_card'] && $quote['jet_vnoska'] === '88.28', 'both channels use highest promotional rate of selected term');
+        foreach (['jet', 'jet_card'] as $listedCode) {
+            $payment = $c->{'model_extension_payment_' . $listedCode};
+            $payment->model_extension_mt_jet_credit_jetcredit = $model;
+            $payment->cart = new class {
+                public function getProducts() { return [['product_id'=>1], ['product_id'=>2]]; }
+            };
+            $c->config->values['module_mt_jet_credit_vnoski'] = 12;
+            $assert($payment->getMethod(['country_id'=>1,'zone_id'=>1], 600) === [], 'native listing omits the excluded initial term');
+            $c->config->values['module_mt_jet_credit_vnoski'] = 6;
+            $assert($payment->getMethod(['country_id'=>1,'zone_id'=>1], 600)['code'] === $listedCode, 'fresh listing restores eligible method');
+            $c->config->values['module_mt_jet_credit_vnoski'] = 30;
+            $assert($payment->getMethod(['country_id'=>1,'zone_id'=>1], 600)['code'] === $listedCode, 'unsupported initial term is not an exclusion');
+        }
+        $c->config->values['module_mt_jet_credit_vnoski'] = 6;
+        $post = [$code.'_parva'=>'100', $code.'_vnoski'=>'6', $code.'_egn'=>'1234567890'];
+        foreach (['products'=>'products_key', 'products_qt'=>'products_qt', 'products_pr'=>'products_pr', 'products_vr'=>'products_vr'] as $key=>$field) $post[$code.'_'.$key] = $snapshot[$field];
+        foreach (['priceall','vnoska','total_credit_price','obshto','gpr','glp'] as $key) {
+            $post[$code.'_'.$key] = $quote['jet_'.$key.($code === 'jet_card' && !in_array($key, ['priceall','total_credit_price'], true) ? '_card' : '')];
+        }
+        $c->request->post = $post;
+        if ($ruleChanged === 'winning') $db->rate = '-1';
+        if ($ruleChanged === 'initial') $c->config->values['module_mt_jet_credit_vnoski'] = 12;
+        if ($ruleChanged === 'initial') {
+            $c->session->data['payment_methods'] = ['jet'=>[], 'jet_card'=>[], 'cod'=>[]];
+            $view = $c->index();
+            $assert(is_string($view) && strpos($view, 'checkout/checkout') !== false
+                && !isset($c->session->data['payment_method']) && array_keys($c->session->data['payment_methods']) === ['cod'],
+                'stale saved selection returns to Checkout with both financing methods removed from the cache');
+        }
+        $reset(); $c->confirm();
+        $result = json_decode($c->response->output, true);
+        $assert(($result['success'] === 'success') === !$ruleChanged, 'real Checkout confirmation rechecks product promotions');
+        $assert(($result['jet_quote_invalid'] ?? false) === ($ruleChanged !== null), 'stale multi-product quote receives a business rejection marker');
+        $assert(count(SubmissionTestMailer::$attempts) === ($ruleChanged ? 0 : 3) && count($c->model_checkout_order->histories) === ($ruleChanged ? 0 : 1),
+            'only accepted Checkout winner reaches existing side effects');
+
+    }
     foreach (['jet', 'jet_card'] as $code) {
+        foreach (['1e1', '1,5', '10abc'] as $raw) {
+            [$c] = $environment($code);
+            $c->request->post[$code . '_parva'] = $raw;
+            $reject($c, 'strict Checkout parser rejects ' . $raw);
+            $result = json_decode($c->response->output, true);
+            $assert(($result['jet_quote_invalid'] ?? false) && empty($result['jet_quote_error']), 'invalid input is a business rejection');
+        }
+        [$c] = $environment($code);
+        $c->model_extension_mt_jet_credit_jetcredit->model_checkout_order = new class extends Orders {
+            public function getOrder($id) { throw new RuntimeException('Mock read failure'); }
+        };
+        $reject($c, 'Checkout read exception fails before side effects');
+        $result = json_decode($c->response->output, true);
+        $assert(($result['jet_quote_error'] ?? false) && empty($result['jet_quote_invalid']), 'read exception is a technical error');
         $cases = ['total' => function ($c) use ($code) { $c->request->post[$code . '_priceall'] = '1'; },
             'installment' => function ($c) use ($code) { $c->request->post[$code . '_vnoska'] = '1'; },
             'term 999' => function ($c) use ($code) { $c->request->post[$code . '_vnoski'] = '999'; },

@@ -170,7 +170,7 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		$order_options = json_decode(html_entity_decode(filter_var(htmlspecialchars($encoded, ENT_COMPAT, 'UTF-8'), FILTER_SANITIZE_STRING)), true);
 		if (!is_array($order_options)) return false;
 		return ['raw_amount'=>$raw, 'browser_raw'=>(float)(string)$raw, 'amount'=>$this->cartFixed((float)(string)$raw),
-			'products_key'=>implode('_',$ids), 'products_qt'=>implode('_',$quantities), 'products_pr'=>implode('_',$prices),
+			'product_ids'=>$ids, 'products_key'=>implode('_',$ids), 'products_qt'=>implode('_',$quantities), 'products_pr'=>implode('_',$prices),
 			'cart_rows'=>implode('_',$row_ids), 'options'=>$options, 'order_options'=>$order_options, 'products'=>$evaluation['context']['products'],
 			'fingerprint'=>hash('sha256',serialize([$evaluation,$prices]))];
 	}
@@ -194,11 +194,12 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		return json_decode(htmlspecialchars_decode($post['jet_products_vr'], ENT_COMPAT),true) === $context['options'] && json_last_error()===JSON_ERROR_NONE;
 	}
 
-	public function getCartPromotion($key, $term, $principal) {
-		$result = $this->cartPromotionResult($key, $term, $principal);
+	public function getCartPromotion(array $product_ids, $term, $principal) {
+		$result = $this->basketPromotionResult($product_ids, $term, $principal);
 		$promotion = $result['promotion'];
-		$row = $result['evidence'];
-		return ['promotion'=>$promotion, 'fingerprint'=>hash('sha256', serialize([$key,$term,$principal,$promotion,$row]))];
+		return ['promotion'=>$promotion, 'fingerprint'=>hash('sha256', serialize([
+			$product_ids, $term, $principal, $promotion, $result['evidence']
+		]))];
 	}
 
 	public function findCartQuote($reference) {
@@ -443,7 +444,7 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 			$variations[] = implode(', ', array_column($options, 'value'));
 		}
 		unset($product);
-		return ['order' => $order, 'products' => $products, 'amount' => $amount,
+		return ['order' => $order, 'products' => $products, 'product_ids' => $ids, 'amount' => $amount,
 			'products_key' => implode('_', $ids), 'products_qt' => implode('_', $quantities),
 			'products_pr' => implode('_', $prices), 'products_vr' => implode('_', $variations)];
 	}
@@ -464,7 +465,24 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		return is_finite((float)$value) ? (float)$value : null;
 	}
 
+	// The native selector uses its first option if no configured option is rendered selected.
+	public function checkoutInitialPromotionExcluded(array $product_ids, $amount) {
+		$terms = [3, 6, 9, 10, 12, 15, 18, 24, 30, 36];
+		$term = (int)$this->config->get('module_mt_jet_credit_vnoski');
+		if (!in_array($term, $terms, true)) $term = $terms[0];
+		$amount = (float)(string)$amount;
+		if (!is_finite($amount) || $amount <= 0
+			|| ($amount < 401 && in_array($term, [15, 18, 24], true))
+			|| ($amount < 601 && in_array($term, [30, 36], true))) return false;
+		$principal = (float)$this->checkoutFixed($amount);
+		return $principal > 0 && !$this->basketPromotionResult($product_ids, $term, $principal)['promotion']['jet_show_button'];
+	}
+
 	public function getCheckoutQuote($snapshot, $post) {
+		return $this->checkoutQuoteResult($snapshot, $post)['quote'];
+	}
+
+	public function checkoutQuoteResult($snapshot, $post) {
 		$submitted = $this->checkoutNumber($post['jet_priceall'] ?? null);
 		$down = $this->checkoutNumber($post['jet_parva'] ?? '', true);
 		$term = $this->checkoutNumber($post['jet_vnoski'] ?? null);
@@ -474,15 +492,16 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		if ($submitted === null || $submitted !== $amount || $down === null || $down < 0 || $down >= $browser_amount
 			|| !in_array($term, [3.0, 6.0, 9.0, 10.0, 12.0, 15.0, 18.0, 24.0, 30.0, 36.0], true)
 			|| ($browser_amount < 401 && in_array($term, [15.0, 18.0, 24.0], true))
-			|| ($browser_amount < 601 && in_array($term, [30.0, 36.0], true))) return false;
+			|| ($browser_amount < 601 && in_array($term, [30.0, 36.0], true))) return ['quote' => false, 'excluded' => false];
 		foreach (['products' => 'products_key', 'products_qt' => 'products_qt', 'products_pr' => 'products_pr', 'products_vr' => 'products_vr'] as $field => $key) {
 			$expected = $field === 'products_vr' ? html_entity_decode($snapshot[$key], ENT_QUOTES | ENT_HTML5, 'UTF-8') : $snapshot[$key];
-			if (array_key_exists('jet_' . $field, $post) && (!is_string($post['jet_' . $field]) || $post['jet_' . $field] !== $expected)) return false;
+			if (array_key_exists('jet_' . $field, $post) && (!is_string($post['jet_' . $field]) || $post['jet_' . $field] !== $expected)) return ['quote' => false, 'excluded' => false];
 		}
 		$principal = $amount - (float)$this->checkoutFixed($down);
-		if ($principal <= 0 || $amount - $down <= 0) return false;
-		$promo = $this->model_extension_mt_jet_credit_jetcredit->getPromo($snapshot['products_key'], (int)$term, $principal);
-		if (!$promo['jet_show_button']) return false;
+		if ($principal <= 0 || $amount - $down <= 0) return ['quote' => false, 'excluded' => false];
+		$promo = $this->basketPromotionResult($snapshot['product_ids'], (int)$term, $principal)['promotion'];
+		$excluded = !$promo['jet_show_button'];
+		if ($excluded) return ['quote' => false, 'excluded' => true];
 		$json = ['success' => 'success', 'jet_priceall' => number_format($amount, 2, '.', ''),
 			'jet_priceall_second' => number_format($amount, 2, '.', ''),
 			'jet_total_credit_price' => number_format($principal, 2, '.', ''),
@@ -495,13 +514,13 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 			$gpr = (pow((1 + $rate / 12), 12) - 1) * 100;
 			$overall = $monthly * $term;
 			foreach (['vnoska' => $monthly, 'glp' => $glp, 'gpr' => $gpr, 'obshto' => $overall] as $field => $number) {
-				if (!is_finite($number)) return false;
+				if (!is_finite($number)) throw new \RuntimeException('Non-finite Checkout calculation.');
 				$json['jet_' . $field . $suffix] = number_format($number, 2, '.', '');
 			}
 			$json['jet_vnoska' . $suffix . '_second'] = '0.00';
 			$json['jet_obshto' . $suffix . '_second'] = number_format($overall, 2, '.', '');
 		}
-		return $json;
+		return ['quote' => $json, 'excluded' => false];
 	}
 
 	public function validateCheckoutSubmission($code, $post) {
@@ -571,7 +590,28 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		return $result['promotion'];
 	}
 
-	// Explicit per-call evidence for Cart; the public promotion API stays unchanged.
+	protected function basketPromotionResult(array $product_ids, $term, $principal) {
+		$promotion = [
+			'jet_show_button' => true,
+			'jet_purcent' => (float)$this->config->get('module_mt_jet_credit_purcent'),
+			'jet_purcent_card' => (float)$this->config->get('module_mt_jet_credit_purcent_card')
+		];
+		$evidence = $rates = [];
+		foreach ($product_ids as $product_id) {
+			$result = $this->cartPromotionResult($product_id, $term, $principal);
+			$evidence[] = $result['evidence'];
+			if (!$result['promotion']['jet_show_button']) {
+				$promotion['jet_show_button'] = false;
+			} elseif ($result['evidence']) {
+				$rates[] = $result['promotion']['jet_purcent'];
+			}
+		}
+		if ($promotion['jet_show_button'] && $rates && count($rates) === count($product_ids)) {
+			$promotion['jet_purcent'] = $promotion['jet_purcent_card'] = max($rates);
+		}
+		return ['promotion' => $promotion, 'evidence' => $evidence];
+	}
+
 	private function cartPromotionResult($jet_product_id, $jet_vnoski, $jet_total_credit_price) {
 		$jet_purcent      = (float)$this->config->get('module_mt_jet_credit_purcent');
 		$jet_purcent_card = (float)$this->config->get('module_mt_jet_credit_purcent_card');
@@ -582,7 +622,8 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		$total      = (float)$jet_total_credit_price;
 
 		$sql = "
-			SELECT jet_product_percent, jet_product_id, id
+			SELECT jet_product_percent, jet_product_id, id, jet_product_meseci,
+			       jet_product_price, jet_product_start, jet_product_end
 			FROM " . DB_PREFIX . "jet_kop
 			WHERE (jet_product_id = '*' OR jet_product_id = '{$product_id}')
 			  AND FIND_IN_SET({$vnoski}, REPLACE(jet_product_meseci, '_', ','))

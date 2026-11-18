@@ -63,7 +63,7 @@ jQuery(document).ready(function($) {
 		return Number.isFinite(value) && value >= 0 && value < 1e21 ? value.toFixed(2) : null;
 	};
 	const jetProductState = () => JSON.stringify([String($('#jet_product_id').val()), jetQuantity(), jetNativeOptions(),
-		String($('#jet_vnoski').val()), jetNormalizedDownpayment()]);
+		String($('#jet_vnoski').val()), jetNormalizedDownpayment(), card]);
 	const jetInvalidateQuote = () => {
 		jetActiveQuote = null;
 		$('#buy2_jetcredit').prop('disabled', true);
@@ -159,11 +159,12 @@ jQuery(document).ready(function($) {
 							changeBtnJetcreditBuy();
 						}
 						jetButtonInstallments(true);
-						if (json.jet_show_button) {
-							$('#jet-product-button-container').show('slow');
-						}else{
-							$('#jet-product-button-container').hide('slow');
-						}
+						if (json.jet_promotion_excluded === true) {
+							$('#jet-product-button-container').hide();
+							$('#jet-product-popup-container').hide();
+							return;
+						}
+						$('#jet-product-button-container').show('slow');
 						$('#jet_vnoska').text(json.jet_vnoska);
 						$('#jet_vnoska_second').text(json.jet_vnoska_second);
 						$('#jet_vnoski_text').text(parseInt($('#jet_vnoski').val()));
@@ -381,6 +382,7 @@ jQuery(document).ready(function($) {
 	}
 
 	const changeBtnJetcredit = () => {
+		if (!jetQuoteCurrent()) { $('#buy_jetcredit').prop('disabled', true); return; }
 		if ($('#uslovia').is(':checked') && $('#uslovia1').is(':checked')) {
 			let _taxa = parseFloat($('#jet_vnoska_popup').text());
 			if (_taxa >= 20) {
