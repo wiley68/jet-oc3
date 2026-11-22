@@ -2,6 +2,7 @@
 class ModelExtensionMtJetCreditJetcredit extends Model {
 	private const JETCREDIT_FINANCIAL_MAX_ITERATIONS = 128;
 	private const JETCREDIT_FINANCIAL_PRECISION = 1.0e-08;
+	private const BASKET_TERMS = [3, 6, 9, 10, 12, 15, 18, 24, 30, 36];
 
 	// Product quotes are short-lived session data, independent of Cart and Checkout orders.
 	private const PRODUCT_QUOTE_TTL = 1800;
@@ -465,17 +466,10 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		return is_finite((float)$value) ? (float)$value : null;
 	}
 
-	// The native selector uses its first option if no configured option is rendered selected.
-	public function checkoutInitialPromotionExcluded(array $product_ids, $amount) {
-		$terms = [3, 6, 9, 10, 12, 15, 18, 24, 30, 36];
-		$term = (int)$this->config->get('module_mt_jet_credit_vnoski');
-		if (!in_array($term, $terms, true)) $term = $terms[0];
-		$amount = (float)(string)$amount;
-		if (!is_finite($amount) || $amount <= 0
-			|| ($amount < 401 && in_array($term, [15, 18, 24], true))
-			|| ($amount < 601 && in_array($term, [30, 36], true))) return false;
-		$principal = (float)$this->checkoutFixed($amount);
-		return $principal > 0 && !$this->basketPromotionResult($product_ids, $term, $principal)['promotion']['jet_show_button'];
+	// Native listing has no saved order yet; opening rechecks the persisted snapshot.
+	public function checkoutInitialPromotionExcluded(array $product_ids, $amount, $code = 'jet') {
+		return !$this->resolveInitialBasketScheme($product_ids, $code, $amount,
+			$this->config->get('module_mt_jet_credit_vnoski'), 0)['valid'];
 	}
 
 	public function getCheckoutQuote($snapshot, $post) {
@@ -489,37 +483,32 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		// Twig prints floats as PHP strings; retain that same browser input precision.
 		$browser_amount = (float)(string)$snapshot['amount'];
 		$amount = (float)$this->checkoutFixed($browser_amount);
-		if ($submitted === null || $submitted !== $amount || $down === null || $down < 0 || $down >= $browser_amount
-			|| !in_array($term, [3.0, 6.0, 9.0, 10.0, 12.0, 15.0, 18.0, 24.0, 30.0, 36.0], true)
-			|| ($browser_amount < 401 && in_array($term, [15.0, 18.0, 24.0], true))
-			|| ($browser_amount < 601 && in_array($term, [30.0, 36.0], true))) return ['quote' => false, 'excluded' => false];
+		if ($submitted === null || $submitted !== $amount || $down === null || $term === null) return ['quote' => false, 'excluded' => false];
 		foreach (['products' => 'products_key', 'products_qt' => 'products_qt', 'products_pr' => 'products_pr', 'products_vr' => 'products_vr'] as $field => $key) {
 			$expected = $field === 'products_vr' ? html_entity_decode($snapshot[$key], ENT_QUOTES | ENT_HTML5, 'UTF-8') : $snapshot[$key];
 			if (array_key_exists('jet_' . $field, $post) && (!is_string($post['jet_' . $field]) || $post['jet_' . $field] !== $expected)) return ['quote' => false, 'excluded' => false];
 		}
+		$code = $snapshot['order']['payment_code'] ?? '';
+		$scheme = $this->checkBasketScheme($snapshot['product_ids'], $code, $snapshot['amount'], $term, $down);
+		if (!$scheme['valid']) return ['quote'=>false, 'excluded'=>$scheme['reason']==='excluded', 'invalid'=>true];
 		$principal = $amount - (float)$this->checkoutFixed($down);
-		if ($principal <= 0 || $amount - $down <= 0) return ['quote' => false, 'excluded' => false];
-		$promo = $this->basketPromotionResult($snapshot['product_ids'], (int)$term, $principal)['promotion'];
-		$excluded = !$promo['jet_show_button'];
-		if ($excluded) return ['quote' => false, 'excluded' => true];
 		$json = ['success' => 'success', 'jet_priceall' => number_format($amount, 2, '.', ''),
 			'jet_priceall_second' => number_format($amount, 2, '.', ''),
 			'jet_total_credit_price' => number_format($principal, 2, '.', ''),
 			'jet_total_credit_price_second' => number_format($principal, 2, '.', '')];
-		foreach (['' => 'jet_purcent', '_card' => 'jet_purcent_card'] as $suffix => $key) {
-			$percent = (float)$promo[$key];
-			$monthly = (($principal / $term) * (1 + ($term * $percent) / 100));
-			$rate = $this->checkoutRate($term, $monthly, -1 * $principal) * 12;
-			$glp = ($this->checkoutRate($term, $monthly, -1 * $principal) * 12) * 100;
-			$gpr = (pow((1 + $rate / 12), 12) - 1) * 100;
-			$overall = $monthly * $term;
-			foreach (['vnoska' => $monthly, 'glp' => $glp, 'gpr' => $gpr, 'obshto' => $overall] as $field => $number) {
-				if (!is_finite($number)) throw new \RuntimeException('Non-finite Checkout calculation.');
-				$json['jet_' . $field . $suffix] = number_format($number, 2, '.', '');
-			}
-			$json['jet_vnoska' . $suffix . '_second'] = '0.00';
-			$json['jet_obshto' . $suffix . '_second'] = number_format($overall, 2, '.', '');
+		$suffix = $code === 'jet_card' ? '_card' : '';
+		$percent = (float)$scheme['scheme']['percent'];
+		$monthly = (($principal / $term) * (1 + ($term * $percent) / 100));
+		$rate = $this->checkoutRate($term, $monthly, -1 * $principal) * 12;
+		$glp = ($this->checkoutRate($term, $monthly, -1 * $principal) * 12) * 100;
+		$gpr = (pow((1 + $rate / 12), 12) - 1) * 100;
+		$overall = $monthly * $term;
+		foreach (['vnoska' => $monthly, 'glp' => $glp, 'gpr' => $gpr, 'obshto' => $overall] as $field => $number) {
+			if (!is_finite($number)) throw new \RuntimeException('Non-finite Checkout calculation.');
+			$json['jet_' . $field . $suffix] = number_format($number, 2, '.', '');
 		}
+		$json['jet_vnoska' . $suffix . '_second'] = '0.00';
+		$json['jet_obshto' . $suffix . '_second'] = number_format($overall, 2, '.', '');
 		return ['quote' => $json, 'excluded' => false];
 	}
 
@@ -533,7 +522,8 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		foreach (['products', 'products_qt', 'products_pr', 'products_vr'] as $field) {
 			if (!isset($input['jet_' . $field])) return false;
 		}
-		$quote = $this->getCheckoutQuote($snapshot, $input);
+		$result = $this->checkoutQuoteResult($snapshot, $input);
+		$quote = $result['quote'];
 		if (!$quote) return false;
 		$suffix = $code === 'jet_card' ? '_card' : '';
 		foreach (['vnoska', 'total_credit_price', 'obshto', 'gpr', 'glp'] as $field) {
@@ -590,6 +580,90 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 		return $result['promotion'];
 	}
 
+	/**
+	 * Exact scheme only: callers supply IDs and the unrounded EUR total from an
+	 * already authenticated Cart/Checkout context. Availability/ownership stays there.
+	 * Quantities/options are already reflected in that total; duplicate IDs are kept.
+	 * reason: valid, different_rates, excluded (-1), or financial_constraint.
+	 * constraint identifies a financial failure; only a valid result has a scheme.
+	 * Its fingerprint binds the channel, rate and selected promotion evidence.
+	 * A scheme is calculation data, not a saved or authenticated submission quote.
+	 */
+	public function checkBasketScheme(array $product_ids, $channel, $amount, $term, $downpayment = 0) {
+		$result = ['valid'=>false, 'reason'=>'financial_constraint', 'constraint'=>'invalid_input', 'scheme'=>null];
+		$raw_amount = $this->checkoutNumber($amount);
+		$down = $this->checkoutNumber($downpayment, true);
+		$term = $this->checkoutNumber($term);
+		if (!$product_ids || !in_array($channel, ['jet', 'jet_card'], true)
+			|| $raw_amount === null || $raw_amount <= 0 || $down === null || $term === null) return $result;
+		foreach ($product_ids as $id) if (!$this->productId($id)) return $result;
+		$browser_amount = (float)(string)$raw_amount;
+		$amount = (float)$this->checkoutFixed($browser_amount);
+		$result['constraint'] = 'minimum_amount';
+		if ($raw_amount < (float)$this->config->get('module_mt_jet_credit_price')) return $result;
+		$result['constraint'] = 'term';
+		if ($term != (int)$term || !in_array((int)$term, self::BASKET_TERMS, true)
+			|| ($browser_amount < 401 && in_array((int)$term, [15, 18, 24], true))
+			|| ($browser_amount < 601 && in_array((int)$term, [30, 36], true))) return $result;
+		$canonical_down = $this->checkoutFixed($down);
+		$principal = $amount - (float)$canonical_down;
+		$result['constraint'] = 'downpayment';
+		if ($down < 0 || $down >= $browser_amount || $down >= $amount || $principal <= 0) return $result;
+
+		$percent = null;
+		$different = false;
+		$evidence = [];
+		$key = $channel === 'jet_card' ? 'jet_purcent_card' : 'jet_purcent';
+		foreach ($this->basketProductPromotions($product_ids, (int)$term, $principal) as $product) {
+			$evidence[] = $product['evidence'];
+			if (!$product['promotion']['jet_show_button']) {
+				return ['valid'=>false, 'reason'=>'excluded', 'constraint'=>null, 'scheme'=>null];
+			}
+			$value = $product['promotion'][$key];
+			$result['constraint'] = 'percent';
+			if (!is_finite($value)) return $result;
+			// DECIMAL(5,2) precision, independent of source and financial rounding.
+			$current = number_format($value, 2, '.', '');
+			if ($percent === null) $percent = $current;
+			elseif ($percent !== $current) $different = true;
+		}
+		if ($different) return ['valid'=>false, 'reason'=>'different_rates', 'constraint'=>null, 'scheme'=>null];
+		// Same formula and rounded >=20 boundary as Cart/Checkout submission checks.
+		$monthly = (($principal / $term) * (1 + ($term * (float)$percent) / 100));
+		$result['constraint'] = 'monthly';
+		if (!is_finite($monthly)) return $result;
+		$monthly = number_format($monthly, 2, '.', '');
+		if ((float)$monthly < 20) return $result;
+		return ['valid'=>true, 'reason'=>'valid', 'constraint'=>null,
+			'fingerprint'=>hash('sha256', serialize([$product_ids, (int)$term, $principal, $channel, $percent, $evidence])), 'scheme'=>[
+			'channel'=>$channel, 'term'=>(int)$term, 'percent'=>$percent,
+			'amount'=>number_format($amount, 2, '.', ''), 'downpayment'=>$canonical_down,
+			'principal'=>number_format($principal, 2, '.', ''), 'monthly'=>$monthly
+		]];
+	}
+
+	/** Initial discovery only; never use this to replace a customer's selected term. */
+	public function resolveInitialBasketScheme(array $product_ids, $channel, $amount, $initial_term, $downpayment = 0) {
+		$result = $this->checkBasketScheme($product_ids, $channel, $amount, $initial_term, $downpayment);
+		if ($result['valid']) return $result;
+		$initial = $this->checkoutNumber($initial_term);
+		foreach (self::BASKET_TERMS as $term) {
+			if ((float)$term === $initial) continue;
+			$result = $this->checkBasketScheme($product_ids, $channel, $amount, $term, $downpayment);
+			if ($result['valid']) return $result;
+		}
+		return ['valid'=>false, 'reason'=>'no_scheme', 'constraint'=>null, 'scheme'=>null];
+	}
+
+	protected function basketProductPromotions(array $product_ids, $term, $principal) {
+		$products = [];
+		foreach ($product_ids as $id) $products[] = $this->cartPromotionResult($id, $term, $principal);
+		return $products;
+	}
+
+	// Legacy getCartPromotion() API and historical regression fixtures only.
+	// Cart/Checkout eligibility uses checkBasketScheme()/resolveInitialBasketScheme().
+	// The maximum/fallback below is legacy behavior, not the new eligibility rule.
 	protected function basketPromotionResult(array $product_ids, $term, $principal) {
 		$promotion = [
 			'jet_show_button' => true,
@@ -597,8 +671,7 @@ class ModelExtensionMtJetCreditJetcredit extends Model {
 			'jet_purcent_card' => (float)$this->config->get('module_mt_jet_credit_purcent_card')
 		];
 		$evidence = $rates = [];
-		foreach ($product_ids as $product_id) {
-			$result = $this->cartPromotionResult($product_id, $term, $principal);
+		foreach ($this->basketProductPromotions($product_ids, $term, $principal) as $result) {
 			$evidence[] = $result['evidence'];
 			if (!$result['promotion']['jet_show_button']) {
 				$promotion['jet_show_button'] = false;

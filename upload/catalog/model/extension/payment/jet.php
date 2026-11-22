@@ -29,10 +29,13 @@ class ModelExtensionPaymentJet extends Model {
 				$amount = $this->currency->convert($total, $this->config->get('config_currency'), 'EUR');
 				$this->load->model('extension/mt_jet_credit/jetcredit');
 				$ids = array_column($this->cart->getProducts(), 'product_id');
-				if ($this->model_extension_mt_jet_credit_jetcredit->checkoutInitialPromotionExcluded($ids, $amount)) return [];
+				$status = !$this->model_extension_mt_jet_credit_jetcredit->checkoutInitialPromotionExcluded($ids, $amount, 'jet');
 			} catch (\Throwable $error) {
 				return [];
 			}
+		}
+		if (!$status && $snapshot_eur === null && ($this->session->data['payment_method']['code'] ?? '') === 'jet') {
+			unset($this->session->data['payment_method'], $this->session->data['payment_methods']['jet']);
 		}
 		$method_data = array();
 		if ($status) {

@@ -139,8 +139,8 @@ function cartPayload($m,$context,$down='100',$card=0,$term=12){
         'jet_lname'=>'','jet_name'=>'Test','jet_lastname'=>'User','jet_egn'=>'9001010000','jet_phone'=>'+359888888888','jet_email'=>'client@example.invalid'];
 }
 function cartWire($r,$wire){$r->get('request')->post=(new OpenCartProductRequestDouble($wire))->post;}
-function quoteCart($configure=null,$down='100',$card=0,$term=12){
-    [$c,$r]=cartEnvironment($configure);$m=$r->get('model_extension_mt_jet_credit_jetcredit');$ctx=$m->getCartContext();check((bool)$ctx,'valid native Cart context: '.$m->getCartFailureCode());
+function quoteCart($configure=null,$down='100',$card=0,$term=12,$legacy=false){
+    [$c,$r]=cartEnvironment($configure);if($legacy)$c=new CartLegacyController($r);$m=$r->get('model_extension_mt_jet_credit_jetcredit');$ctx=$m->getCartContext();check((bool)$ctx,'valid native Cart context: '.$m->getCartFailureCode());
     $wire=cartPayload($m,$ctx,$down,$card,$term);cartWire($r,$wire);$passes=nativePasses($r);$c->jet_calculate_cart();check(nativePasses($r)===$passes+1,'one native pipeline per calculation endpoint');$q=json_decode($r->get('response')->output,true);
     if(!isset($q['jet_quote_ref'])){
         try {$debug=internal($c,'cartCalculate',$m,$ctx,$r->get('request')->post);}catch(Throwable $e){$debug=$e->getMessage();}
@@ -167,8 +167,8 @@ function rejectCart($c,$r,$stale=null,$expectedPasses=1){
 
 foreach([0,1] as $card){
     [$c,$r,$wire,$q]=quoteCart(null,'100',$card);
-    check($q['jet_priceall']==='600.00' && $q['jet_total_credit_price']==='500.00' && $q['jet_vnoska']==='47.67' && $q['jet_vnoska_card']==='45.67','independent financing golden');
-    $legacy=new CartLegacyController($r);CartFinancialMailer::$messages=[];$legacy->jet_send_cart();
+    check($q['jet_priceall']==='600.00' && $q['jet_total_credit_price']==='500.00' && $q['jet_vnoska'.($card?'_card':'')]===($card?'45.67':'47.67'),'selected channel financing golden');
+    [$legacy,$r]=quoteCart(null,'100',$card,12,true);CartFinancialMailer::$messages=[];$legacy->jet_send_cart();
     check((json_decode($r->get('response')->output,true)['success']??null)==='success','HEAD golden fixture completes durable submission');
     $oldOrders=$r->get('model_checkout_order')->orders;$oldMail=CartFinancialMailer::$messages;
     check(count($oldOrders)===1,'HEAD golden fixture creates exactly one mock order');
@@ -336,15 +336,19 @@ function basketParity($ids, $rules, $recalculations) {
     $model = $r->get('model_extension_mt_jet_credit_jetcredit');
     $context = $model->getCartContext();
     check($context['product_ids'] === $ids, 'Cart keeps native product IDs in row order');
-    $cartQuotes = [];
     foreach ([0, 1] as $card) {
         $previous = [];
-        foreach ($recalculations as [$down, $term, $rates]) {
+        foreach ($recalculations as $calculation) {
+            [$down, $term, $rates] = $calculation;
+            $cartRates = $calculation[3] ?? ($rates ?? [null, null]);
             cartWire($r, cartPayload($model, $context, $down, $card, $term) + $previous);
             $c->jet_calculate_cart();
             $quote = json_decode($r->get('response')->output, true);
-            check(($quote['success'] === 'success') === ($rates !== null), 'Cart promotion availability for method ' . json_encode([$card, $down, $term, $ids]));
-            $cartQuotes[$card][] = $quote;
+            check(($quote['success'] === 'success') === ($cartRates[$card] !== null), 'Cart independent eligibility for ' . json_encode([$card, $down, $term, $ids]));
+            if ($cartRates[$card] !== null) {
+                $expected = number_format(((float)$context['amount'] - (float)$down) / $term * (1 + $term * $cartRates[$card] / 100), 2, '.', '');
+                check($quote['jet_vnoska'.($card?'_card':'')] === $expected, 'Cart selected channel financial golden');
+            }
             if (isset($quote['jet_quote_ref'])) {
                 $previous = ['jet_previous_quote' => $quote['jet_quote_ref'],
                     'jet_cart_lineage' => $quote['jet_cart_lineage'], 'jet_intent_id' => $quote['jet_intent_id']];
@@ -357,20 +361,18 @@ function basketParity($ids, $rules, $recalculations) {
         $r->get('model_checkout_order')->code = $code;
         $snapshot = $model->getCheckoutSnapshot($code);
         check($snapshot && array_map('strval', $snapshot['product_ids']) === $ids, 'Checkout keeps native product IDs in row order');
-        foreach ($recalculations as $index => [$down, $term, $rates]) {
+        foreach ($recalculations as $calculation) {
+            [$down, $term, $rates] = $calculation;
+            $expectedRates = $calculation[3] ?? ($rates ?? [null, null]);
             cartWire($r, ['jet_checkout_context' => $code, 'jet_priceall' => $context['amount'],
                 'jet_parva' => $down, 'jet_vnoski' => (string)$term]);
             $c->jet_calculate_cart();
             $quote = json_decode($r->get('response')->output, true);
-            check(($quote['success'] === 'success') === ($rates !== null), 'Checkout promotion availability for ' . $code);
-            if ($rates === null) continue;
+            check(($quote['success'] === 'success') === ($expectedRates[$card] !== null), 'Checkout independent eligibility for ' . $code);
+            if ($expectedRates[$card] === null) continue;
             $principal = (float)$context['amount'] - (float)$down;
-            foreach (['', '_card'] as $method => $suffix) {
-                $expected = number_format($principal / $term * (1 + $term * $rates[$method] / 100), 2, '.', '');
-                $field = 'jet_vnoska' . $suffix;
-                check($quote[$field] === $expected && $cartQuotes[$card][$index][$field] === $expected,
-                    'Cart and Checkout installment matches expected rate for ' . $code . $suffix);
-            }
+            $expected = number_format($principal / $term * (1 + $term * $expectedRates[$card] / 100), 2, '.', '');
+            check($quote['jet_vnoska'.($card ? '_card' : '')] === $expected, 'Checkout and Cart use the same eligibility and financial formula');
         }
     }
 }
@@ -378,34 +380,36 @@ $a = basketRule('1', '0.50');
 $b = basketRule('2', '0.99', 2);
 $excluded = basketRule('1', '-1');
 foreach ([
-    [['1'], [], [1.20, 0.80]],
-    [['1'], [$a], [0.50, 0.50]],
-    [['1'], [$excluded], null],
-    [['1', '2'], [$a, basketRule('2', '0.5', 2)], [0.50, 0.50]],
-    [['1', '2'], [$a, $b], [0.99, 0.99]],
-    [['1', '2', '3'], [basketRule('1', '0.00'), basketRule('2', '0.50', 2), basketRule('3', '1.20', 3)], [1.20, 1.20]],
-    [['1', '2'], [$a], [1.20, 0.80]],
-    [['1', '2'], [], [1.20, 0.80]],
-    [['1', '2'], [$excluded, $b], null],
-    [['1'], [basketRule('*', '-1', 1), basketRule('1', '0.50', 2)], [0.50, 0.50]],
-    [['1', '2'], [basketRule('*', '-1', 1), basketRule('1', '0.50', 2)], null],
-    [['1'], [basketRule('1', '0.50', 1), basketRule('1', '-1', 2)], [0.50, 0.50]],
-    [['2', '1'], [$excluded], null],
-    [['1', '2'], [basketRule('*', '0.25', 1), basketRule('1', '0.50', 2), basketRule('1', '0.99', 3)], [0.50, 0.50]],
-    [['1', '2'], [basketRule('*', '0.25', 1), basketRule('1', '0.99', 2, '12', 0, '2026-05-31')], [0.25, 0.25]],
-    [['1', '2', '1'], [$a, $b], [0.99, 0.99]],
-] as [$ids, $rules, $rates]) {
-    basketParity($ids, $rules, [['100', 12, $rates]]);
+    [['1'], [], [1.20, 0.80], [1.20, 0.80]],
+    [['1'], [$a], [0.50, 0.50], [0.50, 0.50]],
+    [['1'], [$excluded], null, [null, null]],
+    [['1', '2'], [$a, basketRule('2', '0.5', 2)], [0.50, 0.50], [0.50, 0.50]],
+    [['1', '2'], [$a, $b], [0.99, 0.99], [null, null]],
+    [['1', '2', '3'], [basketRule('1', '0.00'), basketRule('2', '0.50', 2), basketRule('3', '1.20', 3)], [1.20, 1.20], [null, null]],
+    [['1', '2'], [$a], [1.20, 0.80], [null, null]],
+    [['1', '2'], [basketRule('1', '1.20')], [1.20, 0.80], [1.20, null]],
+    [['1', '2'], [basketRule('1', '0.80')], [1.20, 0.80], [null, 0.80]],
+    [['1', '2'], [], [1.20, 0.80], [1.20, 0.80]],
+    [['1', '2'], [$excluded, $b], null, [null, null]],
+    [['1'], [basketRule('*', '-1', 1), basketRule('1', '0.50', 2)], [0.50, 0.50], [0.50, 0.50]],
+    [['1', '2'], [basketRule('*', '-1', 1), basketRule('1', '0.50', 2)], null, [null, null]],
+    [['1'], [basketRule('1', '0.50', 1), basketRule('1', '-1', 2)], [0.50, 0.50], [0.50, 0.50]],
+    [['2', '1'], [$excluded], null, [null, null]],
+    [['1', '2'], [basketRule('*', '0.25', 1), basketRule('1', '0.50', 2), basketRule('1', '0.99', 3)], [0.50, 0.50], [null, null]],
+    [['1', '2'], [basketRule('*', '0.25', 1), basketRule('1', '0.99', 2, '12', 0, '2026-05-31')], [0.25, 0.25], [0.25, 0.25]],
+    [['1', '2', '1'], [$a, $b], [0.99, 0.99], [null, null]],
+] as [$ids, $rules, $rates, $cartRates]) {
+    basketParity($ids, $rules, [['100', 12, $rates, $cartRates]]);
 }
 basketParity(['1', '2'], [basketRule('1', '0.50', 1, '12', 1100), $b], [
-    ['100', 12, [0.99, 0.99]],
-    ['101', 12, [1.20, 0.80]],
+    ['100', 12, [0.99, 0.99], [null, null]],
+    ['101', 12, [1.20, 0.80], [null, null]],
     ['100', 9, [1.20, 0.80]],
-    ['100', 12, [0.99, 0.99]],
+    ['100', 12, [0.99, 0.99], [null, null]],
 ]);
 
-// An edit to the non-winning rule preserves the result but invalidates the quote.
-[$c, $r] = quoteCart(basketCart(['1', '2'], [$a, $b]));
+// An edit to an equal-rate rule preserves the result but invalidates the quote.
+[$c, $r] = quoteCart(basketCart(['1', '2'], [$a, basketRule('2', '0.50', 2)]));
 $model = $r->get('model_extension_mt_jet_credit_jetcredit');
 $before = $model->getCartPromotion(['1', '2'], 12, 1100);
 $r->get('db')->promotionRules[0]['jet_product_price'] = 100;

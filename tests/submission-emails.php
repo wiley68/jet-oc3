@@ -24,8 +24,8 @@ class Promo extends ModelExtensionMtJetCreditJetcredit {
  function getPromo(...$args) {
   return ['jet_show_button' => $this->show, 'jet_purcent' => $this->normal, 'jet_purcent_card' => $this->card];
  }
- protected function basketPromotionResult(array $ids, $term, $principal) {
-  return ['promotion' => $this->getPromo(), 'evidence' => []];
+ protected function basketProductPromotions(array $ids, $term, $principal) {
+  return array_fill(0, count($ids), ['promotion'=>$this->getPromo(), 'evidence'=>[]]);
  }
  function getJetWideButtonInlineStyle($v) { return ''; }
 }

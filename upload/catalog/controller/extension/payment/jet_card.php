@@ -14,16 +14,22 @@ class ControllerExtensionPaymentJetCard extends Controller
 	public function index()
 	{
 		if (($this->session->data['currency'] ?? '') !== 'EUR') {
+			if (($this->session->data['payment_method']['code'] ?? '') === 'jet_card') unset($this->session->data['payment_method'], $this->session->data['payment_methods']['jet_card']);
 			return '';
 		}
 		$this->load->language('extension/payment/jet_card');
-		$data['JET_VERSION'] = '2.0.3';
+		$data['JET_VERSION'] = '2.0.4';
 
 		$this->load->model('extension/mt_jet_credit/jetcredit');
 		try {
 			$snapshot = $this->model_extension_mt_jet_credit_jetcredit->getCheckoutSnapshot('jet_card');
-			if ($snapshot && $this->model_extension_mt_jet_credit_jetcredit->checkoutInitialPromotionExcluded($snapshot['product_ids'], $snapshot['amount'])) {
-				unset($this->session->data['payment_method'], $this->session->data['payment_methods']['jet'], $this->session->data['payment_methods']['jet_card']);
+			$initial = $snapshot ? $this->model_extension_mt_jet_credit_jetcredit->resolveInitialBasketScheme($snapshot['product_ids'], 'jet_card', $snapshot['amount'], $this->config->get('module_mt_jet_credit_vnoski'), 0) : null;
+			if (!$snapshot) {
+				if (($this->session->data['payment_method']['code'] ?? '') === 'jet_card') unset($this->session->data['payment_method'], $this->session->data['payment_methods']['jet_card']);
+				return '';
+			}
+			if (!$initial['valid']) {
+				unset($this->session->data['payment_method'], $this->session->data['payment_methods']['jet_card']);
 				$checkout = htmlspecialchars($this->url->link('checkout/checkout', '', true), ENT_QUOTES, 'UTF-8', false);
 				return '<p>Финансирането за тази поръчка не е налично. <a href="' . $checkout . '">Изберете друг начин на плащане.</a></p>';
 			}
@@ -37,21 +43,12 @@ class ControllerExtensionPaymentJetCard extends Controller
 		$data['jet_card_status'] = false;
 		$data['jet_card_price'] = $jet_card_price;
 		$data['jet_card_minstojnost'] = $jet_card_minstojnost;
-		$data['jet_card_vnoski'] = (int)$this->config->get('module_mt_jet_credit_vnoski');
+		$data['jet_card_vnoski'] = $initial['scheme']['term'];
 
 
 
 		$jet_card_sign = 'евро';
 		$jet_card_sign_second = '';
-		$jet_card_min_250 = 125.00;
-
-		$jet_card_vnoski_default = (int)$this->config->get('module_mt_jet_credit_vnoski');
-		if ($jet_card_price < $jet_card_min_250) {
-			$jet_card_vnoski = '9';
-		} else {
-			$jet_card_vnoski = $jet_card_vnoski_default;
-		}
-
 		$data['jet_card_products'] = $snapshot['products_key'];
 		$data['jet_card_products_qt'] = $snapshot['products_qt'];
 		$data['jet_card_products_pr'] = $snapshot['products_pr'];
@@ -287,6 +284,7 @@ class ControllerExtensionPaymentJetCard extends Controller
 			} catch (\Throwable $error) { $this->submissionFailed($execution, $json); }
 		} else {
 			$json['jet_quote_invalid'] = true;
+			$json['jet_scheme_invalid'] = true;
 		}
 		$this->response->addHeader('Content-Type: application/json');
 		$this->response->setOutput(json_encode($json));

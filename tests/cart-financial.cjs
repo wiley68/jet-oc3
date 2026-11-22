@@ -5,25 +5,24 @@ const source = fs.readFileSync('upload/catalog/view/theme/default/template/exten
 const css = fs.readFileSync('upload/catalog/view/theme/default/template/extension/mt_jet_credit/creditjet_cart.css','utf8');
 let checks=0;
 const check=(value,label)=>{checks++;if(!value)throw Error(label);};
-run({},(environment,quote)=>{
+run({},(environment,quote,openCart)=>{
+ const create=()=>openCart(environment(source,false,css));
  const offer=(ref='a',extra={})=>({...quote(),jet_quote_ref:ref.repeat(48),...extra});
  const prepare=()=>{
-  const e=environment(source,false,css);e.requests[0].resolve(offer());
+  const e=create();e.requests[0].resolve(offer());
   for(const [k,v] of Object.entries({jet_name:'Test',jet_lastname:'User',jet_egn:'9001010000',jet_phone:'+359888888888',jet_email:'test@example.invalid'}))e.get('#'+k).val(v);
   return e;
  };
  {
-  const e = environment(source, false, css);
-  e.requests[0].resolve(offer());
+  const e = create();
   check(e.get('#jet-product-button-container').visible, 'eligible preview displays entry buttons');
-  e.trigger('#btn_jet', 'click');
   check(!e.get('#jet-product-popup-container').visible, 'opening waits for an authoritative calculation');
-  e.requests.at(-1).resolve({success:'unsuccess',jet_promotion_excluded:true});
-  check(!e.get('#jet-product-popup-container').visible && !e.get('#jet-product-button-container').visible,
-   'excluded Cart hides both entry buttons and cannot open an empty popup');
+  e.requests.at(-1).resolve({success:'unsuccess',jet_scheme_invalid:true});
+  check(e.get('#jet-product-popup-container').visible && e.get('#jet-product-button-container').visible,
+   'invalid exact Cart scheme leaves popup and valid entry buttons available');
   e.get('#jet_vnoski').val('9');e.trigger('#jet_vnoski', 'change');
   e.requests.at(-1).resolve(offer());
-  check(e.get('#jet-product-button-container').visible, 'eligible context restores Cart entry buttons');
+  check(!e.get('#jet_alert_box').length, 'valid exact scheme clears refusal');
  }
  const sends=e=>e.requests.filter(r=>r.config.url.endsWith('/jet_send_cart'));
  for(const [raw,canonical] of [['12.345','12.35'],['1.005','1.00'],['2.675','2.67'],['0.125','0.13']]){
@@ -37,7 +36,7 @@ run({},(environment,quote)=>{
   const e=prepare();e.get('#'+field).val('changed');e.trigger('#buy2_jetcredit','click');check(!sends(e).length,'changed row transport blocks submission '+field);
  }
  for(const extra of [{jet_quote_ref:''},{jet_quote_ref:'x'},{jet_cart_lineage:''},{jet_show_button:false}]){
-  const e=environment(source,false,css);e.requests[0].resolve(offer('a',extra));e.trigger('#buy2_jetcredit','click');check(!sends(e).length,'unconfirmed quote blocked');
+  const e=create();e.requests[0].resolve(offer('a',extra));e.trigger('#buy2_jetcredit','click');check(!sends(e).length,'unconfirmed quote blocked');
  }
  {
   const e=prepare();e.get('#jet_parva').val('10');e.trigger('#jet_parva','input');e.tick(400);const old=e.requests.at(-1);

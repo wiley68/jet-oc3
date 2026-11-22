@@ -78,7 +78,7 @@ $checkoutFinancialTests = function () {
             ['order_product_id'=>2,'product_id'=>2,'name'=>'Second','quantity'=>1,'price'=>250,'tax'=>50]
         ];
         $db = new class extends DB {
-            public $rate = '0.99';
+            public $rate = '0.50';
             public function query($sql) {
                 if (strpos($sql, 'FROM oc_jet_kop') === false) return parent::query($sql);
                 $this->queries[] = $sql;
@@ -107,7 +107,7 @@ $checkoutFinancialTests = function () {
         $calc->jet_calculate_cart(); $quote = json_decode($calc->response->output, true);
         $assert($quote['success'] === 'success', 'eligible exact term calculates');
         $assert(Trace::$events === ['read_order'], 'Checkout resolves the persisted order once per search');
-        $assert($quote['jet_vnoska'] === $quote['jet_vnoska_card'] && $quote['jet_vnoska'] === '88.28', 'both channels use highest promotional rate of selected term');
+        $assert($quote['jet_vnoska'.($code === 'jet_card' ? '_card' : '')] === '85.83', 'selected channel uses the common effective promotional rate');
         foreach (['jet', 'jet_card'] as $listedCode) {
             $payment = $c->{'model_extension_payment_' . $listedCode};
             $payment->model_extension_mt_jet_credit_jetcredit = $model;
@@ -115,7 +115,7 @@ $checkoutFinancialTests = function () {
                 public function getProducts() { return [['product_id'=>1], ['product_id'=>2]]; }
             };
             $c->config->values['module_mt_jet_credit_vnoski'] = 12;
-            $assert($payment->getMethod(['country_id'=>1,'zone_id'=>1], 600) === [], 'native listing omits the excluded initial term');
+            $assert($payment->getMethod(['country_id'=>1,'zone_id'=>1], 600)['code'] === $listedCode, 'native listing finds another term after initial exclusion');
             $c->config->values['module_mt_jet_credit_vnoski'] = 6;
             $assert($payment->getMethod(['country_id'=>1,'zone_id'=>1], 600)['code'] === $listedCode, 'fresh listing restores eligible method');
             $c->config->values['module_mt_jet_credit_vnoski'] = 30;
@@ -133,15 +133,16 @@ $checkoutFinancialTests = function () {
         if ($ruleChanged === 'initial') {
             $c->session->data['payment_methods'] = ['jet'=>[], 'jet_card'=>[], 'cod'=>[]];
             $view = $c->index();
-            $assert(is_string($view) && strpos($view, 'checkout/checkout') !== false
-                && !isset($c->session->data['payment_method']) && array_keys($c->session->data['payment_methods']) === ['cod'],
-                'stale saved selection returns to Checkout with both financing methods removed from the cache');
+            $assert(is_array($view) && $view[$code.'_vnoski'] === 6
+                && $c->session->data['payment_method']['code'] === $code && array_keys($c->session->data['payment_methods']) === ['jet', 'jet_card', 'cod'],
+                'changed initial configuration finds a valid scheme without removing either method');
         }
         $reset(); $c->confirm();
         $result = json_decode($c->response->output, true);
-        $assert(($result['success'] === 'success') === !$ruleChanged, 'real Checkout confirmation rechecks product promotions');
-        $assert(($result['jet_quote_invalid'] ?? false) === ($ruleChanged !== null), 'stale multi-product quote receives a business rejection marker');
-        $assert(count(SubmissionTestMailer::$attempts) === ($ruleChanged ? 0 : 3) && count($c->model_checkout_order->histories) === ($ruleChanged ? 0 : 1),
+        $rejected = $ruleChanged === 'winning';
+        $assert(($result['success'] === 'success') === !$rejected, 'real Checkout confirmation rechecks the exact selected scheme');
+        $assert(($result['jet_quote_invalid'] ?? false) === $rejected, 'invalid multi-product quote receives a business rejection marker');
+        $assert(count(SubmissionTestMailer::$attempts) === ($rejected ? 0 : 3) && count($c->model_checkout_order->histories) === ($rejected ? 0 : 1),
             'only accepted Checkout winner reaches existing side effects');
 
     }
@@ -230,7 +231,11 @@ $checkoutFinancialTests = function () {
             $input = [];
             foreach ($c->request->post as $key => $value) $input['jet_' . substr($key, strlen($code) + 1)] = $value;
             $snapshot = $c->model_extension_mt_jet_credit_jetcredit->getCheckoutSnapshot($code);
-            $assert($c->model_extension_mt_jet_credit_jetcredit->getCheckoutQuote($snapshot, $input) == $quote, 'complete financial response matches committed calculator golden');
+            foreach (['vnoska', 'vnoska_second', 'gpr', 'glp', 'obshto', 'obshto_second'] as $field) {
+                $parts = explode('_', $field, 2);
+                unset($quote['jet_'.$parts[0].($code === 'jet' ? '_card' : '').(isset($parts[1]) ? '_'.$parts[1] : '')]);
+            }
+            $assert($c->model_extension_mt_jet_credit_jetcredit->getCheckoutQuote($snapshot, $input) == $quote, 'chosen channel complete financial response matches committed calculator golden');
             $old = setup($code === 'jet' ? 'OldJet' : 'OldCard', $base);
             $old->request->post = $c->request->post; $old->session->data['payment_method']['code'] = $code;
             if (trim($down) === '') $old->request->post[$code . '_parva'] = '0';
@@ -292,6 +297,8 @@ $checkoutFinancialTests = function () {
         $c->currency->rates['EUR'] = 0.4; $c->config->values['module_mt_jet_credit_price'] = 450;
         $model = $c->{'model_extension_payment_' . $code};
         $assert($model->getMethod(['country_id' => 1, 'zone_id' => 1], 1000) === [], 'two-argument native availability still uses live rate');
+        $assert(!isset($c->session->data['payment_method']), 'unavailable native listing invalidates its own selection');
+        $c->session->data['payment_method'] = ['code'=>$code];
         $assert($model->getMethod(['country_id' => 1, 'zone_id' => 1], 1000, 500)['code'] === $code, 'snapshot-aware existing minimum');
         $reset(); $c->confirm(); $assert(count(SubmissionTestMailer::$attempts) === 3, 'snapshot eligibility used at confirm');
         foreach (['', 'bank@example.invalid'] as $bank) foreach (['false', 'throw'] as $failure) {
@@ -327,7 +334,11 @@ $checkoutFinancialTests = function () {
         $old=setup('OldCalc'); $old->request->post=$regular->request->post; $old->jet_calculate_cart();
         $regular->jet_calculate_cart(); $quote=json_decode($regular->response->output,true);
         $assert(isset($quote['jet_quote_ref']) && $quote['jet_priceall']==='600.00', 'regular Cart quote ignores persisted Checkout amount');
-        foreach (json_decode($old->response->output,true) as $key=>$value) $assert($quote[$key]===$value,'regular Cart original financial field '.$key);
+        foreach (json_decode($old->response->output,true) as $key=>$value) {
+            // Cart now returns only the chosen channel; Checkout still returns both.
+            if (strpos($key, '_card') !== false) continue;
+            $assert($quote[$key]===$value,'regular Cart original financial field '.$key);
+        }
     }
     echo "PASS $checks Checkout security/financial golden checks; original calculator and email golden references\n";
 };

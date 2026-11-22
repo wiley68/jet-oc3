@@ -22,6 +22,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    text(value) { if (value === undefined) return this.content; this.content = value; return this; }
    ready(fn) { fn($); return this; }
    first() { return this; } eq() { return this; }
+   closest(selector) { return get(this.key + ' closest ' + selector); }
    find(selector) {
     if (selector === '.jet_offer_loader') return { length: loaderCount };
     const thisSelector = this.key;
@@ -36,22 +37,22 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
    on(names, selector, fn) { if (typeof selector === 'function') fn = selector; for (const name of names.split(' ')) (this.events[name] ||= []).push(fn); return this; }
    off(namespace) { for (const name of Object.keys(this.events)) if (name.includes(namespace)) delete this.events[name]; return this; }
    append(child) { if (child instanceof Element) { this.children.push(child); if (child.attributes.id) elements.set('#' + child.attributes.id, child); } return this; }
-   appendTo(parent) { this.parentNode = typeof parent === 'string' ? get(parent) : parent; if (this.attributes.class === 'jet_offer_loader') { loaderCount++; loaderNodes.push(this); } return this; }
+   appendTo(parent) { if (this.attributes.id) elements.set('#' + this.attributes.id, this); this.parentNode = typeof parent === 'string' ? get(parent) : parent; if (this.attributes.class === 'jet_offer_loader') { loaderCount++; loaderNodes.push(this); } return this; }
    prependTo() { return this; } remove() { this.length = 0; return this; } parent() { return this; } after(markup) { (this.afterMarkup ||= []).push(markup); return this; }
    toggleClass(name, enabled) { enabled ? this.classes.add(name) : this.classes.delete(name); return this; }
    addClass(name) { this.classes.add(name); return this; }
    removeClass(name) { this.classes.delete(name); return this; }
    hasClass(name) { return this.classes.has(name); }
-   attr(name, value) { if (value === undefined) return this.attributes[name]; this.attributes[name] = value; return this; }
+   attr(name, value) { if (typeof name === 'object') { Object.assign(this.attributes, name); return this; } if (value === undefined) return this.attributes[name]; this.attributes[name] = value; return this; }
    button() { return this; }
    removeAttr(name) { delete this.attributes[name]; return this; }
    prop(name, value) { if (value === undefined) return this.props[name]; this.props[name] = value; return this; }
    contains(target) { return this === target || this.children.some((child) => child.contains(target)); }
    querySelector() { return this.children.find((child) => child.key.startsWith('<button')); }
-   focus() { this.focused = true; } blur() { this.focused = false; } css() { return this; } show() { this.visible = true; return this; } hide() { this.visible = false; return this; }
+   focus() { if (document.activeElement) document.activeElement.focused = false; document.activeElement = this; this.focused = true; dispatch(this, 'focusin'); } blur() { this.focused = false; } css(name, value) { const style = this.attributes.css ||= {}; if (typeof name === 'object') Object.assign(style, name); else if (value !== undefined) style[name] = value; else return style[name]; return this; } show() { this.visible = true; return this; } hide() { this.visible = false; return this; }
    is(selector) { return selector === ':checked' && !!this.props.checked; } click() { dispatch(this, 'click'); return this; }
   }
-  const hasMarkup = key => !markupIds || !/^#[\w-]+$/.test(key) || markupIds.has(key);
+  const hasMarkup = key => elements.has(key) || !markupIds || !/^#[\w-]+$/.test(key) || markupIds.has(key);
   const emptySelection = { length: 0, val() {}, text() {}, on() {}, remove() {} };
   const get = (key) => { if (!hasMarkup(key)) return emptySelection; if (!elements.has(key)) elements.set(key, new Element(key)); return elements.get(key); };
   function $(key, attrs) {
@@ -81,16 +82,19 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
   if (hasMarkup('#jet_alert_box')) {
    const placeholder = get('#jet_alert_box'); placeholder.attributes.id = 'jet_alert_box'; placeholder.length = 1;
   }
-  function trigger(key, name) {
+  function trigger(key, name, details = {}) {
    if (!hasMarkup(key)) throw new Error('No element in production markup: ' + key);
-   return dispatch(get(key), name);
+   return dispatch(get(key), name, details);
   }
-  function dispatch(element, name) {
+  function dispatch(element, name, details = {}) {
    element.id = element.key.slice(1);
-   const event = { target: element, cancelable: true, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
+   const event = { ...details, target: element, cancelable: true, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
    for (const fn of captureEvents[name] || []) { fn(event); if (event.stopped) return event; }
    for (const [registered, handlers] of Object.entries(element.events)) if (registered.split('.')[0] === name) for (const fn of handlers) fn.call(element, event);
-   for (const fn of documentEvents[name] || []) fn(event);
+   if (!event.stopped && element !== get('__document') && ['keydown', 'focusin'].includes(name)) {
+    for (const [registered, handlers] of Object.entries(get('__document').events)) if (registered.split('.')[0] === name) for (const fn of handlers) fn(event);
+   }
+   for (const fn of documentEvents[name] || []) if (!event.stopped) fn(event);
    return event;
   }
   function tick(ms) {
@@ -119,13 +123,26 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
     animation: cssProperty('#jet-product-popup-container .jet_offer_loader::after', 'animation'),
     text: loader?.children[0]?.text() };
   };
+  document.body = get('body');
+  document.activeElement = document.body;
   new Function('jQuery', 'document', 'FormData', 'setTimeout', 'clearTimeout', 'console', 'window', 'alert', 'location', source)($, document, Data, schedule, clear, { error() {}, log() {} }, { addEventListener: (name, fn) => (captureEvents[name] ||= []).push(fn), location: { origin: 'http://test.invalid', href: '' } }, (message) => alerts.push(message), {});
   return { requests, trigger, tick, get, faults, alerts, loaderLayout,
    replacePanel() { elements.delete('#jet_checkout_offer'); elements.delete('#button-confirm'); },
    switchPayment(value) { paymentMethod = value; for (const fn of get('__document').events['change.jetCheckoutSelection'] || []) fn.call({ value }); }, changeOption: () => optionEvents.change?.(), inputOption: () => optionEvents.input?.(), loaderCount: () => loaderCount, loading: () => get('#jet-product-popup-container').classes.has('jet_offer_loading') };
  }
  const quote = (value = '50.00') => ({ success: 'success', __mockQuote: true, jet_intent_id: 'c'.repeat(48), jet_quote_ref: 'a'.repeat(48), jet_cart_lineage: 'b'.repeat(48), jet_parva: '0.00', jet_show_button: true, jet_vnoska: value, jet_vnoska_second: '0', jet_priceall: '600', jet_priceall_second: '600', jet_total_credit_price: '600', jet_total_credit_price_second: '600', jet_gpr: '10', jet_glp: '10', jet_obshto: '700', jet_obshto_second: '700' });
- if (productTests) return productTests(environment, quote);
+ // Existing popup tests start after discovery; keep the discovery request explicit
+ // in the Cart eligibility suite and out of their post-opening request counts.
+ const openCart = (e) => {
+  const request = e.requests.shift();
+  request.resolve({ success: 'success', jet_cart_schemes: {
+   jet: { jet_card: 0, jet_vnoski: 12, jet_priceall: Number(e.get('#jet_price').val()).toFixed(2), jet_vnoska: '50.00', jet_vnoska_second: '0.00' },
+   jet_card: false
+  } });
+  e.trigger('#btn_jet', 'click');
+  return e;
+ };
+ if (productTests) return productTests(environment, quote, openCart);
  // F02: execute the real option/quantity JavaScript and PHP calculator, never a submission transport.
  const { execFileSync } = require('child_process');
  const phpCache = new Map();
@@ -228,6 +245,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
  for (const page of ['products', 'cart']) {
   const source = sources[page];
   let e = environment(source);
+  if (page === 'cart') openCart(e);
   check(e.requests.length === 1 && e.loading(), page + ': initial request and loader');
   e.requests[0].resolve(quote());
   check(!e.loading() && e.get('#jet_vnoska_popup').text() === '50.00', 'success releases loader');
@@ -271,6 +289,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
   // Compare legacy invalid/empty behavior against HEAD rather than introducing rules.
   for (const value of (page === 'cart' ? ['invalid', '700', '-10'] : ['', 'invalid', '700', '-10'])) {
    const current = environment(source), baseline = environment(sources['baseline_' + page]);
+   if (page === 'cart') openCart(current);
    current.requests[0].resolve(quote()); baseline.requests[0].resolve(quote());
    for (const env of [current, baseline]) { env.get('#jet_parva').val(value); env.trigger('#btn_preizcisli', 'click'); }
    if (page === 'products') { check(current.requests.length === (value.trim() === '' ? 2 : 1), 'Product blank normalization/invalid negative rejection'); continue; }
@@ -362,6 +381,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
  // Cart empty values are numeric zero, while editing remains uninterrupted.
  for (const empty of ['', '   ', '\t\r\n']) {
   const cart = environment(sources.cart);
+  openCart(cart);
   cart.requests[0].resolve(quote());
   cart.get('#jet_parva').val('100'); cart.trigger('#jet_parva', 'input'); cart.tick(400);
   const prior = cart.requests.at(-1);
@@ -380,7 +400,7 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
   check(cart.requests.at(-1).config.data.values.jet_parva === '0.00', 'legitimate zero remains valid');
  }
  for (const empty of ['', '  ']) {
-  const cart = environment(sources.cart); cart.requests[0].resolve(quote());
+  const cart = environment(sources.cart); openCart(cart); cart.requests[0].resolve(quote());
   cart.get('#jet_parva').val('100'); cart.trigger('#jet_parva', 'input'); cart.tick(400); cart.requests.at(-1).resolve(quote());
   cart.get('#jet_parva').val(empty); cart.trigger('#jet_parva', 'input');
   cart.trigger('#jet_parva', 'blur'); cart.trigger('#jet_parva', 'change'); cart.tick(400);
@@ -389,7 +409,9 @@ module.exports = function runCalculatorRegression(sources, productTests = null) 
  // Step 2: one pending request, captured interaction lock and existing information result.
  for (const page of ['products', 'cart']) {
   const prepare = () => {
-   const e = environment(sources[page], false, sources['css_' + page]); e.requests[0].resolve(quote());
+   const e = environment(sources[page], false, sources['css_' + page]);
+   if (page === 'cart') openCart(e);
+   e.requests[0].resolve(quote());
    e.get('#jet-product-popup-container').show(); e.get('#jet_step_1').hide(); e.get('#jet_step_2').show();
    for (const [key, value] of Object.entries({ jet_name: 'Test', jet_lastname: 'User', jet_egn: '9001010000', jet_phone: '+359888888888', jet_email: 'test@example.invalid' })) e.get('#' + key).val(value);
    return e;

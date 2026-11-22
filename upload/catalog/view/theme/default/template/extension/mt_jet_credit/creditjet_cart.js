@@ -11,6 +11,8 @@ jQuery(document).ready(function($) {
 	let jetIntentQueued = false;
 	let jetFormGeneration = 0;
 	let jetCartLineage = '';
+	const jetInitialSchemes = [null, null];
+	const jetSchemeMessage = 'За избраните условия продуктите в количката не могат да бъдат закупени заедно на изплащане. Моля, изберете друг срок или условия.\n\nАко желаете, можете да закупите на изплащане всеки продукт поотделно.';
 	const jetStaleMessage = 'Условията на количката са променени. Заявката за финансиране не е изпратена. Моля, обновете количката и направете ново изчисление на финансирането.';
 	const jetCanonicalDown = () => {
 		const raw = String($('#jet_parva').val() || '').trim();
@@ -25,6 +27,43 @@ jQuery(document).ready(function($) {
 		jetActiveQuote = null;
 		$('#buy_jetcredit').prop('disabled', true);
 		$('#buy2_jetcredit').prop('disabled', true);
+	};
+	let jetSchemeNoticeState = null;
+	let jetCloseSchemeDialog = null;
+	const previousInformation = document.getElementById('jet_alert_box');
+	if (previousInformation && typeof previousInformation.jetCloseSchemeDialog === 'function') previousInformation.jetCloseSchemeDialog(false);
+	const jetSchemeStatus = (invalid) => {
+		const state = jetQuoteState();
+		if (invalid && jetSchemeNoticeState === state) return;
+		if (jetCloseSchemeDialog) jetCloseSchemeDialog(false);
+		if (!invalid) return;
+		jetSchemeNoticeState = state;
+		jetShowCustomAlert(jetSchemeMessage, false, true);
+	};
+	const jetClearResults = () => {
+		for (const field of ['priceall', 'total_credit_price', 'vnoska_popup', 'gpr', 'glp', 'obshto']) {
+			$('#jet_' + field).text('');
+			$('#jet_' + field + '_second').text('');
+		}
+	};
+	const jetSchemeRejected = () => {
+		jetInvalidateQuote();
+		jetClearResults();
+		if (jetOpenPending) $('#jet-product-popup-container').show();
+		jetOpenPending = false;
+		jetSchemeStatus(true);
+	};
+	const jetSetEntry = (index, scheme) => {
+		jetInitialSchemes[index] = scheme;
+		const suffix = index ? '_card' : '';
+		const button = $('#btn_jet' + suffix);
+		const table = button.closest('.jet_table_img');
+		if (scheme) {
+			button.show(); table.show();
+			$('#jet_vnoski_text' + suffix).text(scheme.jet_vnoski);
+			$('#jet_vnoska' + suffix).text(scheme['jet_vnoska' + suffix]);
+			$('#jet_vnoska' + suffix + '_second').text(scheme['jet_vnoska' + suffix + '_second']);
+		} else { button.hide(); table.hide(); }
 	};
 	const jetSubmission = { locked: false, needsReview: false, alert: null };
 	const jetSubmissionUncertain = 'Резултатът от изпращането не е потвърден. Моля, свържете се с магазина за проверка.';
@@ -85,6 +124,8 @@ jQuery(document).ready(function($) {
 		popup.toggleClass('jet_offer_loading', loading).attr('aria-busy', loading ? 'true' : 'false');
 	};
 	const jetBeginCalculation = () => {
+		jetSchemeStatus(false);
+		if (jetSchemeNoticeState !== jetQuoteState()) jetSchemeNoticeState = null;
 		jetInvalidateQuote();
 		clearTimeout(jetDownpaymentTimer);
 		jetLastDownpayment = jetDownpaymentValue();
@@ -99,6 +140,8 @@ jQuery(document).ready(function($) {
 		const value = jetDownpaymentValue();
 		if (value === jetLastDownpayment) return;
 		jetLastDownpayment = value;
+		jetSchemeStatus(false);
+		if (jetSchemeNoticeState !== jetQuoteState()) jetSchemeNoticeState = null;
 		jetInvalidateQuote();
 		++jetCalculationRevision;
 		clearTimeout(jetDownpaymentTimer);
@@ -106,20 +149,31 @@ jQuery(document).ready(function($) {
 	};
 
 	/* function */
+	const jetOpen = (selectedCard) => {
+		if (jetSubmission.locked || jetSubmission.needsReview || !jetInitialSchemes[selectedCard]) return;
+		if (jetOpenPending && card === selectedCard) return;
+		++jetFormGeneration;
+		jetIntentId = ''; jetPreviousQuote = ''; jetCartLineage = '';
+		jetIntentPending = false; jetIntentQueued = false;
+		jetSchemeNoticeState = null;
+		card = selectedCard;
+		$('#jet_vnoski').val(jetInitialSchemes[card].jet_vnoski);
+		$('#jet_parva').val(0);
+		$('#jet_step_1').show(); $('#jet_step_2').hide();
+		jetClearResults(); jetSchemeStatus(false);
+		jetOpenPending = true;
+		jetCalculate();
+	};
 	const jetLoad = () => {
 		if ($('#btn_jet').length !== 0) {
 			$('#jet_step_1').css('display', 'block');
 			$('#jet_step_2').css('display', 'none');
 			$('#btn_jet').on('click', function(event) {
-				card = 0;
-				jetOpenPending = true;
-				jetCalculate();
+				jetOpen(0);
 			});
 			if ($('#btn_jet_card').length !== 0) {
 				$('#btn_jet_card').on('click', function(event) {
-					card = 1;
-					jetOpenPending = true;
-					jetCalculate();
+					jetOpen(1);
 				});
 			}
 			$('#back_jetcredit').on('click', function(event) {
@@ -168,11 +222,12 @@ jQuery(document).ready(function($) {
 					$(this).removeClass('error');
 				}
 			});
-			jetCalculate();
+			jetSetEntry(0, null); jetSetEntry(1, null);
+			jetCalculate(true);
 		}
 	}
 
-	const jetCalculate = () => {
+	const jetCalculate = (discovery = false) => {
 		if (jetSubmission.locked) return;
 		if (!jetIntentId && jetIntentPending) { jetIntentQueued = true; jetInvalidateQuote(); return; }
 		const revision = jetBeginCalculation();
@@ -190,6 +245,7 @@ jQuery(document).ready(function($) {
 		}
 		if (Number.isFinite(jetPriceall) && jetPriceall > 0 && Number.isFinite(jetDownpayment) && jetDownpayment < Number(jetPriceall.toFixed(2))) {
 			const jetFormData = new FormData();
+			if (discovery) jetFormData.append('jet_cart_discovery', '1');
 			jetFormData.append('jet_priceall', jetPriceall.toFixed(2));
 			jetFormData.append('jet_intent_id', jetIntentId);
 			jetFormData.append('jet_parva', canonicalDown);
@@ -204,7 +260,7 @@ jQuery(document).ready(function($) {
 			jetFormData.append('jet_products_qt', $('#jet_products_qt').val());
 			jetFormData.append('jet_products_pr', $('#jet_products_pr').val());
 			const formGeneration = jetFormGeneration;
-			const creatingIntent = !jetIntentId;
+			const creatingIntent = !discovery && !jetIntentId;
 			if (creatingIntent) jetIntentPending = true;
 			try {
 			$.ajax({
@@ -221,55 +277,53 @@ jQuery(document).ready(function($) {
 					if (json && json.jet_quote_invalid === true) { jetPreviousQuote = ''; jetCartLineage = ''; }
 					if (json && json.jet_cart_stale === true) { jetOpenPending = false; jetShowCustomAlert(jetStaleMessage, false); return; }
 					if (json && json.jet_submission_review === true) { jetOpenPending = false; jetSubmission.needsReview = true; jetShowCustomAlert(jetSubmissionUncertain, false); return; }
-					if (json && json.jet_promotion_excluded === true) {
-						jetOpenPending = false;
-						$('#jet-product-button-container').hide();
-						$('#jet-product-popup-container').hide();
-						return;
+					if (discovery) {
+						if (!json || json.success !== 'success' || !json.jet_cart_schemes) return;
+						for (const [index, channel] of ['jet', 'jet_card'].entries()) {
+							const scheme = json.jet_cart_schemes[channel];
+							const suffix = index ? '_card' : '';
+							const valid = scheme && Number(scheme.jet_card) === index && Number(scheme.jet_priceall) === Number(jetPriceall.toFixed(2))
+								&& [3, 6, 9, 10, 12, 15, 18, 24, 30, 36].includes(Number(scheme.jet_vnoski))
+								&& Number.isFinite(Number(scheme['jet_vnoska' + suffix])) && Number(scheme['jet_vnoska' + suffix]) >= 20;
+							jetSetEntry(index, valid && (!index || Number($('#jet_card_in').val()) === 1) ? scheme : null);
+						}
+						if (jetInitialSchemes.some(Boolean)) $('#jet-product-button-container').show();
+						else $('#jet-product-button-container').hide();
+					return;
 					}
+					if (json && (json.jet_scheme_invalid === true || json.jet_promotion_excluded === true)) { jetSchemeRejected(); return; }
 					if (json && json.success === 'success') {
-						$('#jet-product-button-container').show();
-						if (json.jet_intent_id === jetIntentId && jetIntentId && typeof json.jet_quote_ref === 'string' && /^[a-f0-9]{48}$/.test(json.jet_quote_ref)
+						const suffix = card ? '_card' : '';
+						const fields = ['vnoska', 'gpr', 'glp', 'obshto'];
+						if (!(json.jet_intent_id === jetIntentId && jetIntentId && typeof json.jet_quote_ref === 'string' && /^[a-f0-9]{48}$/.test(json.jet_quote_ref)
 							&& typeof json.jet_cart_lineage === 'string' && /^[a-f0-9]{48}$/.test(json.jet_cart_lineage) && json.jet_parva === canonicalDown
 							&& json.jet_show_button === true && Number(json.jet_vnoski) === Number($('#jet_vnoski').val()) && Number(json.jet_card) === card
-							&& Number(json.jet_priceall) === Number(jetPriceall.toFixed(2))) {
-							jetPreviousQuote = json.jet_quote_ref; jetCartLineage = json.jet_cart_lineage;
-							jetActiveQuote = { intent: jetIntentId, reference: json.jet_quote_ref, state, downpayment: canonicalDown };
+							&& Number(json.jet_priceall) === Number(jetPriceall.toFixed(2))
+							&& fields.every(field => typeof json['jet_' + field + suffix] === 'string' && json['jet_' + field + suffix] !== '' && Number.isFinite(Number(json['jet_' + field + suffix]))))) {
+							jetSchemeRejected(); return;
 						}
-						if ($('#jet_vnoska').length !== 0) $('#jet_vnoska').text(json.jet_vnoska);
-						if ($('#jet_vnoska_second').length !== 0) $('#jet_vnoska_second').text(json.jet_vnoska_second);
-						$('#jet_vnoski_text').text(parseInt($('#jet_vnoski').val()));
-						$('#jet_priceall').text(json.jet_priceall);
-						if ($('#jet_priceall_second').length !== 0) $('#jet_priceall_second').text(json.jet_priceall_second);
-						$('#jet_total_credit_price').text(json.jet_total_credit_price);
-						if ($('#jet_total_credit_price_second').length !== 0) $('#jet_total_credit_price_second').text(json.jet_total_credit_price_second);
-						$('#jet_vnoska_popup').text(json.jet_vnoska);
-						if ($('#jet_vnoska_popup_second').length !== 0) $('#jet_vnoska_popup_second').text(json.jet_vnoska_second);
-						$('#jet_gpr').text(json.jet_gpr);
-						$('#jet_glp').text(json.jet_glp);
-						$('#jet_obshto').text(json.jet_obshto);
-						if ($('#jet_obshto_second').length !== 0) $('#jet_obshto_second').text(json.jet_obshto_second);
-						if (parseInt($('#jet_card_in').val(), 10) === 1) {
-							$('#jet_vnoska_card').text(json.jet_vnoska_card);
-							$('#jet_vnoska_card_second').text(json.jet_vnoska_card_second);
-							$('#jet_vnoski_text_card').text(parseInt($('#jet_vnoski').val(), 10));
-							if (card === 1) {
-								$('#jet_vnoska_popup').text(json.jet_vnoska_card);
-								$('#jet_vnoska_popup_second').text(json.jet_vnoska_card_second);
-								$('#jet_gpr').text(json.jet_gpr_card);
-								$('#jet_glp').text(json.jet_glp_card);
-								$('#jet_obshto').text(json.jet_obshto_card);
-								$('#jet_obshto_second').text(json.jet_obshto_card_second);
-							}
+						jetPreviousQuote = json.jet_quote_ref; jetCartLineage = json.jet_cart_lineage;
+						jetActiveQuote = { intent: jetIntentId, reference: json.jet_quote_ref, state, downpayment: canonicalDown };
+						jetSchemeStatus(false);
+						jetSchemeNoticeState = null;
+						for (const field of ['priceall', 'total_credit_price']) {
+							$('#jet_' + field).text(json['jet_' + field]);
+							$('#jet_' + field + '_second').text(json['jet_' + field + '_second']);
+						}
+						for (const field of fields) {
+							const target = field === 'vnoska' ? 'vnoska_popup' : field;
+							$('#jet_' + target).text(json['jet_' + field + suffix]);
+							$('#jet_' + target + '_second').text(json['jet_' + field + suffix + '_second']);
 						}
 						if (jetOpenPending) $('#jet-product-popup-container').show();
-					}
+					} else { jetSchemeRejected(); }
+
 					jetOpenPending = false;
 				},
 				error: function(error) {
 					if (revision === jetCalculationRevision) { jetOpenPending = false; console.error('Error:', error); }
 				},
-				complete: function() { jetFinishCalculation(revision); if (creatingIntent) { jetIntentPending = false; if (jetIntentQueued) { jetIntentQueued = false; jetCalculate(false); } } if (revision === jetCalculationRevision && jetQuoteCurrent()) { changeBtnJetcredit(); changeBtnJetcreditBuy(); } }
+				complete: function() { if (formGeneration !== jetFormGeneration) return; jetFinishCalculation(revision); if (creatingIntent) { jetIntentPending = false; if (jetIntentQueued) { jetIntentQueued = false; jetCalculate(false); } } if (revision === jetCalculationRevision && jetQuoteCurrent()) { changeBtnJetcredit(); changeBtnJetcreditBuy(); } }
 			});
 			} catch (error) {
 				jetOpenPending = false;
@@ -291,21 +345,22 @@ jQuery(document).ready(function($) {
 		++jetCalculationRevision;
 		jetPopupLoading(false);
 		if (!jetSubmission.needsReview) { ++jetFormGeneration; jetIntentId = ''; jetPreviousQuote = ''; jetCartLineage = ''; jetInvalidateQuote(); }
-		$('#jet-product-popup-container').css('display', 'none');
+		$('#jet-product-popup-container').hide();
 		$('#jet_step_1').css('display', 'block');
 		$('#jet_step_2').css('display', 'none');
 		$('#uslovia').prop('checked', false);
 		$('#uslovia1').prop('checked', false);
 		$('#uslovia2').prop('checked', false);
-		const $jet_parva = $('#jet_parva');
-		if (parseFloat($('#jet_parva').val()) !== 0) {
-			$('#jet_parva').val(0);
-			jetCalculate();
-		}
+		$('#jet_parva').val(0);
+		jetSchemeStatus(false);
 		changeBtnJetcredit();
 	}
 
-	const jetShowCustomAlert = (message, exit) => {
+	const jetShowCustomAlert = (message, exit, information = false) => {
+		if (information) {
+			if (jetCloseSchemeDialog) jetCloseSchemeDialog(false);
+			$('#jet_alert_box').remove();
+		}
 		$('#jet_alert_box:empty').remove();
 		const jetAlertBox = $('<div></div>', {
 			id: 'jet_alert_box',
@@ -323,6 +378,13 @@ jQuery(document).ready(function($) {
 				textAlign: 'center'
 			}
 		});
+		const returnFocus = document.activeElement;
+		if (information) {
+			jetAlertBox.attr({ role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'jet_scheme_title',
+				'aria-describedby': 'jet_scheme_message', 'data-jet-scheme-dialog': 'true' })
+				.css({ width: '360px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxSizing: 'border-box' });
+			jetAlertBox.append($('<h3></h3>', { id: 'jet_scheme_title', text: 'Информация' }));
+		}
 		const jetMessageText = $('<p></p>', {
 			text: message,
 			css: {
@@ -330,8 +392,10 @@ jQuery(document).ready(function($) {
 				color: '#14532d'
 			}
 		});
+		if (information) jetMessageText.attr('id', 'jet_scheme_message').css('white-space', 'pre-line');
 		jetAlertBox.append(jetMessageText);
 		const jetCloseButton = $('<button></button>', {
+			type: 'button',
 			text: 'Добре',
 			css: {
 				fontFamily: '"Roboto Condensed", sans-serif',
@@ -346,6 +410,7 @@ jQuery(document).ready(function($) {
 			}
 		});
 		jetCloseButton.on('click', function() {
+			if (information) { jetCloseSchemeDialog(); return; }
 			jetAlertBox.remove();
 			if (jetSubmission.locked) jetUnlockSubmission();
 			if (exit) {
@@ -355,6 +420,37 @@ jQuery(document).ready(function($) {
 		});
 		jetAlertBox.append(jetCloseButton);
 		$('body').append(jetAlertBox);
+		if (information) {
+			let overlay = $('#jet_alert_overlay');
+			const createdOverlay = !overlay.length;
+			if (createdOverlay) overlay = $('<div>', { id: 'jet_alert_overlay', class: 'jet_alert_overlay' }).appendTo('body');
+			overlay.appendTo('body').addClass('show').css({ display: 'block', position: 'fixed', top: 0, left: 0,
+				width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 5000000 });
+			jetCloseSchemeDialog = (restoreFocus = true) => {
+				$(document).off('.jetSchemeDialog');
+				jetAlertBox.remove();
+				overlay.removeClass('show').css('display', '');
+				if (createdOverlay) overlay.remove();
+				jetCloseSchemeDialog = null;
+				if (restoreFocus) {
+					const controls = document.getElementById('jet-product-popup-container');
+					const target = returnFocus && returnFocus.isConnected !== false && controls && controls.contains(returnFocus)
+						? returnFocus : document.getElementById('jet_vnoski');
+					if (target) target.focus();
+				}
+			};
+			jetAlertBox[0].jetCloseSchemeDialog = jetCloseSchemeDialog;
+			$(document).off('.jetSchemeDialog').on('keydown.jetSchemeDialog', (event) => {
+				if (event.key === 'Escape' || event.key === 'Tab') {
+					event.preventDefault(); event.stopImmediatePropagation();
+					if (event.key === 'Escape') jetCloseSchemeDialog(); else jetCloseButton[0].focus();
+				}
+			}).on('focusin.jetSchemeDialog', (event) => {
+				if (!jetAlertBox[0].contains(event.target)) jetCloseButton[0].focus();
+			});
+			jetCloseButton[0].focus();
+		}
+
 		if (jetSubmission.locked) {
 			jetSubmission.alert = jetAlertBox[0];
 			jetSubmissionLoading(false);

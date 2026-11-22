@@ -564,74 +564,60 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 			&& (bool)$model->findCartQuote($reference);
 	}
 
-	private function cartCalculate($model, $context, $post) {
-		if (!$model->cartTransportMatches($context,$post)) { return false; }
+	private function cartCalculate($model, $context, $post, $scheme = null) {
+		if (!$model->cartTransportMatches($context,$post)) return false;
 		$submitted = $model->productNumber($post['jet_priceall'] ?? null);
 		$raw_down = $model->productNumber($post['jet_downpayment_raw'] ?? ($post['jet_parva'] ?? null),true);
 		$displayed_down = $model->productNumber($post['jet_parva'] ?? null,true);
 		$term = $model->productNumber($post['jet_vnoski'] ?? null);
 		$card = $model->productNumber($post['jet_card'] ?? null);
-		if ($submitted === null || $submitted !== (float)$context['amount'] || $raw_down === null || $raw_down < 0
-			|| !in_array($term,[3.0,6.0,9.0,10.0,12.0,15.0,18.0,24.0,30.0,36.0],true)
-			|| ($context['browser_raw'] < 401 && in_array($term,[15.0,18.0,24.0],true))
-			|| ($context['browser_raw'] < 601 && in_array($term,[30.0,36.0],true))
-			|| !in_array($card,[0.0,1.0],true) || ($card===1.0 && !$this->config->get('module_mt_jet_credit_status_card'))
-			|| $context['raw_amount'] < (float)$this->config->get('module_mt_jet_credit_price')) { return false; }
+		if ($submitted === null || $submitted !== (float)$context['amount'] || $raw_down === null || $term === null
+			|| !in_array($card,[0.0,1.0],true) || ($card===1.0 && !$this->config->get('module_mt_jet_credit_status_card'))) return false;
 		$canonical = $model->cartFixed($raw_down);
-		if ($displayed_down === null || $displayed_down !== (float)$canonical || (float)$canonical >= (float)$context['amount']) { return false; }
+		if ($displayed_down === null || $displayed_down !== (float)$canonical) return false;
+		$channel = $card === 1.0 ? 'jet_card' : 'jet';
+		if ($scheme === null) $scheme = $model->checkBasketScheme($context['product_ids'], $channel, $context['raw_amount'], $term, $raw_down);
+		if (!$scheme['valid']) return ['quote'=>null, 'promotion'=>null, 'eligible'=>false,
+			'invalid'=>true, 'excluded'=>$scheme['reason']==='excluded'];
 		$jet_priceall = (float)$context['amount']; $jet_parva = (float)$canonical; $jet_vnoski = (int)$term;
-		$json = [];
 		$jet_total_credit_price = $jet_priceall - $jet_parva;
-		$jet_purcent = (float) $this->config->get('module_mt_jet_credit_purcent');
-		$jet_purcent_card = (float)$this->config->get('module_mt_jet_credit_purcent_card');
-		$jet_show_button = true;
-		$promotion = $model->getCartPromotion($context['product_ids'], $jet_vnoski, $jet_total_credit_price);
-		$jet_promo = $promotion['promotion'];
-		if (!$jet_promo['jet_show_button']) { return ['quote'=>null,'promotion'=>$promotion['fingerprint'],'eligible'=>false,'excluded'=>true]; }
-		$jet_show_button = (bool) $jet_promo['jet_show_button'];
-		$jet_purcent = (float) $jet_promo['jet_purcent'];
-		$jet_purcent_card = (float) $jet_promo['jet_purcent_card'];
+		$jet_purcent = (float)$scheme['scheme']['percent'];
 		$jet_vnoska = (($jet_total_credit_price / $jet_vnoski) * (1 + ($jet_vnoski * $jet_purcent) / 100));
-		$jet_vnoska_card = (($jet_total_credit_price / $jet_vnoski) * (1 + ($jet_vnoski * $jet_purcent_card) / 100));
 		$jet_gprm = $this->RATE($jet_vnoski, $jet_vnoska, -1 * $jet_total_credit_price) * 12;
 		$jet_glp = ($this->RATE($jet_vnoski, $jet_vnoska, -1 * $jet_total_credit_price) * 12) * 100;
 		$jet_gpr = (pow((1 + $jet_gprm / 12), 12) - 1) * 100;
 		$jet_obshto = $jet_vnoska * $jet_vnoski;
-		$jet_gprm_card = $this->RATE($jet_vnoski, $jet_vnoska_card, -1 * $jet_total_credit_price) * 12;
-		$jet_glp_card = ($this->RATE($jet_vnoski, $jet_vnoska_card, -1 * $jet_total_credit_price) * 12) * 100;
-		$jet_gpr_card = (pow((1 + $jet_gprm_card / 12), 12) - 1) * 100;
-		$jet_obshto_card = $jet_vnoska_card * $jet_vnoski;
-		$jet_vnoska_second = 0;
-		$jet_vnoska_card_second = 0;
-		$jet_priceall_second = $jet_priceall;
-		$jet_total_credit_price_second = $jet_total_credit_price;
-		$jet_obshto_second = $jet_obshto;
-		$jet_obshto_card_second = $jet_obshto_card;
+		foreach ([$jet_vnoska,$jet_gpr,$jet_glp,$jet_obshto] as $number) if (!is_finite($number)) return false;
+		// Only the chosen channel's results belong to this quote.
+		$suffix = $card === 1.0 ? '_card' : '';
+		$json = ['success'=>'success', 'jet_parva'=>$canonical, 'jet_vnoski'=>$jet_vnoski,
+			'jet_card'=>(int)$card, 'jet_show_button'=>true];
+		foreach (['priceall'=>$jet_priceall, 'total_credit_price'=>$jet_total_credit_price] as $field=>$number) {
+			$json['jet_'.$field] = $json['jet_'.$field.'_second'] = number_format($number, 2, '.', '');
+		}
+		foreach (['vnoska'=>$jet_vnoska, 'gpr'=>$jet_gpr, 'glp'=>$jet_glp, 'obshto'=>$jet_obshto] as $field=>$number) {
+			$json['jet_'.$field.$suffix] = number_format($number, 2, '.', '');
+		}
+		$json['jet_vnoska'.$suffix.'_second'] = '0.00';
+		$json['jet_obshto'.$suffix.'_second'] = $json['jet_obshto'.$suffix];
+		return ['quote'=>$json, 'promotion'=>$scheme['fingerprint'], 'eligible'=>true];
+	}
 
-		foreach ([$jet_vnoska,$jet_vnoska_card,$jet_gpr,$jet_glp,$jet_obshto,$jet_gpr_card,$jet_glp_card,$jet_obshto_card] as $number) if (!is_finite($number)) { return false; }
-		$json['success'] = 'success';
-		$json['jet_vnoska'] = number_format($jet_vnoska, 2, ".", "");
-		$json['jet_vnoska_second'] = number_format($jet_vnoska_second, 2, ".", "");
-		$json['jet_priceall'] = number_format($jet_priceall, 2, ".", "");
-		$json['jet_priceall_second'] = number_format($jet_priceall_second, 2, ".", "");
-		$json['jet_total_credit_price'] = number_format($jet_total_credit_price, 2, ".", "");
-		$json['jet_total_credit_price_second'] = number_format($jet_total_credit_price_second, 2, ".", "");
-		$json['jet_gpr'] = number_format($jet_gpr, 2, ".", "");
-		$json['jet_glp'] = number_format($jet_glp, 2, ".", "");
-		$json['jet_obshto'] = number_format($jet_obshto, 2, ".", "");
-		$json['jet_obshto_second'] = number_format($jet_obshto_second, 2, ".", "");
-		$json['jet_vnoska_card'] = number_format($jet_vnoska_card, 2, ".", "");
-		$json['jet_vnoska_card_second'] = number_format($jet_vnoska_card_second, 2, ".", "");
-		$json['jet_gpr_card'] = number_format($jet_gpr_card, 2, ".", "");
-		$json['jet_glp_card'] = number_format($jet_glp_card, 2, ".", "");
-		$json['jet_obshto_card'] = number_format($jet_obshto_card, 2, ".", "");
-		$json['jet_obshto_card_second'] = number_format($jet_obshto_card_second, 2, ".", "");
-		$json['jet_parva'] = $canonical;
-		$json['jet_vnoski'] = $jet_vnoski;
-		$json['jet_card'] = (int)$card;
-		$eligible = (float)$json['jet_vnoska'.($card===1.0?'_card':'')] >= 20;
-		$json['jet_show_button'] = $eligible;
-		return ['quote'=>$json,'promotion'=>$promotion['fingerprint'],'eligible'=>$eligible];
+	private function cartInitialSchemes($model, $context, $post) {
+		if (!$model->cartTransportMatches($context, $post)
+			|| $model->productNumber($post['jet_priceall'] ?? null) !== (float)$context['amount']) return false;
+		$initial = $context['raw_amount'] < 125 ? 9 : $this->config->get('module_mt_jet_credit_vnoski');
+		$schemes = ['jet'=>false, 'jet_card'=>false];
+		foreach (['jet', 'jet_card'] as $card=>$channel) {
+			if ($card && !$this->config->get('module_mt_jet_credit_status_card')) continue;
+			$scheme = $model->resolveInitialBasketScheme($context['product_ids'], $channel, $context['raw_amount'], $initial, 0);
+			if (!$scheme['valid']) continue;
+			$input = array_replace($post, ['jet_vnoski'=>$scheme['scheme']['term'], 'jet_card'=>$card,
+				'jet_parva'=>'0.00', 'jet_downpayment_raw'=>'0']);
+			$result = $this->cartCalculate($model, $context, $input, $scheme);
+			if ($result && $result['eligible']) $schemes[$channel] = $result['quote'];
+		}
+		return $schemes;
 	}
 
 	public function jet_calculate_cart() {
@@ -643,7 +629,7 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 				if ($snapshot) {
 					$result = $this->model_extension_mt_jet_credit_jetcredit->checkoutQuoteResult($snapshot, $this->request->post);
 					$json = $result['quote'];
-					if ($result['excluded']) $json = ['success' => 'unsuccess', 'jet_promotion_excluded' => true];
+					if (!empty($result['invalid'])) $json = ['success'=>'unsuccess', 'jet_scheme_invalid'=>true, 'jet_promotion_excluded'=>$result['excluded']];
 				}
 			} catch (\Throwable $error) {
 				$json = ['success' => 'unsuccess', 'jet_quote_error' => true];
@@ -657,11 +643,18 @@ class ControllerExtensionMtJetCreditJetCredit extends Controller {
 			$context = $model ? $model->getCartContext() : false;
 			if (!$context) {
 				$this->cartFailure($this->cartKnownStaleFailure($model,$this->request->post['jet_previous_quote'] ?? null)); return; }
+			if (array_key_exists('jet_cart_discovery', $this->request->post)) {
+				if ($this->request->post['jet_cart_discovery'] !== '1') { $this->cartFailure(); return; }
+				$schemes = $this->cartInitialSchemes($model, $context, $this->request->post);
+				if ($schemes === false) { $this->cartFailure(true); return; }
+				$this->submissionOutput(['success'=>'success', 'jet_cart_schemes'=>$schemes]); return;
+			}
 			$previous = $model->findCartQuote($this->request->post['jet_previous_quote'] ?? null);
 			if ($previous && $previous['context']['fingerprint'] !== $context['fingerprint']) { $this->cartFailure(true); return; }
 			$result = $this->cartCalculate($model,$context,$this->request->post);
-			if ($result && !empty($result['excluded'])) {
-				$this->submissionOutput(['success'=>'unsuccess','jet_promotion_excluded'=>true]);
+			if ($result && !empty($result['invalid'])) {
+				$this->submissionOutput(['success'=>'unsuccess', 'jet_scheme_invalid'=>true,
+					'jet_promotion_excluded'=>!empty($result['excluded'])]);
 				return;
 			}
 			if (!$result || !$result['quote']) { $this->cartFailure(); return; }

@@ -285,7 +285,7 @@ input[type="checkbox"].jet_uslovia{
 <input type="hidden" id="jet_card_products_vr" name="jet_card_products_vr" value="{{ jet_card_products_vr }}" />
 
 <div class="jet_panel" id="jet_checkout_offer">
-	<p id="jet_offer_status" role="status" hidden></p>
+	<p id="jet_offer_status" role="status" style="white-space:pre-line;" hidden></p>
 	<div class="jet_row">
 		<div class="{{ jet_column_left }}">
 			Първоначална вноска ({{ jet_card_sign }})
@@ -306,7 +306,7 @@ input[type="checkbox"].jet_uslovia{
 			>Преизчисли</button>
 		</div>
 	</div>
-	<div class="jet_row jet_offer_result" hidden>
+	<div class="jet_row jet_offer_result">
 		<div class="{{ jet_column_left }}">
 			{% if jet_card_sign_second == '' %}
 				Цена на стоките ({{ jet_card_sign }})
@@ -348,7 +348,7 @@ input[type="checkbox"].jet_uslovia{
 			</select>
 		</div>
 	</div>
-	<div class="jet_row jet_offer_result" hidden>
+	<div class="jet_row jet_offer_result">
 		<div class="{{ jet_column_left }}">
 			{% if jet_card_sign_second == '' %}
 				Общо кредит ({{ jet_card_sign }})
@@ -367,7 +367,7 @@ input[type="checkbox"].jet_uslovia{
 
 		</div>
 	</div>
-	<div class="jet_row jet_offer_result" hidden>
+	<div class="jet_row jet_offer_result">
 		<div class="{{ jet_column_left }}">
 			{% if jet_card_sign_second == '' %}
 				Месечна вноска ({{ jet_card_sign }})
@@ -386,7 +386,7 @@ input[type="checkbox"].jet_uslovia{
 
 		</div>
 	</div>
-	<div class="jet_row jet_offer_result" hidden>
+	<div class="jet_row jet_offer_result">
 		<div class="{{ jet_column_left }}">
 			Фикс ГПР (%)
 		</div>
@@ -398,7 +398,7 @@ input[type="checkbox"].jet_uslovia{
 			</div>
 		</div>
 	</div>
-	<div class="jet_row jet_offer_result" hidden>
+	<div class="jet_row jet_offer_result">
 		<div class="{{ jet_column_left }}">
 			ГЛП (%)
 		</div>
@@ -410,7 +410,7 @@ input[type="checkbox"].jet_uslovia{
 			</div>
 		</div>
 	</div>
-	<div class="jet_row jet_offer_result" hidden>
+	<div class="jet_row jet_offer_result">
 		<div class="{{ jet_column_left }}">
 			{% if jet_card_sign_second == '' %}
 				Общо плащания ({{ jet_card_sign }})
@@ -429,7 +429,7 @@ input[type="checkbox"].jet_uslovia{
 
 		</div>
 	</div>
-	<div class="jet_row jet_offer_result" hidden>
+	<div class="jet_row jet_offer_result">
 		<div class="{{ jet_column_left }}">
 			ЕГН *
 		</div>
@@ -443,8 +443,8 @@ input[type="checkbox"].jet_uslovia{
 			/>
 		</div>
 	</div>
-	<div class="jet_hr jet_offer_result" hidden></div>
-	<div class="jet_row_footer jet_offer_result" hidden>
+	<div class="jet_hr jet_offer_result"></div>
+	<div class="jet_row_footer jet_offer_result">
 		<div style="padding-bottom: 5px;">
 			<input 
 				type="checkbox" 
@@ -505,20 +505,39 @@ jQuery(document).ready(function($) {
 	const jetCheckoutState = () => JSON.stringify(['price', 'parva', 'vnoski', 'products', 'products_qt', 'products_pr', 'products_vr']
 		.map(field => $('#jet_card_' + field).val()));
 	const jetOfferCurrent = () => jetPanelCurrent() && jetCurrentOffer !== null && jetCurrentOffer.state === jetCheckoutState();
+	let jetSchemeNoticeState = null;
+	let jetCloseSchemeDialog = null;
+	const previousInformation = document.getElementById('jet_alert_box');
+	if (previousInformation && typeof previousInformation.jetCloseSchemeDialog === 'function') previousInformation.jetCloseSchemeDialog(false);
 	const jetOfferStatus = (status) => {
 		const messages = {
 			loading: 'Преизчисляване…',
-			unavailable: 'За избраните условия финансиране не е налично.',
+			unavailable: 'За избраните условия продуктите в количката не могат да бъдат закупени заедно на изплащане. Моля, изберете друг срок или условия.\n\nАко желаете, можете да закупите на изплащане всеки продукт поотделно.',
 			invalid: 'Проверете въведените данни и преизчислете.',
 			error: 'Финансирането не може да бъде изчислено. Натиснете „Преизчисли“, за да опитате отново.'
 		};
 		const message = messages[status] || '';
+		if (status === 'unavailable') {
+			$('#jet_offer_status').text('').prop('hidden', true);
+			const state = jetCheckoutState();
+			if (jetSchemeNoticeState !== state) {
+				jetSchemeNoticeState = state;
+				jetShowCustomAlert(message, false, true);
+			}
+			return;
+		}
 		$('#jet_offer_status').text(message).prop('hidden', !message);
 	};
 	const jetInvalidateOffer = () => {
 		++jetCalculationRevision;
 		jetCurrentOffer = null;
-		$panel.find('.jet_offer_result').prop('hidden', true);
+		if (jetCloseSchemeDialog) jetCloseSchemeDialog(false);
+		if (jetSchemeNoticeState !== jetCheckoutState()) jetSchemeNoticeState = null;
+		for (const field of ['priceall', 'total_credit_price', 'vnoska', 'vnoska_popup', 'gpr', 'glp', 'obshto']) {
+			$('#jet_card_' + field).text('');
+			$('#jet_card_' + field + '_second').text('');
+		}
+		$panel.find('.jet_offer_result').prop('hidden', false);
 		$confirm.prop('disabled', true);
 		jetOfferStatus(null);
 	};
@@ -561,7 +580,7 @@ jQuery(document).ready(function($) {
 				success: function(json) {
 					if (!current()) return;
 					if (!json || json.success !== 'success') {
-						jetOfferStatus(json && json.jet_promotion_excluded === true ? 'unavailable' :
+						jetOfferStatus(json && (json.jet_scheme_invalid === true || json.jet_promotion_excluded === true) ? 'unavailable' :
 							(json && json.success === 'unsuccess' && !json.jet_quote_error ? 'invalid' : 'error'));
 						return;
 					}
@@ -580,6 +599,7 @@ jQuery(document).ready(function($) {
 						const key = field === 'vnoska_popup' ? fields.vnoska : fields[field];
 						$('#jet_card_' + field + '_second').text(json[key + '_second']);
 					}
+					jetSchemeNoticeState = null;
 					jetCurrentOffer = { state: jetCheckoutState(), down: canonicalDown };
 					$panel.find('.jet_offer_result').prop('hidden', false);
 					jetOfferStatus(null);
@@ -621,7 +641,11 @@ jQuery(document).ready(function($) {
 		});
 	}
 	
-	const jetShowCustomAlert = (message, exit) => {
+	const jetShowCustomAlert = (message, exit, information = false) => {
+		if (information) {
+			if (jetCloseSchemeDialog) jetCloseSchemeDialog(false);
+			$('#jet_alert_box').remove();
+		}
 		const jetAlertBox = $('<div></div>', {
 			id: 'jet_alert_box',
 			css: {
@@ -638,6 +662,13 @@ jQuery(document).ready(function($) {
 				textAlign: 'center'
 			}
 		});
+		const returnFocus = document.activeElement;
+		if (information) {
+			jetAlertBox.attr({ role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'jet_scheme_title',
+				'aria-describedby': 'jet_scheme_message', 'data-jet-scheme-dialog': 'true' })
+				.css({ width: '360px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxSizing: 'border-box' });
+			jetAlertBox.append($('<h3></h3>', { id: 'jet_scheme_title', text: 'Информация' }));
+		}
 		const jetMessageText = $('<p></p>', {
 			text: message,
 			css: {
@@ -645,8 +676,10 @@ jQuery(document).ready(function($) {
 				color: '#14532d'
 			}
 		});
+		if (information) jetMessageText.attr('id', 'jet_scheme_message').css('white-space', 'pre-line');
 		jetAlertBox.append(jetMessageText);
 		const jetCloseButton = $('<button></button>', {
+			type: 'button',
 			text: 'Добре',
 			css: {
 				fontFamily: '"Roboto Condensed", sans-serif',
@@ -661,6 +694,7 @@ jQuery(document).ready(function($) {
 			}
 		});
 		jetCloseButton.on('click', function() {
+			if (information) { jetCloseSchemeDialog(); return; }
 			jetAlertBox.remove();
 			if (exit) {
 				window.location.href = window.location.origin;
@@ -669,6 +703,37 @@ jQuery(document).ready(function($) {
 		});
 		jetAlertBox.append(jetCloseButton);
 		$('body').append(jetAlertBox);
+		if (information) {
+			let overlay = $('#jet_alert_overlay');
+			const createdOverlay = !overlay.length;
+			if (createdOverlay) overlay = $('<div>', { id: 'jet_alert_overlay', class: 'jet_alert_overlay' }).appendTo('body');
+			overlay.appendTo('body').addClass('show').css({ display: 'block', position: 'fixed', top: 0, left: 0,
+				width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 5000000 });
+			jetCloseSchemeDialog = (restoreFocus = true) => {
+				$(document).off('.jetSchemeDialog');
+				jetAlertBox.remove();
+				overlay.removeClass('show').css('display', '');
+				if (createdOverlay) overlay.remove();
+				jetCloseSchemeDialog = null;
+				if (restoreFocus) {
+					const controls = document.getElementById('jet_checkout_offer');
+					const target = returnFocus && returnFocus.isConnected !== false && controls && controls.contains(returnFocus)
+						? returnFocus : document.getElementById('jet_card_vnoski');
+					if (target) target.focus();
+				}
+			};
+			jetAlertBox[0].jetCloseSchemeDialog = jetCloseSchemeDialog;
+			$(document).off('.jetSchemeDialog').on('keydown.jetSchemeDialog', (event) => {
+				if (event.key === 'Escape' || event.key === 'Tab') {
+					event.preventDefault(); event.stopImmediatePropagation();
+					if (event.key === 'Escape') jetCloseSchemeDialog(); else jetCloseButton[0].focus();
+				}
+			}).on('focusin.jetSchemeDialog', (event) => {
+				if (!jetAlertBox[0].contains(event.target)) jetCloseButton[0].focus();
+			});
+			jetCloseButton[0].focus();
+		}
+
 	}
 	
 	const changeBtnJetcredit = () => {
@@ -734,7 +799,7 @@ jQuery(document).ready(function($) {
 				if (json.success === 'unsuccess' && (json.jet_quote_invalid === true || json.jet_quote_error === true || (!json.code && !json.order_id))) {
 					if (jetPanelCurrent()) {
 						jetInvalidateOffer();
-						jetOfferStatus(json.jet_quote_error === true ? 'error' : 'invalid');
+						jetOfferStatus(json.jet_quote_error === true ? 'error' : (json.jet_scheme_invalid === true ? 'unavailable' : 'invalid'));
 					}
 					return;
 				}

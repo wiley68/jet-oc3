@@ -76,8 +76,8 @@ if (process.argv.includes('--rounding')) {
     accept(payment.requests[0], 3);
     payment.trigger('#button-confirm', 'click');
     payment.requests[1].resolve(response);
-    check(payment.get('#button-confirm').prop('disabled') && payment.get('.jet_offer_result').prop('hidden'),
-     'rejection and AJAX completion leave the offer hidden and disabled');
+    check(payment.get('#button-confirm').prop('disabled') && !payment.get('.jet_offer_result').prop('hidden') && payment.get('#' + code + '_vnoska').text() === '',
+     'rejection and AJAX completion leave the rows visible, figures cleared and confirmation disabled');
     check(payment.get('#jet_offer_status').text().includes(message), 'business and technical rejection use distinct status');
     payment.trigger('#button-confirm', 'click');
     check(payment.requests.length === 2, 'cannot resend the rejected offer');
@@ -100,11 +100,11 @@ if (process.argv.includes('--rounding')) {
    accept(request, 9);
    check(e.get('#jet_offer_status').text() === '', 'eligible explicit selection has no notice');
    request = select('12');
-   check(e.get('#button-confirm').prop('disabled') && e.get('.jet_offer_result').prop('hidden'), 'change hides old figures immediately');
+   check(e.get('#button-confirm').prop('disabled') && !e.get('.jet_offer_result').prop('hidden') && e.get('#' + code + '_vnoska').text() === '', 'change clears old figures without hiding rows');
    accept(request);
    check(e.get('#' + code + '_vnoski').val() === '12' && e.get('#jet_offer_status').text() === '', 'exact term preserved without fallback notice');
    select('12').resolve({ success: 'unsuccess', jet_promotion_excluded: true });
-   check(e.get('#jet_offer_status').text().includes('не е налично') && e.get('#button-confirm').prop('disabled'), 'confirmed unavailable has no confirmation control');
+   check(e.get('#jet_scheme_message').text().includes('не могат да бъдат закупени заедно') && e.get('#button-confirm').prop('disabled'), 'confirmed unavailable has no confirmation control');
    const beforeRetry = e.requests.length;
    e.trigger(recalculate, 'click');
    check(e.requests.length === beforeRetry + 1, 'visible button starts a request');
